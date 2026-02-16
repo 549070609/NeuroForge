@@ -1,0 +1,30 @@
+# Standard Preset
+# Code assistant scenario
+
+preset: standard
+enabled:
+  # Providers
+  - providers.anthropic
+  # Tools
+  - tools.file_tools
+  - tools.interact_tools
+  # Middleware
+  - middleware.compaction
+  - middleware.thinking
+  # Integration
+  - integration.events
+  # Skills
+  - skills.skill_loader
+disabled: []
+plugin_dirs:
+  - plugins
+
+config:
+  middleware.compaction:
+    enabled: true
+    strategy: "simple"  # simple | agent
+    trigger_threshold: 0.8
+    adaptive: false
+
+  middleware.thinking:
+    level: "low"

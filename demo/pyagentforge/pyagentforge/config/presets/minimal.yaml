@@ -1,0 +1,8 @@
+# Minimal Preset
+# Only kernel + 6 core tools
+
+preset: minimal
+enabled: []
+disabled: []
+plugin_dirs:
+  - plugins

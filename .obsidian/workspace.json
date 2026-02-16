@@ -1,0 +1,231 @@
+{
+  "main": {
+    "id": "d6fcd1a0f57b1634",
+    "type": "split",
+    "children": [
+      {
+        "id": "7329b00497f9f37a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8c1596c5d43b5818",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "新标签页"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "4967ffce5c24fd2a",
+    "type": "split",
+    "children": [
+      {
+        "id": "1f41956920b14854",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5facbbfcec5c594b",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "0ae4c85fa2e173e0",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "98257141a3ba9bfc",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "9b1c71aa98c67913",
+    "type": "split",
+    "children": [
+      {
+        "id": "8171c202f52a2df0",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3dc9854e3c0e3845",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "01-OpenCode-技术文档/01_系统概述.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "01_系统概述 的反向链接列表"
+            }
+          },
+          {
+            "id": "149cd8c3e5977f64",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "01-OpenCode-技术文档/01_系统概述.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "01_系统概述 的出链列表"
+            }
+          },
+          {
+            "id": "5b77367adcc2663b",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "9526ee4a92f71ffc",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "decb15db3868b4ba",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "01-OpenCode-技术文档/01_系统概述.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "01_系统概述 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "8c1596c5d43b5818",
+  "lastOpenFiles": [
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/__init__.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/write.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/websearch.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/webfetch.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/truncation.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/todo.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/task.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/read.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/question.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/plan.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/pyagentforge/tools/builtin/__pycache__/multiedit.cpython-311.pyc",
+    "demo/test-frontend/pyagentforge/data/skills/git-commit/SKILL.md",
+    "demo/test-frontend/pyagentforge/data/skills/code-review/SKILL.md",
+    "demo/test-frontend/pyagentforge/data/commands/review.md",
+    "demo/test-frontend/pyagentforge/data/commands/debug.md",
+    "demo/test-frontend/pyagentforge/data/commands/test.md",
+    "demo/test-frontend/pyagentforge/data/commands/commit.md",
+    "demo/test-frontend/pyagentforge/docs/API_REFERENCE.md",
+    "demo/test-frontend/pyagentforge/README.md",
+    "Docs/plan/PyAgentForge-Plugin-Architecture-Execution-Plan.md",
+    "demo/test-frontend/node_modules/jsesc/README.md",
+    "demo/test-frontend/node_modules/semver/README.md",
+    "demo/test-frontend/node_modules/esbuild/README.md",
+    "demo/test-frontend/node_modules/esbuild/LICENSE.md",
+    "demo/test-frontend/node_modules/node-releases/README.md",
+    "demo/test-frontend/node_modules/@types/babel__template/README.md",
+    "demo/test-frontend/node_modules/source-map-js/README.md",
+    "demo/test-frontend/node_modules/debug/README.md",
+    "demo/test-frontend/node_modules/escalade/readme.md",
+    "demo/test-frontend/README.md",
+    "Docs/plan/OpenClaw-to-PyAgentForge-功能移植分析.md",
+    "demo/glm-provider/README.md",
+    "Docs/plan/三方对比-OpenCode-PyAgentForge-OpenClaw-Agent实现.md",
+    "Docs/plan/PyAgentForge-vs-OpenClaw-Agent设计实现深度对比.md",
+    "Docs/plan/PyAgentForge-vs-OpenClaw-对比差异分析.md",
+    "Docs/OpenClaw/09-运维与安全/03-故障排除.md",
+    "Learncode/OpenClaw/ui/src/ui/__screenshots__/config-form.browser.test.ts/config-form-renderer-renders-union-literals-as-select-options-1.png",
+    "Learncode/OpenClaw/ui/src/ui/__screenshots__/navigation.browser.test.ts/control-UI-routing-auto-scrolls-chat-history-to-the-latest-message-1.png",
+    "Learncode/OpenClaw/ui/src/ui/__screenshots__/config-form.browser.test.ts/config-form-renderer-renders-inputs-and-patches-values-1.png",
+    "Learncode/OpenClaw/ui/src/ui/__screenshots__/config-form.browser.test.ts/config-form-renderer-flags-unsupported-unions-1.png",
+    "Learncode/OpenClaw/ui/public/favicon.svg",
+    "Learncode/OpenClaw/ui/public/favicon-32.png",
+    "Learncode/OpenClaw/ui/public/apple-touch-icon.png",
+    "Learncode/OpenClaw/docs/assets/showcase/xuezh-pronunciation.jpeg",
+    "Learncode/OpenClaw/docs/assets/showcase/winix-air-purifier.jpg",
+    "Learncode/OpenClaw/docs/assets/showcase/wine-cellar-skill.jpg"
+  ]
+}
