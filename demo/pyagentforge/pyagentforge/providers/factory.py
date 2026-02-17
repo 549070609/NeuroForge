@@ -7,7 +7,7 @@
 import os
 from typing import Any
 
-from pyagentforge.core.model_registry import (
+from pyagentforge.kernel.model_registry import (
     ModelConfig,
     ModelRegistry,
     ProviderType,

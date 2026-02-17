@@ -5,6 +5,7 @@
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pyagentforge.plugin.base import Plugin, PluginContext
@@ -38,6 +39,7 @@ class PluginManager:
         self,
         config: Dict[str, Any],
         plugin_dirs: List[str] | None = None,
+        working_dir: str | None = None,
     ) -> None:
         """
         初始化插件系统
@@ -45,18 +47,36 @@ class PluginManager:
         Args:
             config: 配置字典，包含 enabled, disabled, plugin_dirs 等
             plugin_dirs: 额外的插件搜索目录
+            working_dir: 工作目录，用于自动发现插件
         """
         logger.info("Initializing plugin manager")
 
         self._config = config.get("config", {})
 
         # 合并插件目录
-        all_plugin_dirs = config.get("plugin_dirs", [])
+        all_plugin_dirs = list(config.get("plugin_dirs", []))
         if plugin_dirs:
             all_plugin_dirs.extend(plugin_dirs)
 
         # 获取启用的插件列表
         enabled_plugins = self._get_effective_plugins(config)
+
+        # 自动发现逻辑
+        auto_discover = config.get("auto_discover", True)
+        auto_enable_all = config.get("auto_enable_all", False)
+        auto_discover_dir = config.get("auto_discover_dir", ".agent/plugins")
+
+        if auto_discover and working_dir:
+            auto_dir = Path(working_dir) / auto_discover_dir
+            if auto_dir.exists() and str(auto_dir) not in all_plugin_dirs:
+                all_plugin_dirs.append(str(auto_dir))
+                logger.info(f"Auto-discovered plugin directory: {auto_dir}")
+
+                # 如果启用自动启用，发现并添加所有插件ID到 enabled
+                if auto_enable_all:
+                    discovered_ids = self._discover_plugin_ids(str(auto_dir))
+                    enabled_plugins = list(set(enabled_plugins) | set(discovered_ids))
+                    logger.info(f"Auto-enabled plugins: {discovered_ids}")
 
         if not enabled_plugins:
             logger.info("No plugins to load")
@@ -99,6 +119,25 @@ class PluginManager:
         effective = (preset_plugins | enabled) - disabled
 
         return list(effective)
+
+    def _discover_plugin_ids(self, plugin_dir: str) -> List[str]:
+        """
+        发现目录下所有插件的ID
+
+        Args:
+            plugin_dir: 插件目录路径
+
+        Returns:
+            发现的插件ID列表
+        """
+        discovered_ids = []
+        for path in self.loader.discover([plugin_dir]):
+            try:
+                plugin = self.loader.load(path)
+                discovered_ids.append(plugin.metadata.id)
+            except Exception as e:
+                logger.warning(f"Failed to load plugin at {path}: {e}")
+        return discovered_ids
 
     def _get_preset_plugins(self, preset: str) -> set:
         """获取预设的插件列表"""

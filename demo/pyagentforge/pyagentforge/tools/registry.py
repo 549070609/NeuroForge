@@ -152,14 +152,26 @@ class ToolRegistry:
             extra_data={"count": len(p0_tools)},
         )
 
-    def register_p1_tools(self) -> None:
+    def register_p1_tools(
+        self,
+        working_dir: str | None = None,
+        permission_checker: "PermissionChecker | None" = None,
+    ) -> None:
         """注册 P1 中优先级工具"""
-        from pyagentforge.tools.builtin.codesearch import CodeSearchTool
+        from pyagentforge.codesearch import create_codesearch_tool, CodeSearchConfig
         from pyagentforge.tools.builtin.apply_patch import ApplyPatchTool, DiffTool
         from pyagentforge.tools.builtin.plan import PlanTool
 
+        # 创建增强版 CodeSearch 工具
+        codesearch_config = CodeSearchConfig()
+        codesearch_tool = create_codesearch_tool(
+            config=codesearch_config,
+            permission_checker=permission_checker,
+            workspace_root=working_dir,
+        )
+
         p1_tools = [
-            CodeSearchTool(),
+            codesearch_tool,
             ApplyPatchTool(),
             DiffTool(),
             PlanTool(),
@@ -169,7 +181,7 @@ class ToolRegistry:
             self.register(tool)
 
         logger.info(
-            "Registered P1 tools",
+            "Registered P1 tools (with enhanced CodeSearch)",
             extra_data={"count": len(p1_tools)},
         )
 

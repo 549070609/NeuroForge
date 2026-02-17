@@ -2,11 +2,16 @@
 GLM Provider - 智谱 AI GLM 模型提供商
 
 GLM API 兼容 OpenAI 格式，使用 OpenAI SDK
+支持两种工具调用格式：tools (OpenAI 新版) 和 functions (OpenAI 旧版/GLM)
 """
 
 import os
 import sys
 from typing import Any
+
+# 加载 .env 文件
+from dotenv import load_dotenv
+load_dotenv()
 
 # 添加 pyagentforge 到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pyagentforge"))
@@ -25,10 +30,11 @@ class GLMProvider(BaseProvider):
     """智谱 AI GLM 模型提供商
 
     GLM API 兼容 OpenAI 格式
-    支持 GLM-4 系列、GLM-5 等模型
+    支持 GLM-4 系列、GLM-5、GLM-4.7 等模型
+    支持两种工具调用格式
     """
 
-    # GLM OpenAI 兼容 API 地址
+    # GLM OpenAI 兼容 API 地址（从环境变量读取）
     GLM_BASE_URL = os.environ.get("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
 
     # 支持的模型列表
@@ -42,6 +48,7 @@ class GLMProvider(BaseProvider):
         "glm-4",
         "glm-3-turbo",
         "glm-5",
+        "glm-4.7",
     ]
 
     def __init__(
@@ -50,6 +57,7 @@ class GLMProvider(BaseProvider):
         model: str = "glm-4-flash",
         max_tokens: int = 4096,
         temperature: float = 0.95,
+        use_functions_format: bool = True,  # 使用 functions 格式（GLM 可能需要）
         **kwargs: Any,
     ) -> None:
         super().__init__(model, max_tokens, temperature, **kwargs)
@@ -59,6 +67,9 @@ class GLMProvider(BaseProvider):
         if not self.api_key:
             raise ValueError("GLM API Key is required. Set GLM_API_KEY environment variable or pass api_key parameter.")
 
+        # 是否使用 functions 格式（GLM 可能需要旧版 OpenAI 格式）
+        self.use_functions_format = use_functions_format
+
         # 创建 OpenAI 兼容客户端
         self.client = AsyncOpenAI(
             api_key=self.api_key,
@@ -66,12 +77,13 @@ class GLMProvider(BaseProvider):
         )
 
         print(f"[GLM Provider] Initialized with model: {model}, base_url: {self.GLM_BASE_URL}")
+        print(f"[GLM Provider] Using functions format: {use_functions_format}")
 
     def _convert_tools_to_openai(
         self,
         tools: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """将工具格式转换为 OpenAI 格式"""
+        """将工具格式转换为 OpenAI tools 格式（新版）"""
         openai_tools = []
         for tool in tools:
             openai_tools.append({
@@ -83,6 +95,24 @@ class GLMProvider(BaseProvider):
                 },
             })
         return openai_tools
+
+    def _convert_tools_to_glm_functions(
+        self,
+        tools: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """将工具格式转换为 GLM functions 格式（旧版 OpenAI 格式）
+
+        GLM API 可能使用 functions 参数而非 tools 参数
+        参考: https://open.bigmodel.cn/dev/api
+        """
+        glm_functions = []
+        for tool in tools:
+            glm_functions.append({
+                "name": tool.get("name", ""),
+                "description": tool.get("description", ""),
+                "parameters": tool.get("input_schema", {}),
+            })
+        return glm_functions
 
     def _convert_messages_to_openai(
         self,
@@ -153,7 +183,12 @@ class GLMProvider(BaseProvider):
         }
 
         if openai_tools:
-            params["tools"] = openai_tools
+            # 尝试使用 functions 格式（GLM 可能需要）
+            if self.use_functions_format:
+                params["functions"] = self._convert_tools_to_glm_functions(tools)
+                params["function_call"] = "auto"
+            else:
+                params["tools"] = openai_tools
 
         try:
             response = await self.client.chat.completions.create(**params)

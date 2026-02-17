@@ -17,6 +17,11 @@ class PluginConfig:
     plugin_dirs: List[str] = field(default_factory=lambda: ["plugins"])
     config: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
+    # 自动发现配置
+    auto_discover: bool = True                    # 是否启用自动发现
+    auto_enable_all: bool = False                 # 是否自动启用所有发现的插件
+    auto_discover_dir: str = ".agent/plugins"     # 自动发现的目录名
+
     @classmethod
     def from_yaml(cls, path: str) -> "PluginConfig":
         """从 YAML 文件加载配置"""
@@ -33,6 +38,9 @@ class PluginConfig:
             disabled=data.get("disabled", []),
             plugin_dirs=data.get("plugin_dirs", ["plugins"]),
             config=data.get("config", {}),
+            auto_discover=data.get("auto_discover", True),
+            auto_enable_all=data.get("auto_enable_all", False),
+            auto_discover_dir=data.get("auto_discover_dir", ".agent/plugins"),
         )
 
     @classmethod
@@ -44,6 +52,9 @@ class PluginConfig:
             disabled=data.get("disabled", []),
             plugin_dirs=data.get("plugin_dirs", ["plugins"]),
             config=data.get("config", {}),
+            auto_discover=data.get("auto_discover", True),
+            auto_enable_all=data.get("auto_enable_all", False),
+            auto_discover_dir=data.get("auto_discover_dir", ".agent/plugins"),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -54,6 +65,9 @@ class PluginConfig:
             "disabled": self.disabled,
             "plugin_dirs": self.plugin_dirs,
             "config": self.config,
+            "auto_discover": self.auto_discover,
+            "auto_enable_all": self.auto_enable_all,
+            "auto_discover_dir": self.auto_discover_dir,
         }
 
     def get_effective_plugins(self) -> List[str]:

@@ -16,6 +16,16 @@ from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.executor import ToolExecutor, ToolRegistry, PermissionChecker
 from pyagentforge.kernel.engine import AgentEngine
+from pyagentforge.kernel.model_registry import (
+    ModelRegistry,
+    ModelConfig,
+    ProviderType,
+    ProviderInfo,
+    get_registry,
+    register_model,
+    get_model,
+    register_provider,
+)
 
 __all__ = [
     # Message types
@@ -33,4 +43,13 @@ __all__ = [
     "ToolRegistry",
     "PermissionChecker",
     "AgentEngine",
+    # Model registry
+    "ModelRegistry",
+    "ModelConfig",
+    "ProviderType",
+    "ProviderInfo",
+    "get_registry",
+    "register_model",
+    "get_model",
+    "register_provider",
 ]

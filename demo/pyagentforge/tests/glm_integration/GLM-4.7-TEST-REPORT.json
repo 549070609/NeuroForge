@@ -1,0 +1,124 @@
+{
+  "timestamp": "2026-02-16T17:00:00",
+  "model": "glm-4.7",
+  "api_endpoint": "https://open.bigmodel.cn/api/coding/paas/v4",
+  "summary": {
+    "basic_functionality": {
+      "passed": 12,
+      "failed": 2,
+      "total": 14,
+      "success_rate": 85.7
+    },
+    "concurrency": {
+      "passed": 1,
+      "failed": 0,
+      "total": 1,
+      "success_rate": 100
+    },
+    "tool_calling": {
+      "passed": 0,
+      "failed": 1,
+      "total": 1,
+      "success_rate": 0
+    },
+    "overall": {
+      "passed": 13,
+      "failed": 3,
+      "total": 16,
+      "success_rate": 81.3,
+      "grade": "B"
+    }
+  },
+  "performance": {
+    "concurrency": {
+      "sessions": 5,
+      "success_rate": 100,
+      "total_time": 13.66,
+      "avg_response_time": 6.68
+    },
+    "comparison_with_glm4flash": {
+      "total_time_improvement": "30%",
+      "response_time_improvement": "11%",
+      "basic_functionality": "85.7% vs 100%",
+      "concurrency": "100% vs 100%"
+    }
+  },
+  "test_details": {
+    "basic_functionality": {
+      "passed": [
+        "test_simple_question",
+        "test_context_awareness",
+        "test_multi_turn_conversation",
+        "test_role_playing",
+        "test_add_messages",
+        "test_context_truncation",
+        "test_context_serialization",
+        "test_tool_result_tracking",
+        "test_user_message_creation",
+        "test_assistant_message_with_text",
+        "test_assistant_message_with_tool_use",
+        "test_message_to_api_format"
+      ],
+      "failed": [
+        {
+          "test": "test_math_calculation",
+          "reason": "timeout",
+          "timeout": 30
+        },
+        {
+          "test": "test_custom_system_prompt",
+          "reason": "timeout",
+          "timeout": 30
+        }
+      ]
+    },
+    "tool_calling": {
+      "error_code": "1210",
+      "error_message": "API 调用参数错误",
+      "conclusion": "不支持 OpenAI 格式的工具调用"
+    }
+  },
+  "recommendations": {
+    "use_cases": {
+      "suitable": [
+        "高并发对话场景",
+        "快速响应应用",
+        "基础问答对话",
+        "多轮交互"
+      ],
+      "not_suitable": [
+        "工具调用场景",
+        "复杂计算任务",
+        "自定义提示词高级场景"
+      ]
+    },
+    "configuration": {
+      "model": "glm-4.7",
+      "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "timeout": 60
+    }
+  },
+  "comparison": {
+    "vs_glm4flash": {
+      "concurrency_performance": "GLM-4.7 快 30%",
+      "response_time": "GLM-4.7 快 11%",
+      "basic_functionality": "GLM-4-flash 更稳定",
+      "tool_calling": "两者均不支持"
+    },
+    "recommendation": {
+      "basic_dialogue": "GLM-4-flash",
+      "high_concurrency": "GLM-4.7",
+      "tool_calling": "均不适用"
+    }
+  },
+  "grade": {
+    "overall": "B",
+    "score": 82,
+    "breakdown": {
+      "basic_functionality": "B (85.7%)",
+      "concurrency": "A+ (100%)",
+      "response_speed": "A (6.68s)",
+      "tool_calling": "F (0%)"
+    }
+  }
+}

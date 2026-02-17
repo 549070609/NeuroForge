@@ -178,6 +178,121 @@ class AgentEngine:
         )
         return "Error: Maximum iterations reached"
 
+    async def run_stream(self, prompt: str):
+        """
+        流式运行 Agent
+
+        Args:
+            prompt: 用户输入
+
+        Yields:
+            流式响应事件
+        """
+        logger.info(
+            f"Starting Agent stream: session_id={self._session_id}, prompt_len={len(prompt)}"
+        )
+
+        # 插件钩子: on_engine_start
+        if self.plugin_manager:
+            await self.plugin_manager.emit_hook("on_engine_start", self)
+
+        # 添加用户消息
+        self.context.add_user_message(prompt)
+
+        # 执行循环
+        iteration = 0
+        max_iterations = self.config.max_iterations
+
+        while iteration < max_iterations:
+            iteration += 1
+
+            logger.info(
+                f"[Agent Stream] Iteration {iteration}/{max_iterations}"
+            )
+
+            # 插件钩子: on_before_llm_call
+            messages = self.context.get_messages_for_api()
+            if self.plugin_manager:
+                modified = await self.plugin_manager.emit_hook(
+                    "on_before_llm_call", messages
+                )
+                if modified and modified[0]:
+                    messages = modified[0]
+
+            # 流式调用 LLM
+            final_response = None
+            async for event in self.provider.stream_message(
+                self.config.system_prompt,
+                messages,
+                self.tools.get_schemas(),
+            ):
+                if isinstance(event, ProviderResponse):
+                    final_response = event
+                else:
+                    yield {"type": "stream", "event": event}
+
+            if final_response is None:
+                logger.warning(
+                    f"[Agent Stream] No final response from provider, session_id={self._session_id}"
+                )
+                break
+
+            # 插件钩子: on_after_llm_call
+            if self.plugin_manager:
+                modified = await self.plugin_manager.emit_hook(
+                    "on_after_llm_call", final_response
+                )
+                if modified and modified[0]:
+                    final_response = modified[0]
+
+            logger.info(
+                f"[Agent Stream] Response: stop_reason={final_response.stop_reason}, "
+                f"has_tools={final_response.has_tool_calls}"
+            )
+
+            if not final_response.has_tool_calls:
+                self.context.add_assistant_text(final_response.text)
+
+                # 插件钩子: on_task_complete
+                if self.plugin_manager:
+                    await self.plugin_manager.emit_hook("on_task_complete", final_response.text)
+
+                yield {"type": "complete", "text": final_response.text}
+                return
+
+            # 添加助手消息（包含工具调用）
+            self.context.add_assistant_message(final_response.content)
+
+            # 记录工具调用
+            tool_names = [tc.name for tc in final_response.tool_calls]
+            logger.info(f"[Agent Stream] Tool calls: {tool_names}")
+
+            # 执行工具并 yield 结果
+            for tool_call in final_response.tool_calls:
+                yield {
+                    "type": "tool_start",
+                    "tool_name": tool_call.name,
+                    "tool_id": tool_call.id,
+                }
+
+                result = await self.executor.execute(tool_call, self.ask_callback)
+                self.context.add_tool_result(tool_call.id, result)
+
+                yield {
+                    "type": "tool_result",
+                    "tool_id": tool_call.id,
+                    "result": result,
+                }
+
+            # 检查是否需要截断上下文
+            if len(self.context) > self.context.max_messages * 0.8:
+                self.context.truncate()
+
+        logger.error(
+            f"[Agent Stream] Maximum iterations reached! session_id={self._session_id}"
+        )
+        yield {"type": "error", "message": "Maximum iterations reached"}
+
     async def _call_llm(self, messages: list[dict]) -> ProviderResponse:
         """调用 LLM"""
         return await self.provider.create_message(

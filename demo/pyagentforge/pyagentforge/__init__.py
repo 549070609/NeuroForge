@@ -94,7 +94,10 @@ async def create_engine(
     # 如果有插件配置，初始化插件系统
     if plugin_config:
         plugin_manager = PluginManager(engine=engine)
-        await plugin_manager.initialize(plugin_config.to_dict())
+        await plugin_manager.initialize(
+            plugin_config.to_dict(),
+            working_dir=working_dir,
+        )
         engine.plugin_manager = plugin_manager
 
         # 注册插件提供的工具

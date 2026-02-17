@@ -1,78 +1,156 @@
 """
-核心引擎模块
+核心引擎模块 - 兼容层
 
-包含 Agent 执行循环、上下文管理、消息类型、事件总线、并行执行等核心组件
+注意: 核心逻辑已迁移到 pyagentforge.kernel 和 pyagentforge.plugins
+此文件仅用于向后兼容，将在未来版本中移除。
+
+迁移指南:
+- 核心组件: from pyagentforge.kernel import AgentEngine, ContextManager, ...
+- 思考功能: from pyagentforge.plugins.middleware.thinking.thinking import ...
+- 事件总线: from pyagentforge.plugins.integration.events.events import ...
+- 并行执行: from pyagentforge.plugins.integration.parallel_executor.executor import ...
+- 故障转移: from pyagentforge.plugins.middleware.failover.failover import ...
+- 持久化: from pyagentforge.plugins.integration.persistence.persistence import ...
+- 上下文感知: from pyagentforge.plugins.integration.context_aware.prompt_manager import ...
 """
 
-from pyagentforge.core.engine import AgentEngine
-from pyagentforge.core.context import ContextManager
-from pyagentforge.core.message import Message, TextBlock, ToolUseBlock, ToolResultBlock
-from pyagentforge.core.executor import ToolExecutor
-from pyagentforge.core.events import EventBus, Event, EventType, get_event_bus, create_event_bus
-from pyagentforge.core.parallel import (
-    ParallelSubagentExecutor,
-    SubagentTask,
-    SubagentResult,
-    SubagentStatus,
-    ParallelTaskTool,
+# 发出弃用警告
+import warnings
+
+warnings.warn(
+    "Importing from pyagentforge.core is deprecated. "
+    "Use pyagentforge.kernel or pyagentforge.plugins.* instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
-from pyagentforge.core.compaction import (
-    Compactor,
-    CompactionSettings,
-    CompactionResult,
-)
-from pyagentforge.core.thinking import (
-    ThinkingLevel,
-    ThinkingConfig,
-    ThinkingBlock,
-    supports_thinking,
-    create_thinking_config,
-)
-from pyagentforge.core.model_registry import (
+
+# 从 kernel 重导出核心组件
+from pyagentforge.kernel import (
+    # 消息类型
+    Message,
+    TextBlock,
+    ToolUseBlock,
+    ToolResultBlock,
+    ProviderResponse,
+    # 核心组件
+    AgentEngine,
+    ContextManager,
+    ToolExecutor,
+    ToolRegistry,
+    PermissionChecker,
+    BaseTool,
+    BaseProvider,
+    # 模型注册
     ModelRegistry,
     ModelConfig,
     ProviderType,
+    ProviderInfo,
     get_registry,
     register_model,
     get_model,
     register_provider,
 )
-from pyagentforge.core.context_aware import (
-    AgentsMdLoader,
-    DynamicPromptInjector,
-    ContextAwarePromptManager,
+
+# 从 plugins 重导出扩展功能
+from pyagentforge.plugins.middleware.thinking.thinking import (
+    ThinkingLevel,
+    ThinkingConfig,
+    ThinkingBlock,
+    THINKING_CAPABLE_MODELS,
+    supports_thinking,
+    get_thinking_provider,
+    get_max_thinking_tokens,
+    create_thinking_config,
 )
-from pyagentforge.core.failover import (
-    ProviderPool,
-    FailoverConfig,
+
+from pyagentforge.plugins.integration.events.events import (
+    EventType,
+    Event,
+    EventHandler,
+    EventBus,
+    get_event_bus,
+    create_event_bus,
+)
+
+from pyagentforge.plugins.integration.parallel_executor.executor import (
+    SubagentStatus,
+    SubagentTask,
+    SubagentResult,
+    AGENT_TYPES,
+    get_agent_type_config,
+    ParallelSubagentExecutor,
+    ParallelTaskTool,
+)
+
+from pyagentforge.plugins.middleware.failover.failover import (
     FailoverCondition,
     LoadBalanceStrategy,
     ProviderHealth,
+    FailoverConfig,
+    ProviderPool,
     create_provider_pool_from_config,
 )
-from pyagentforge.core.persistence import (
-    SessionPersistence,
-    SessionManager,
+
+from pyagentforge.plugins.integration.persistence.persistence import (
     SessionMetadata,
     SessionState,
     SessionSummary,
     SessionSnapshot,
+    SessionPersistence,
+    SessionManager,
+)
+
+from pyagentforge.plugins.integration.context_aware.prompt_manager import (
+    AgentsMdLoader,
+    DynamicPromptInjector,
+    ContextAwarePromptManager,
+)
+
+# 上下文压缩 (保持原位置)
+from pyagentforge.core.compaction import (
+    Compactor,
+    CompactionSettings,
+    CompactionResult,
 )
 
 __all__ = [
-    # 引擎和上下文
+    # 核心组件 (from kernel)
     "AgentEngine",
     "ContextManager",
+    "ToolExecutor",
+    "ToolRegistry",
+    "PermissionChecker",
+    "BaseTool",
+    "BaseProvider",
     # 消息类型
     "Message",
     "TextBlock",
     "ToolUseBlock",
     "ToolResultBlock",
-    "ToolExecutor",
+    "ProviderResponse",
+    # 模型注册
+    "ModelRegistry",
+    "ModelConfig",
+    "ProviderType",
+    "ProviderInfo",
+    "get_registry",
+    "register_model",
+    "get_model",
+    "register_provider",
+    # 思考级别控制
+    "ThinkingLevel",
+    "ThinkingConfig",
+    "ThinkingBlock",
+    "THINKING_CAPABLE_MODELS",
+    "supports_thinking",
+    "get_thinking_provider",
+    "get_max_thinking_tokens",
+    "create_thinking_config",
     # 事件总线
     "EventBus",
     "Event",
     "EventType",
+    "EventHandler",
     "get_event_bus",
     "create_event_bus",
     # 并行执行
@@ -81,24 +159,12 @@ __all__ = [
     "SubagentResult",
     "SubagentStatus",
     "ParallelTaskTool",
+    "AGENT_TYPES",
+    "get_agent_type_config",
     # 上下文压缩
     "Compactor",
     "CompactionSettings",
     "CompactionResult",
-    # 思考级别控制
-    "ThinkingLevel",
-    "ThinkingConfig",
-    "ThinkingBlock",
-    "supports_thinking",
-    "create_thinking_config",
-    # 模型注册
-    "ModelRegistry",
-    "ModelConfig",
-    "ProviderType",
-    "get_registry",
-    "register_model",
-    "get_model",
-    "register_provider",
     # 上下文感知提示
     "AgentsMdLoader",
     "DynamicPromptInjector",

@@ -29,8 +29,8 @@ class EventsPlugin(Plugin):
     async def on_plugin_activate(self) -> None:
         """激活插件"""
         await super().on_plugin_activate()
-        # 延迟导入避免循环依赖
-        from pyagentforge.core.events import EventBus
+        # 使用本地 events 模块
+        from pyagentforge.plugins.integration.events.events import EventBus
         self._event_bus = EventBus("plugin_events")
         self.context.logger.info("Event bus initialized")
 
