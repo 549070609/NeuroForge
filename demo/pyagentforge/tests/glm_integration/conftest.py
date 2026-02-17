@@ -53,6 +53,7 @@ async def glm_provider() -> AsyncGenerator[GLMProvider, None]:
     provider = GLMProvider(
         api_key=GLM_API_KEY,
         model=GLM_MODEL,
+        use_functions_format=True,  # 使用 GLM functions 格式
     )
     yield provider
 

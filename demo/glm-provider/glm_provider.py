@@ -274,7 +274,12 @@ class GLMProvider(BaseProvider):
         }
 
         if openai_tools:
-            params["tools"] = openai_tools
+            # 使用 GLM functions 格式
+            if self.use_functions_format:
+                params["functions"] = self._convert_tools_to_glm_functions(tools)
+                params["function_call"] = "auto"
+            else:
+                params["tools"] = openai_tools
 
         # 收集完整响应用于最终返回
         full_content = ""
