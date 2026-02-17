@@ -1,0 +1,3 @@
+"""
+WebChat Channel Tests
+"""
