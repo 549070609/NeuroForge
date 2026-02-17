@@ -1114,9 +1114,7 @@ logger.setLevel("DEBUG")
 
 ### 12.2 架构文档
 
-- [OpenClaw 功能说明书](../../Docs/OpenClaw/00-系统总览.md)
-- [三方对比报告](../../Docs/PyAgentForge/三方对比报告-OpenClaw-PyAgentForge-OpenCodeServer.md)
-- [PyAgentForge vs OpenCode](../../Docs/PyAgentForge/PyAgentForge-vs-OpenCodeServer-2026-02-16-完整对比.md)
+（无）
 
 ### 12.3 外部参考
 

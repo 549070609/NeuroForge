@@ -265,13 +265,4 @@ def create_provider(model_id: str, **kwargs) -> BaseProvider
 
 ---
 
-## 相关资源
-
-- [PyAgentForge 分析报告](../PyAgentForge/PyAgentForge-vs-OpenCodeServer-2026-02-16-完整对比.md)
-- [三方对比报告](../PyAgentForge/三方对比报告-OpenClaw-PyAgentForge-OpenCodeServer.md)
-- [OpenCode Server 深度说明书](../OpenCode/OpenCode-Server深度功能说明书/README.md)
-- [Claude Code 学习笔记](../learn/02-Claude-Code-学习笔记/)
-
----
-
 *本文档由 Claude Code 自动生成*
