@@ -243,8 +243,91 @@ class TelemetryCollector:
             return 0.0
         sorted_latencies = sorted(self._latencies)
         index = int(len(sorted_latencies) * percentile / 100)
-        index = min(index, len(sorted_latencies) - 1)
-        return sorted_latencies[index]
+        return sorted_latencies[min(index, len(sorted_latencies) - 1)]
+
+    # === 导出格式 ===
+
+    def export_json(self) -> str:
+        """
+        导出为 JSON 格式
+
+        Returns:
+            JSON 字符串
+        """
+        import json
+        return json.dumps(self.get_all_metrics(), indent=2)
+
+    def export_prometheus(self) -> str:
+        """
+        导出为 Prometheus 格式
+
+        Returns:
+            Prometheus 格式文本
+        """
+        metrics = self.get_all_metrics()
+        lines = []
+
+        # 请求指标
+        lines.append("# HELP pyagentforge_requests_total Total number of requests")
+        lines.append("# TYPE pyagentforge_requests_total counter")
+        lines.append(f"pyagentforge_requests_total {metrics['requests']['total']}")
+
+        lines.append("# HELP pyagentforge_requests_errors_total Total number of request errors")
+        lines.append("# TYPE pyagentforge_requests_errors_total counter")
+        lines.append(f"pyagentforge_requests_errors_total {metrics['requests']['errors']}")
+
+        # Token 指标
+        lines.append("# HELP pyagentforge_tokens_input_total Total input tokens")
+        lines.append("# TYPE pyagentforge_tokens_input_total counter")
+        lines.append(f"pyagentforge_tokens_input_total {metrics['tokens']['total_input']}")
+
+        lines.append("# HELP pyagentforge_tokens_output_total Total output tokens")
+        lines.append("# TYPE pyagentforge_tokens_output_total counter")
+        lines.append(f"pyagentforge_tokens_output_total {metrics['tokens']['total_output']}")
+
+        # 延迟指标
+        lines.append("# HELP pyagentforge_latency_ms Request latency in milliseconds")
+        lines.append("# TYPE pyagentforge_latency_ms gauge")
+        lines.append(f"pyagentforge_latency_ms{{quantile=\"avg\"}} {metrics['latency']['average_ms']:.2f}")
+        lines.append(f"pyagentforge_latency_ms{{quantile=\"p50\"}} {metrics['latency']['p50_ms']:.2f}")
+        lines.append(f"pyagentforge_latency_ms{{quantile=\"p95\"}} {metrics['latency']['p95_ms']:.2f}")
+        lines.append(f"pyagentforge_latency_ms{{quantile=\"p99\"}} {metrics['latency']['p99_ms']:.2f}")
+
+        # 事件指标
+        lines.append("# HELP pyagentforge_events_emitted_total Total events emitted")
+        lines.append("# TYPE pyagentforge_events_emitted_total counter")
+        lines.append(f"pyagentforge_events_emitted_total {metrics['events']['emitted']}")
+
+        # 会话指标
+        lines.append("# HELP pyagentforge_sessions_active Number of active sessions")
+        lines.append("# TYPE pyagentforge_sessions_active gauge")
+        lines.append(f"pyagentforge_sessions_active {metrics['sessions']['active_count']}")
+
+        return "\n".join(lines)
+
+    # === 集成辅助方法 ===
+
+    def attach_to_event_bus(self, event_bus: Any) -> None:
+        """
+        自动附加到 EventBus 以定期同步数据
+
+        Args:
+            event_bus: EventBus 实例
+        """
+        if hasattr(event_bus, 'get_stats'):
+            stats = event_bus.get_stats()
+            self.sync_from_event_bus(stats)
+
+    def attach_to_provider_pool(self, provider_pool: Any) -> None:
+        """
+        自动附加到 ProviderPool 以同步健康状态
+
+        Args:
+            provider_pool: ProviderPool 实例
+        """
+        if hasattr(provider_pool, 'get_health_status'):
+            status = provider_pool.get_health_status()
+            self.sync_from_provider_pool(status)
 
     # === 重置 ===
 

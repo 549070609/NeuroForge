@@ -29,18 +29,21 @@ class AutomationManager:
         >>> await manager.start()
     """
 
-    def __init__(self, engine: Any = None):
+    def __init__(self, engine: Any = None, event_bus: Any = None):
         """
         初始化自动化管理器
 
         Args:
             engine: Agent 引擎实例 (可选)
+            event_bus: EventBus 实例 (可选)
         """
         self.engine = engine
+        self.event_bus = event_bus
         self._tasks: dict[str, AutomationTask] = {}
         self._webhook_handlers: dict[str, dict[str, Any]] = {}
         self._running = False
         self._scheduler = None
+        self._event_handlers: list[Any] = []  # 保存事件处理器引用
 
     async def start(self) -> None:
         """启动调度器"""
@@ -61,9 +64,18 @@ class AutomationManager:
     async def stop(self) -> None:
         """停止调度器"""
         self._running = False
+
+        # 停止 Cron 调度器
         if self._scheduler:
             self._scheduler.shutdown()
             self._scheduler = None
+
+        # 取消事件订阅
+        if self.event_bus:
+            for handler in self._event_handlers:
+                self.event_bus.unsubscribe(handler)
+            self._event_handlers.clear()
+
         logger.info("Automation manager stopped")
 
     def add_cron_task(
@@ -137,6 +149,86 @@ class AutomationManager:
             "Added webhook handler",
             extra_data={"path": path}
         )
+
+    def add_event_task(
+        self,
+        task_id: str,
+        event_type: str,
+        action: str,
+        name: Optional[str] = None,
+        condition: Optional[Callable[[dict], bool]] = None,
+        **kwargs: Any
+    ) -> AutomationTask:
+        """
+        添加事件触发任务
+
+        Args:
+            task_id: 任务 ID
+            event_type: 触发的事件类型
+            action: Agent 执行的 prompt
+            name: 任务名称
+            condition: 可选条件检查函数，接收事件数据，返回是否执行
+            **kwargs: 额外参数
+
+        Returns:
+            创建的任务
+
+        Examples:
+            >>> # 当收到特定消息时触发
+            >>> manager.add_event_task(
+            ...     "on_message",
+            ...     "message.received",
+            ...     "Summarize the received message",
+            ...     condition=lambda data: data.get("urgent", False)
+            ... )
+        """
+        task = AutomationTask(
+            id=task_id,
+            name=name or task_id,
+            trigger_type=TriggerType.EVENT,
+            trigger_config={
+                "event_type": event_type,
+                "condition": condition,
+            },
+            action=action,
+            metadata=kwargs,
+        )
+
+        self._tasks[task_id] = task
+
+        # 注册事件监听器
+        if self.event_bus:
+            async def event_handler(event: Any) -> None:
+                """事件处理器"""
+                if not task.enabled:
+                    return
+
+                # 检查条件
+                if condition and not condition(event.data):
+                    logger.debug(
+                        f"Task {task_id} condition not met",
+                        extra_data={"event_type": event_type}
+                    )
+                    return
+
+                # 执行任务
+                await self._execute_task(task_id)
+
+            handler = self.event_bus.subscribe(
+                event_handler,
+                event_types=[event_type]
+            )
+            self._event_handlers.append(handler)
+
+            logger.info(
+                "Added event task",
+                extra_data={
+                    "task_id": task_id,
+                    "event_type": event_type,
+                }
+            )
+
+        return task
 
     async def handle_webhook(
         self,
