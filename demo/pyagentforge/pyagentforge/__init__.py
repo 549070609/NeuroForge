@@ -3,10 +3,10 @@ PyAgentForge - 通用型 AI Agent 服务底座
 
 核心理念: 模型即代理，代码即配置
 
-v2.0.0: 插件化架构重构
+v3.0.0: 四层架构重构 + Channel 系统 + Automation + Telemetry
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 __author__ = "PyAgentForge Team"
 
 # ============================================================================

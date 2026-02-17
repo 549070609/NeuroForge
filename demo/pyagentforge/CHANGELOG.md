@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-02-17
+
+### 💥 Breaking Changes
+
+#### Architecture Migration
+- **Four-Layer Architecture** - Migrated from flat to hierarchical structure
+  - Foundation Layer (Session Key, Config)
+  - Engine Layer (reserved)
+  - Middleware Layer (Pipeline, Telemetry)
+  - Capabilities Layer (Channels)
+
+- **Import Path Changes**
+  ```python
+  # v2.x
+  from pyagentforge.core.events import EventBus
+
+  # v3.0
+  from pyagentforge.plugins.integration.events import EventBus
+  # or use compat layer
+  from pyagentforge.compat.v2 import EventBus
+  ```
+
+### ✨ Added
+
+#### Foundation Layer
+- **Session Key System** - Unified session identifier
+  - Format: `{channel}:{conversation_id}[:{sub_key}]`
+  - Multi-level sub-keys support
+  - Hashable and comparable
+  - Empty value validation
+
+- **Environment Variable Parser** - Secure configuration
+  - Syntax: `${VAR}` and `${VAR:-default}`
+  - Recursive resolution
+  - Circular dependency detection
+
+#### Capabilities Layer
+
+- **Channel System** - Unified message channel protocol
+  - `BaseChannel` abstract class
+  - `ChannelStatus` enum
+  - `ChannelMessage` and `SendMessageResult`
+
+- **WebChat Channel** - Web client integration
+  - Session management with limits/timeout
+  - WebSocket real-time push
+  - Message queue polling
+  - Streaming message support
+  - Auto expired session cleanup
+
+- **Webhook Channel** - External webhook receiver
+  - Multiple path handlers
+  - HMAC-SHA256 signature verification
+  - Sync/async handler support
+  - Auto message emission
+
+#### Middleware Layer
+
+- **Middleware Pipeline** - Standardized execution
+  - `MiddlewareContext` with session/messages/tools
+  - `BaseMiddleware` with priority
+  - `MiddlewarePipeline` for chain execution
+
+- **Telemetry Middleware** - Unified metrics
+  - Request/token tracking
+  - Session-level metrics
+  - Latency percentiles (P50/P95/P99)
+  - JSON/Prometheus export
+  - EventBus/ProviderPool integration
+
+#### Automation Layer
+
+- **Automation System** - Built-in automation
+  - Trigger types: TIME/EVENT/WEBHOOK
+  - `AutomationTask` with tracking
+  - `AutomationManager` for cron/webhook
+  - EventBus integration
+  - Conditional event filtering
+
+### 🔧 Changed
+
+- **Session Management** - Refactored to Session Key system
+- **Provider Pool** - Added circuit breaker + weighted load balancing
+- **Plugin Types** - Expanded from 7 to 10 (+Channel, +Automation)
+
+### 🐛 Fixed
+
+- SessionKey.parse() empty value validation
+- Circular import in compat/v2/failover.py
+
+### 📚 Documentation
+
+- Complete v3.0 architecture design
+- Migration guide with examples
+- 7 comprehensive feature examples
+- Phase completion reports (0-5)
+
+### 🧪 Testing
+
+- **Total Tests**: 208
+- **Pass Rate**: 100%
+- **Coverage**: ~97%
+
+### 🔄 Migration Support
+
+- Backward compatibility via `pyagentforge.compat.v2`
+- Gradual migration path supported
+- See `Docs/PyAgentForge/v3.0-migration-guide.md` for details
+
+---
+
 ## [2.0.0] - 2026-02-17
 
 ### 💥 Breaking Changes

@@ -1,6 +1,6 @@
 [project]
 name = "pyagentforge"
-version = "2.0.0"
+version = "3.0.0"
 description = "通用型 AI Agent 服务底座 - 模型即代理，代码即配置"
 readme = "README.md"
 requires-python = ">=3.11"
