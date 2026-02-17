@@ -36,6 +36,15 @@ class LoadBalanceStrategy(Enum):
     LEAST_LATENCY = "least_latency"  # 最低延迟
     RANDOM = "random"  # 随机
     PRIORITY = "priority"  # 按优先级
+    WEIGHTED = "weighted"  # 按权重 (v3.0 新增)
+
+
+class CircuitState(Enum):
+    """熔断器状态 (v3.0 新增)"""
+
+    CLOSED = "closed"  # 关闭 (正常)
+    OPEN = "open"  # 打开 (拒绝请求)
+    HALF_OPEN = "half_open"  # 半开 (允许一次尝试)
 
 
 @dataclass
@@ -45,6 +54,7 @@ class ProviderHealth:
     provider: BaseProvider
     name: str
     priority: int = 0
+    weight: int = 100  # 权重 (v3.0 新增)，用于 WEIGHTED 调度
     is_healthy: bool = True
     consecutive_failures: int = 0
     last_failure_time: float = 0
@@ -57,12 +67,24 @@ class ProviderHealth:
     max_consecutive_failures: int = 3
     recovery_timeout_seconds: float = 60
 
+    # 熔断器状态 (v3.0 新增)
+    circuit_state: CircuitState = field(default=CircuitState.CLOSED)
+    circuit_open_until: float = 0  # 熔断器打开到这个时间
+
     def record_success(self, latency_ms: float) -> None:
         """记录成功请求"""
         self.consecutive_failures = 0
         self.is_healthy = True
         self.last_success_time = time.time()
         self.total_requests += 1
+
+        # 熔断器：成功后恢复到 CLOSED
+        if self.circuit_state == CircuitState.HALF_OPEN:
+            self.circuit_state = CircuitState.CLOSED
+            logger.info(
+                "Circuit breaker recovered",
+                extra_data={"provider": self.name},
+            )
 
         # 更新平均延迟
         if self.average_latency_ms == 0:
@@ -81,28 +103,67 @@ class ProviderHealth:
 
         if self.consecutive_failures >= self.max_consecutive_failures:
             self.is_healthy = False
+            # 熔断器：打开
+            self.circuit_state = CircuitState.OPEN
+            self.circuit_open_until = time.time() + self.recovery_timeout_seconds
             logger.warning(
-                "Provider marked unhealthy",
+                "Provider marked unhealthy, circuit breaker OPEN",
                 extra_data={
                     "provider": self.name,
                     "consecutive_failures": self.consecutive_failures,
+                    "recovery_in_seconds": self.recovery_timeout_seconds,
                 },
             )
 
     def check_recovery(self) -> bool:
-        """检查是否可以恢复"""
-        if self.is_healthy:
+        """
+        检查是否可以恢复
+
+        熔断器状态机:
+        - CLOSED: 正常，返回 True
+        - OPEN: 检查是否超时，超时则转为 HALF_OPEN
+        - HALF_OPEN: 允许一次尝试
+
+        Returns:
+            是否可以接受请求
+        """
+        # CLOSED 状态，正常
+        if self.circuit_state == CircuitState.CLOSED:
             return True
 
-        elapsed = time.time() - self.last_failure_time
-        if elapsed >= self.recovery_timeout_seconds:
-            logger.info(
-                "Provider recovery attempt",
-                extra_data={"provider": self.name, "elapsed_seconds": elapsed},
-            )
+        # OPEN 状态，检查是否超时
+        if self.circuit_state == CircuitState.OPEN:
+            if time.time() >= self.circuit_open_until:
+                # 转为 HALF_OPEN
+                self.circuit_state = CircuitState.HALF_OPEN
+                logger.info(
+                    "Circuit breaker HALF_OPEN, allowing one attempt",
+                    extra_data={"provider": self.name},
+                )
+                return True
+            return False
+
+        # HALF_OPEN 状态，允许一次尝试
+        if self.circuit_state == CircuitState.HALF_OPEN:
             return True
 
-        return False
+        return self.is_healthy
+
+    def get_metrics_snapshot(self) -> dict[str, Any]:
+        """
+        获取指标快照 (v3.0 新增)
+
+        为 TelemetryCollector 提供统一接口。
+        """
+        return {
+            "name": self.name,
+            "is_healthy": self.is_healthy,
+            "circuit_state": self.circuit_state.value,
+            "consecutive_failures": self.consecutive_failures,
+            "total_requests": self.total_requests,
+            "total_failures": self.total_failures,
+            "average_latency_ms": self.average_latency_ms,
+        }
 
 
 @dataclass
@@ -221,6 +282,20 @@ class ProviderPool:
 
         elif strategy == LoadBalanceStrategy.RANDOM:
             return random.choice(available)
+
+        elif strategy == LoadBalanceStrategy.WEIGHTED:
+            # 按权重随机选择 (v3.0 新增)
+            import random
+            total_weight = sum(h.weight for h in available)
+            if total_weight <= 0:
+                return available[0]
+            r = random.uniform(0, total_weight)
+            cumulative = 0
+            for h in available:
+                cumulative += h.weight
+                if r <= cumulative:
+                    return h
+            return available[-1]
 
         return available[0]
 
