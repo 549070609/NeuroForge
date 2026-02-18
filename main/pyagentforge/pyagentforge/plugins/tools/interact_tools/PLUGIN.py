@@ -1,172 +1,20 @@
 """
 Interact Tools Plugin
 
-Provides question, confirm, todo, and batch tools for user interaction
+Provides question, confirm, and batch tools for user interaction
+
+Note: Todo tools are provided by builtin tools (pyagentforge.tools.builtin.todo)
 """
 
 import asyncio
-import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Callable, List
-
-from pydantic import BaseModel, Field
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.kernel.base_tool import BaseTool
 
 
-# ============ Todo Tools ============
-
-class TodoItem(BaseModel):
-    """Todo item"""
-    id: int
-    content: str
-    status: str = "pending"  # pending, in_progress, completed
-    priority: str = "medium"  # low, medium, high
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-
-
-class TodoWriteTool(BaseTool):
-    """TodoWrite Tool - Write todo items"""
-
-    name = "todowrite"
-    description = """Manage todo list.
-
-    Use scenarios:
-    - Plan task steps
-    - Track progress
-    - Break down complex tasks
-
-    Status:
-    - pending: To be processed
-    - in_progress: In progress
-    - completed: Completed
-    """
-    parameters_schema: dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "todos": {
-                "type": "array",
-                "description": "Todo list",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "integer"},
-                        "content": {"type": "string"},
-                        "status": {
-                            "type": "string",
-                            "enum": ["pending", "in_progress", "completed"],
-                        },
-                        "priority": {
-                            "type": "string",
-                            "enum": ["low", "medium", "high"],
-                        },
-                    },
-                    "required": ["id", "content"],
-                },
-            },
-        },
-        "required": ["todos"],
-    }
-    timeout = 10
-    risk_level = "low"
-
-    def __init__(self, storage_path: Path | None = None) -> None:
-        self.storage_path = storage_path or Path("./data/todos.json")
-        self._todos: dict[int, TodoItem] = {}
-        self._load()
-
-    def _load(self) -> None:
-        """Load todo items"""
-        if self.storage_path.exists():
-            try:
-                with open(self.storage_path) as f:
-                    data = json.load(f)
-                    for item in data:
-                        todo = TodoItem(**item)
-                        self._todos[todo.id] = todo
-            except Exception:
-                pass
-
-    def _save(self) -> None:
-        """Save todo items"""
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.storage_path, "w") as f:
-            json.dump(
-                [t.model_dump() for t in self._todos.values()],
-                f,
-                indent=2,
-            )
-
-    async def execute(self, todos: list[dict[str, Any]]) -> str:
-        """Update todo items"""
-        for item in todos:
-            todo_id = item.get("id")
-            content = item.get("content", "")
-            status = item.get("status", "pending")
-            priority = item.get("priority", "medium")
-
-            todo = TodoItem(
-                id=todo_id,
-                content=content,
-                status=status,
-                priority=priority,
-            )
-            self._todos[todo_id] = todo
-
-        self._save()
-        return self._format_todos()
-
-    def _format_todos(self) -> str:
-        """Format todo items"""
-        if not self._todos:
-            return "No todos."
-
-        lines = ["# Todo List\n"]
-        status_icons = {
-            "pending": "[ ]",
-            "in_progress": "[>]",
-            "completed": "[x]",
-        }
-        priority_icons = {
-            "high": "(!)",
-            "medium": "( )",
-            "low": "(-)",
-        }
-
-        for todo in sorted(self._todos.values(), key=lambda x: x.id):
-            icon = status_icons.get(todo.status, "[ ]")
-            prio = priority_icons.get(todo.priority, "")
-            lines.append(f"{icon} [{todo.id}] {prio} {todo.content}")
-
-        return "\n".join(lines)
-
-
-class TodoReadTool(BaseTool):
-    """TodoRead Tool - Read todo items"""
-
-    name = "todoread"
-    description = """Read current todo list."""
-    parameters_schema: dict[str, Any] = {
-        "type": "object",
-        "properties": {},
-    }
-    timeout = 10
-    risk_level = "low"
-
-    def __init__(self, todo_write_tool: TodoWriteTool) -> None:
-        self.todo_tool = todo_write_tool
-
-    async def execute(self) -> str:
-        """Read todo items"""
-        return self.todo_tool._format_todos()
-
-
-# ============ Question Tools ============
+# ============ Question Tool ============
 
 class QuestionTool(BaseTool):
     """Question Tool - Ask user questions"""
@@ -235,6 +83,8 @@ class QuestionTool(BaseTool):
         result_parts.append("\n[Waiting for user response...]")
         return "\n".join(result_parts)
 
+
+# ============ Confirm Tool ============
 
 class ConfirmTool(BaseTool):
     """Confirm Tool - Simple yes/no confirmation"""
@@ -393,14 +243,17 @@ class BatchTool(BaseTool):
 # ============ Plugin ============
 
 class InteractToolsPlugin(Plugin):
-    """Interactive tools plugin"""
+    """Interactive tools plugin (question, confirm, batch)
+
+    Note: Todo tools are provided by builtin tools, not this plugin.
+    """
 
     metadata = PluginMetadata(
         id="tool.interact_tools",
         name="Interact Tools",
-        version="1.0.0",
+        version="2.0.0",
         type=PluginType.TOOL,
-        description="Provides question, confirm, todo, and batch tools for user interaction",
+        description="Provides question, confirm, and batch tools for user interaction",
         author="PyAgentForge",
         provides=["tools.interact"],
         dependencies=[],
@@ -408,8 +261,6 @@ class InteractToolsPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self._todo_write_tool: TodoWriteTool | None = None
-        self._todo_read_tool: TodoReadTool | None = None
         self._question_tool: QuestionTool | None = None
         self._confirm_tool: ConfirmTool | None = None
         self._batch_tool: BatchTool | None = None
@@ -418,26 +269,18 @@ class InteractToolsPlugin(Plugin):
         """Activate plugin"""
         await super().on_plugin_activate()
 
-        config = self.context.config or {}
-
         # Create tools
-        self._todo_write_tool = TodoWriteTool(
-            storage_path=Path(config.get("todo_storage_path", "./data/todos.json"))
-        )
-        self._todo_read_tool = TodoReadTool(self._todo_write_tool)
         self._question_tool = QuestionTool()
         self._confirm_tool = ConfirmTool()
         self._batch_tool = BatchTool(
             tool_registry=self.context.get_tool_registry() if self.context else None
         )
 
-        self.context.logger.info("Interact tools plugin initialized")
+        self.context.logger.info("Interact tools plugin initialized (v2.0 - no todo)")
 
     def get_tools(self) -> List[BaseTool]:
         """Return plugin provided tools"""
         return [
-            self._todo_write_tool,
-            self._todo_read_tool,
             self._question_tool,
             self._confirm_tool,
             self._batch_tool,
