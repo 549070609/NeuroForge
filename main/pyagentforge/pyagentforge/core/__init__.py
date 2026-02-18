@@ -113,6 +113,18 @@ from pyagentforge.core.compaction import (
     CompactionResult,
 )
 
+# 进程级清理
+from pyagentforge.core.cleanup import (
+    CleanupPriority,
+    CleanupCallback,
+    CleanupStats,
+    ProcessCleanup,
+    get_cleanup,
+    register_cleanup,
+    register_cleanup_async,
+    enable_cleanup_signals,
+)
+
 __all__ = [
     # 核心组件 (from kernel)
     "AgentEngine",
@@ -183,4 +195,13 @@ __all__ = [
     "SessionState",
     "SessionSummary",
     "SessionSnapshot",
+    # 进程级清理
+    "CleanupPriority",
+    "CleanupCallback",
+    "CleanupStats",
+    "ProcessCleanup",
+    "get_cleanup",
+    "register_cleanup",
+    "register_cleanup_async",
+    "enable_cleanup_signals",
 ]
