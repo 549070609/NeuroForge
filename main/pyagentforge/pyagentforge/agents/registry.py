@@ -252,6 +252,114 @@ class AgentRegistry:
             "active_instances": len(self.list_active_instances()),
         }
 
+    # ==================== 构建层扩展方法 ====================
+
+    def register_schema(self, schema: "AgentSchema") -> None:
+        """
+        从 Schema 注册 Agent
+
+        Args:
+            schema: AgentSchema 实例
+        """
+        metadata = schema.to_agent_metadata()
+        self.register(metadata)
+
+    def find_by_capability(self, capability: str) -> list[AgentMetadata]:
+        """
+        按能力查找 Agent（工具名）
+
+        Args:
+            capability: 工具名或能力
+
+        Returns:
+            匹配的 Agent 列表
+        """
+        results = []
+        for agent in self._agents.values():
+            # 检查是否包含该工具
+            if "*" in agent.tools or capability in agent.tools:
+                results.append(agent)
+        return results
+
+    def find_by_tags(self, tags: list[str]) -> list[AgentMetadata]:
+        """
+        按标签查找 Agent
+
+        Args:
+            tags: 标签列表
+
+        Returns:
+            匹配的 Agent 列表
+        """
+        results = []
+        for agent in self._agents.values():
+            # 检查是否包含任意标签
+            if any(tag in agent.tags for tag in tags):
+                results.append(agent)
+        return results
+
+    def find_best_for_task(self, task_description: str) -> AgentMetadata | None:
+        """
+        智能匹配最适合任务的 Agent（增强版 match_agent）
+
+        Args:
+            task_description: 任务描述
+
+        Returns:
+            最佳匹配的 Agent 或 None
+        """
+        import re
+
+        task_lower = task_description.lower()
+        candidates = []
+
+        for agent in self._agents.values():
+            score = 0
+
+            # 1. 检查 key_trigger 模式（权重 10）
+            if agent.key_trigger:
+                if re.search(agent.key_trigger, task_lower, re.IGNORECASE):
+                    score += 10
+
+            # 2. 检查 use_when 关键词（权重 2）
+            for keyword in agent.use_when:
+                if keyword.lower() in task_lower:
+                    score += 2
+
+            # 3. 检查 avoid_when 模式（负权重 -5）
+            for keyword in agent.avoid_when:
+                if keyword.lower() in task_lower:
+                    score -= 5
+
+            # 4. 检查标签匹配（权重 3）
+            for tag in agent.tags:
+                if tag.lower() in task_lower:
+                    score += 3
+
+            # 5. 检查委托触发器（权重 4）
+            for trigger in agent.triggers:
+                if trigger.domain.lower() in task_lower or trigger.trigger.lower() in task_lower:
+                    score += 4
+
+            # 6. 检查描述关键词（权重 1）
+            if agent.description:
+                desc_words = agent.description.lower().split()
+                for word in desc_words:
+                    if word in task_lower and len(word) > 3:
+                        score += 1
+
+            # 如果得分大于 0，加入候选列表
+            if score > 0:
+                candidates.append((agent, score))
+
+        # 按得分排序，返回最高分的 Agent
+        if candidates:
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            return candidates[0][0]
+
+        # 如果没有匹配，返回 None
+        return None
+
 
 # Global registry instance
 _global_registry: AgentRegistry | None = None

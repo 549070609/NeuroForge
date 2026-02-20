@@ -1,0 +1,2 @@
+# Long Memory Dependencies
+chromadb>=0.4.22

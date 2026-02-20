@@ -54,13 +54,15 @@ class GLMProvider(BaseProvider):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "glm-4-flash",
+        model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.95,
         use_functions_format: bool = True,  # 使用 functions 格式（GLM 可能需要）
         **kwargs: Any,
     ) -> None:
-        super().__init__(model, max_tokens, temperature, **kwargs)
+        # 从环境变量或参数获取模型名称（优先使用参数）
+        selected_model = model or os.environ.get("GLM_MODEL", "glm-4-flash")
+        super().__init__(selected_model, max_tokens, temperature, **kwargs)
 
         # 从环境变量或参数获取 API Key
         self.api_key = api_key or os.environ.get("GLM_API_KEY")
@@ -76,7 +78,7 @@ class GLMProvider(BaseProvider):
             base_url=self.GLM_BASE_URL,
         )
 
-        print(f"[GLM Provider] Initialized with model: {model}, base_url: {self.GLM_BASE_URL}")
+        print(f"[GLM Provider] Initialized with model: {selected_model}, base_url: {self.GLM_BASE_URL}")
         print(f"[GLM Provider] Using functions format: {use_functions_format}")
 
     def _convert_tools_to_openai(
@@ -187,35 +189,116 @@ class GLMProvider(BaseProvider):
             if self.use_functions_format:
                 params["functions"] = self._convert_tools_to_glm_functions(tools)
                 params["function_call"] = "auto"
+                # DEBUG: 打印工具定义
+                import json
+                print(f"[GLM Provider DEBUG] Sending functions (count={len(params['functions'])}):")
+                for func in params["functions"]:
+                    print(f"  - {func.get('name')}: {func.get('description', '')[:50]}...")
             else:
                 params["tools"] = openai_tools
+                print(f"[GLM Provider DEBUG] Sending tools (count={len(params['tools'])}):")
+                for tool in params["tools"]:
+                    print(f"  - {tool.get('function', {}).get('name')}")
 
         try:
             response = await self.client.chat.completions.create(**params)
+
+            # DEBUG: 打印原始响应（使用 model_dump 而不是 dict）
+            try:
+                raw_json = response.model_dump_json(indent=2)
+                print(f"[GLM Provider DEBUG] Raw response (first 500 chars):")
+                print(raw_json[:500])
+            except Exception as e:
+                print(f"[GLM Provider DEBUG] Could not serialize response: {e}")
 
             # 解析响应
             content: list[TextBlock | ToolUseBlock] = []
             choice = response.choices[0]
 
+            # DEBUG: 打印原始响应
+            print(f"[GLM Provider DEBUG] Response finish_reason: {choice.finish_reason}")
+            print(f"[GLM Provider DEBUG] Has tool_calls: {hasattr(choice.message, 'tool_calls')}")
+            print(f"[GLM Provider DEBUG] Has function_call: {hasattr(choice.message, 'function_call')}")
+
+            # 更详细的调试
+            if hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                print(f"[GLM Provider DEBUG] tool_calls count: {len(choice.message.tool_calls)}")
+                for i, tc in enumerate(choice.message.tool_calls):
+                    print(f"[GLM Provider DEBUG]   tool_call[{i}]: {tc.function.name if tc.function else 'N/A'}")
+            else:
+                print(f"[GLM Provider DEBUG] tool_calls is None or empty")
+
+            if hasattr(choice.message, 'function_call') and choice.message.function_call:
+                print(f"[GLM Provider DEBUG] function_call name: {choice.message.function_call.name}")
+            else:
+                print(f"[GLM Provider DEBUG] function_call is None or empty")
+
             if choice.message.content:
                 content.append(TextBlock(text=choice.message.content))
 
-            if choice.message.tool_calls:
+            # 处理 OpenAI 新版 tools 格式
+            if hasattr(choice.message, 'tool_calls') and choice.message.tool_calls:
+                print(f"[GLM Provider DEBUG] Processing tool_calls: {len(choice.message.tool_calls)} calls")
+                import json
+                import uuid
                 for tc in choice.message.tool_calls:
+                    # 关键修复：arguments 可能是 JSON 字符串，需要解析
+                    args = tc.function.arguments
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                            print(f"[GLM Provider DEBUG] Parsed tool_arguments from JSON string")
+                        except json.JSONDecodeError as e:
+                            print(f"[GLM Provider DEBUG] Failed to parse tool_arguments: {e}")
+                            args = {}
+                    elif not isinstance(args, dict):
+                        args = {}
+
                     content.append(
                         ToolUseBlock(
-                            id=tc.id,
+                            id=tc.id or f"tool_{uuid.uuid4().hex[:8]}",
                             name=tc.function.name,
-                            input=tc.function.arguments
-                            if isinstance(tc.function.arguments, dict)
-                            else {},
+                            input=args,
                         )
                     )
+                    print(f"[GLM Provider DEBUG] Created ToolUseBlock: {tc.function.name}")
 
-            # 确定停止原因
+            # 处理 OpenAI 旧版 functions 格式（GLM 可能使用这个）
+            elif hasattr(choice.message, 'function_call') and choice.message.function_call:
+                print(f"[GLM Provider DEBUG] Processing function_call: {choice.message.function_call.name}")
+                import json
+                import uuid
+
+                # 关键修复：arguments 可能是 JSON 字符串
+                args = choice.message.function_call.arguments
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                        print(f"[GLM Provider DEBUG] Parsed function_arguments from JSON string")
+                    except json.JSONDecodeError as e:
+                        print(f"[GLM Provider DEBUG] Failed to parse function_arguments: {e}")
+                        args = {}
+                elif not isinstance(args, dict):
+                    args = {}
+
+                content.append(
+                    ToolUseBlock(
+                        id=f"func_{uuid.uuid4().hex[:8]}",
+                        name=choice.message.function_call.name,
+                        input=args,
+                    )
+                )
+                print(f"[GLM Provider DEBUG] Created ToolUseBlock from function_call: {choice.message.function_call.name}")
+
+            # 确定停止原因（关键修复：必须正确识别工具调用）
             finish_reason = choice.finish_reason
-            if finish_reason == "tool_calls":
+
+            # 如果有工具调用内容，强制设置 stop_reason 为 tool_use
+            has_tool_content = any(isinstance(b, ToolUseBlock) for b in content)
+
+            if has_tool_content or finish_reason in ["tool_calls", "function_call"]:
                 stop_reason = "tool_use"
+                print(f"[GLM Provider DEBUG] Set stop_reason to 'tool_use' (has_tool_content={has_tool_content})")
             elif finish_reason == "length":
                 stop_reason = "max_tokens"
             else:

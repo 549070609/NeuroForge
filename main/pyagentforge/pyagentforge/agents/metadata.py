@@ -82,6 +82,9 @@ class AgentMetadata:
     reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
     text_verbosity: Literal["low", "medium", "high"] = "medium"
 
+    # 构建层扩展字段
+    tags: list[str] = field(default_factory=list)  # 标签，用于分类和搜索
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -104,6 +107,8 @@ class AgentMetadata:
             "is_unstable_agent": self.is_unstable_agent,
             "reasoning_effort": self.reasoning_effort,
             "text_verbosity": self.text_verbosity,
+            # 构建层扩展字段
+            "tags": self.tags,
         }
 
 

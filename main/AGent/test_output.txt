@@ -1,0 +1,42 @@
+======================================================================
+ GLM Tool Calling Test
+======================================================================
+
+[Step 1] Creating GLM Provider...
+[GLM Provider] Initialized with model: glm-5, base_url: https://open.bigmodel.cn/api/coding/paas/v4
+[GLM Provider] Using functions format: True
+  [OK] Model: glm-5
+
+[Step 2] Creating ToolRegistry...
+  [OK] Registered 1 tools
+
+[Step 3] Getting tool schemas...
+  [OK] 1 schemas available
+    - write
+
+[Step 4] Creating AgentEngine...
+  [OK] Session: 18caa0f0-0232-4254-b326-635d8259edd7
+
+[Step 5] Testing simple conversation (no tool)...
+[GLM Provider DEBUG] Response finish_reason: stop
+[GLM Provider DEBUG] Has tool_calls: True
+[GLM Provider DEBUG] Has function_call: True
+[GLM Provider DEBUG] tool_calls is None or empty
+[GLM Provider DEBUG] function_call is None or empty
+[GLM Provider] Response: stop_reason=end_turn, usage={'input_tokens': 166, 'output_tokens': 50}
+  [OK] Response: 测试成功...
+
+[Step 6] Testing tool calling...
+  Prompt: '请将以下内容保存到 test_file.md: 这是一个测试文件'
+[GLM Provider DEBUG] Response finish_reason: stop
+[GLM Provider DEBUG] Has tool_calls: True
+[GLM Provider DEBUG] Has function_call: True
+[GLM Provider DEBUG] tool_calls is None or empty
+[GLM Provider DEBUG] function_call is None or empty
+[GLM Provider] Response: stop_reason=end_turn, usage={'input_tokens': 184, 'output_tokens': 43}
+  [Response]: 好的，我来将内容保存到文件中。...
+  [WARNING] File not created
+
+======================================================================
+ Test Complete
+======================================================================

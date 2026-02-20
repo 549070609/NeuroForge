@@ -2,7 +2,7 @@
 Ralph Loop Engine
 
 Auto-continuation system that keeps the agent working until task completion.
-Based on oh-my-code's todo-continuation-enforcer pattern.
+Auto-continuation pattern for task completion tracking.
 """
 
 from dataclasses import dataclass, field

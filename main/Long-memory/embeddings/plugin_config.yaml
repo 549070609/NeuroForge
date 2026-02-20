@@ -1,0 +1,31 @@
+# Local Embeddings 插件配置示例
+#
+# 将此文件复制到 pyagentforge 的配置目录，
+# 或在创建 engine 时使用 PluginConfig.from_yaml() 加载
+
+# 预设: minimal, standard, full
+preset: standard
+
+# 启用的插件列表
+enabled:
+  - tool.local-embeddings
+
+# 插件搜索目录
+plugin_dirs:
+  - "../Long-memory/embeddings"
+
+# 插件特定配置
+config:
+  tool.local-embeddings:
+    # 本地模型路径 (null 表示使用默认路径或在线下载)
+    model_path: null
+    # 模型名称
+    model_name: "all-MiniLM-L6-v2"
+    # 运行设备: cpu, cuda, mps
+    device: cpu
+    # 批处理大小
+    max_batch_size: 4
+
+# 自动发现配置
+auto_discover: true
+auto_enable_all: false

@@ -43,7 +43,24 @@ class ContextManager:
         content: list[TextBlock | ToolUseBlock],
     ) -> None:
         """添加助手消息"""
-        self.messages.append(Message(role="assistant", content=content))
+        # Convert content blocks to dict format for proper Pydantic validation
+        # This ensures the Message model can properly validate the union type
+        content_dicts = []
+        for block in content:
+            if isinstance(block, TextBlock):
+                content_dicts.append({"type": "text", "text": block.text})
+            elif isinstance(block, ToolUseBlock):
+                content_dicts.append({
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                })
+            else:
+                # Fallback: try to convert to dict
+                content_dicts.append(block.model_dump() if hasattr(block, 'model_dump') else block)
+
+        self.messages.append(Message(role="assistant", content=content_dicts))
         logger.debug(f"Added assistant message, blocks={len(content)}")
 
     def add_assistant_text(self, text: str) -> None:
