@@ -46,6 +46,7 @@ class AgentEngine:
         context: ContextManager | None = None,
         ask_callback: AskCallback | None = None,
         plugin_manager: Any = None,  # PluginManager 将在 Phase 2 实现
+        category_registry: Any = None,  # CategoryRegistry for task classification
     ) -> None:
         """
         初始化 Agent 引擎
@@ -57,6 +58,7 @@ class AgentEngine:
             context: 上下文管理器
             ask_callback: 用户确认回调
             plugin_manager: 插件管理器 (可选)
+            category_registry: 类别注册表 (可选，用于任务分类)
         """
         self.provider = provider
         self.tools = tool_registry
@@ -70,6 +72,7 @@ class AgentEngine:
         )
         self.ask_callback = ask_callback
         self.plugin_manager = plugin_manager
+        self.category_registry = category_registry
         self._subagent_depth = 0
         self._session_id = str(uuid.uuid4())
 
@@ -219,10 +222,11 @@ class AgentEngine:
                 if modified and modified[0]:
                     messages = modified[0]
 
-            # 流式调用 LLM
+            # 流式调用 LLM (使用适配后的提示词)
+            system_prompt = self._adapt_system_prompt()
             final_response = None
             async for event in self.provider.stream_message(
-                self.config.system_prompt,
+                system_prompt,
                 messages,
                 self.tools.get_schemas(),
             ):
@@ -295,13 +299,59 @@ class AgentEngine:
 
     async def _call_llm(self, messages: list[dict]) -> ProviderResponse:
         """调用 LLM"""
+        # 适配系统提示词
+        system_prompt = self._adapt_system_prompt()
+
         return await self.provider.create_message(
-            system=self.config.system_prompt,
+            system=system_prompt,
             messages=messages,
             tools=self.tools.get_schemas(),
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
         )
+
+    def _adapt_system_prompt(self) -> str:
+        """
+        根据模型适配系统提示词
+
+        Returns:
+            适配后的系统提示词
+        """
+        from pyagentforge.kernel.model_registry import get_model
+        from pyagentforge.prompts.adapter import get_prompt_adapter
+        from pyagentforge.prompts.base import AdaptationContext
+
+        try:
+            adapter = get_prompt_adapter()
+            model_config = get_model(self.provider.model)
+
+            if not model_config:
+                logger.debug(
+                    f"No model config found for {self.provider.model}, "
+                    f"using base prompt"
+                )
+                return self.config.system_prompt
+
+            context = AdaptationContext(
+                model_id=self.provider.model,
+                model_config=model_config,
+                base_prompt=self.config.system_prompt,
+                available_tools=self.tools.get_schemas(),
+            )
+
+            adapted_prompt = adapter.adapt_prompt(context)
+            logger.info(
+                f"Adapted system prompt for model={self.provider.model}, "
+                f"len={len(adapted_prompt)}"
+            )
+            return adapted_prompt
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to adapt system prompt: {e}, "
+                f"falling back to base prompt"
+            )
+            return self.config.system_prompt
 
     def reset(self) -> None:
         """重置 Agent 状态"""
@@ -319,3 +369,68 @@ class AgentEngine:
                 "max_tokens": self.config.max_tokens,
             },
         }
+
+    async def auto_classify_task(self, prompt: str) -> dict[str, Any]:
+        """
+        自动分类任务并返回推荐配置
+
+        Args:
+            prompt: 用户输入的任务描述
+
+        Returns:
+            包含分类结果的字典:
+            {
+                "category": str,  # 类别名称
+                "confidence": float,  # 置信度
+                "recommended_model": str,  # 推荐模型
+                "recommended_agents": list[str],  # 推荐代理
+                "complexity": str,  # 复杂度
+                "method": str,  # 分类方法
+            }
+        """
+        if not self.category_registry:
+            # 没有分类器，返回默认值
+            return {
+                "category": "coding",
+                "confidence": 0.5,
+                "recommended_model": self.provider.model,
+                "recommended_agents": ["explore", "plan", "code"],
+                "complexity": "standard",
+                "method": "fallback",
+            }
+
+        try:
+            # 尝试使用异步分类
+            result = await self.category_registry.classify_async(
+                prompt,
+                use_semantic=True,
+                use_llm=False,  # 默认不使用 LLM 分类以节省成本
+            )
+
+            if result and result.category:
+                return {
+                    "category": result.category.name,
+                    "confidence": result.confidence,
+                    "recommended_model": result.category.model,
+                    "recommended_agents": result.category.agents,
+                    "complexity": result.category.complexity.value,
+                    "method": result.method,
+                    "matched_keywords": result.matched_keywords,
+                }
+
+        except Exception as e:
+            logger.warning(f"Task classification failed: {e}")
+
+        # Fallback
+        return {
+            "category": "coding",
+            "confidence": 0.5,
+            "recommended_model": self.provider.model,
+            "recommended_agents": ["explore", "plan", "code"],
+            "complexity": "standard",
+            "method": "fallback",
+        }
+
+    def get_category_registry(self) -> Any:
+        """获取类别注册表"""
+        return self.category_registry

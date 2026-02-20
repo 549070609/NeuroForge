@@ -11,6 +11,9 @@ from typing import Any, Callable, TYPE_CHECKING
 
 from pyagentforge.kernel.message import ToolUseBlock
 
+# 导入完整的 ToolRegistry 实现（修复双重实现问题）
+from pyagentforge.tools.registry import ToolRegistry
+
 if TYPE_CHECKING:
     from pyagentforge.kernel.base_tool import BaseTool
 
@@ -48,34 +51,8 @@ class PermissionChecker:
         return PermissionResult.ALLOW
 
 
-class ToolRegistry:
-    """工具注册表"""
-
-    def __init__(self):
-        self._tools: dict[str, "BaseTool"] = {}
-
-    def register(self, tool: "BaseTool") -> None:
-        """注册工具"""
-        self._tools[tool.name] = tool
-        logger.debug(f"Registered tool: {tool.name}")
-
-    def unregister(self, tool_name: str) -> None:
-        """注销工具"""
-        if tool_name in self._tools:
-            del self._tools[tool_name]
-            logger.debug(f"Unregistered tool: {tool_name}")
-
-    def get(self, tool_name: str) -> "BaseTool | None":
-        """获取工具"""
-        return self._tools.get(tool_name)
-
-    def get_all(self) -> list["BaseTool"]:
-        """获取所有工具"""
-        return list(self._tools.values())
-
-    def get_schemas(self) -> list[dict[str, Any]]:
-        """获取所有工具的 schema"""
-        return [tool.to_anthropic_schema() for tool in self._tools.values()]
+# ToolRegistry 已从 pyagentforge.tools.registry 导入
+# 移除本地重复实现（修复双重实现 bug）
 
 
 class ToolExecutor:

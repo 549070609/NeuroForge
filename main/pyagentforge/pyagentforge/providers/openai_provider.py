@@ -4,6 +4,7 @@ OpenAI 提供商
 支持 GPT 系列模型
 """
 
+import json
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -141,13 +142,30 @@ class OpenAIProvider(BaseProvider):
 
             if choice.message.tool_calls:
                 for tc in choice.message.tool_calls:
+                    # OpenAI API 返回的 function.arguments 是 JSON 字符串
+                    # 需要解析为字典
+                    try:
+                        if isinstance(tc.function.arguments, str):
+                            tool_input = json.loads(tc.function.arguments)
+                        elif isinstance(tc.function.arguments, dict):
+                            tool_input = tc.function.arguments
+                        else:
+                            tool_input = {}
+                    except json.JSONDecodeError as e:
+                        # JSON 解析失败，记录错误并使用空字典
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(
+                            f"Failed to parse tool arguments as JSON: {e}. "
+                            f"Tool: {tc.function.name}, Arguments: {tc.function.arguments}"
+                        )
+                        tool_input = {}
+
                     content.append(
                         ToolUseBlock(
                             id=tc.id,
                             name=tc.function.name,
-                            input=tc.function.arguments
-                            if isinstance(tc.function.arguments, dict)
-                            else {},
+                            input=tool_input,
                         )
                     )
 

@@ -6,7 +6,7 @@ Task classification and category-based configuration.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pyagentforge.utils.logging import get_logger
 
@@ -54,6 +54,11 @@ class Category:
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    # v4.0: 增强字段
+    is_unstable_category: bool = False  # 是否为不稳定类别
+    auto_background_conversion: bool = False  # 是否自动转后台
+    reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -67,6 +72,10 @@ class Category:
             "priority": self.priority,
             "keywords": self.keywords,
             "complexity": self.complexity.value,
+            # v4.0: 新增字段
+            "is_unstable_category": self.is_unstable_category,
+            "auto_background_conversion": self.auto_background_conversion,
+            "reasoning_effort": self.reasoning_effort,
         }
 
 

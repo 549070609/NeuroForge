@@ -1,0 +1,60 @@
+{
+  "name": "research",
+  "description": "技术调研思维链，用于系统化地研究和学习新技术",
+  "version": "1.0",
+  "author": "PyAgentForge Team",
+  "tags": ["research", "learning", "exploration"],
+  "phases": [
+    {
+      "name": "define_scope",
+      "prompt": "1. 明确调研目标\n2. 确定调研范围\n3. 列出关键问题\n\n请明确这次调研想解决什么问题。",
+      "order": 0,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须明确调研目标", "type": "hard"}
+      ]
+    },
+    {
+      "name": "search",
+      "prompt": "1. 搜索官方文档和权威资料\n2. 查找示例代码和教程\n3. 收集社区讨论和最佳实践\n\n请列出找到的关键资源。",
+      "order": 1,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须引用来源", "type": "hard"}
+      ]
+    },
+    {
+      "name": "filter",
+      "prompt": "1. 评估资料的相关性\n2. 检查资料的时效性\n3. 选择最可靠的来源\n\n请筛选出最有价值的资料。",
+      "order": 2,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "analyze",
+      "prompt": "1. 提取关键概念\n2. 对比不同方案\n3. 识别优缺点\n\n请提供深入分析。",
+      "order": 3,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须对比至少2个方案", "type": "soft"}
+      ]
+    },
+    {
+      "name": "synthesize",
+      "prompt": "1. 整合分析结果\n2. 形成结论\n3. 提供可操作的建议\n\n请总结调研发现和建议。",
+      "order": 4,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须提供明确结论", "type": "hard"},
+        {"description": "必须提供可操作建议", "type": "hard"}
+      ]
+    },
+    {
+      "name": "validate",
+      "prompt": "1. 通过小实验验证关键结论\n2. 检查是否有遗漏\n3. 确认结论的可靠性\n\n请说明验证过程。",
+      "order": 5,
+      "is_required": false,
+      "constraints": []
+    }
+  ]
+}

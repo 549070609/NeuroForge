@@ -5,3 +5,19 @@
 CLAUDE.md
 .obsidian/
 .claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+
+# Misc
+nul

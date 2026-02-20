@@ -32,6 +32,24 @@ class HookType(str, Enum):
     ON_BEFORE_TOOL_CALL = "on_before_tool_call"
     ON_AFTER_TOOL_CALL = "on_after_tool_call"
 
+    # v4.0: 增强工具钩子 (支持决策)
+    PRE_TOOL_USE = "pre_tool_use"      # 工具执行前 (支持 DENY/ASK/BLOCK/MODIFY)
+    POST_TOOL_USE = "post_tool_use"    # 工具执行后 (支持结果修改)
+    USER_PROMPT_SUBMIT = "user_prompt_submit"  # 用户提交时 (支持 BLOCK)
+
+    # v4.1: 后台任务钩子
+    ON_BACKGROUND_TASK_COMPLETE = "on_background_task_complete"  # 任务成功完成
+    ON_BACKGROUND_TASK_FAIL = "on_background_task_fail"          # 任务失败
+    ON_BACKGROUND_TASK_STALE = "on_background_task_stale"        # 任务陈旧
+
+    # v4.2: Task System 钩子
+    ON_TASK_CREATED = "on_task_created"           # 任务创建
+    ON_TASK_UPDATED = "on_task_updated"           # 任务更新
+    ON_TASK_COMPLETED = "on_task_completed"       # 任务完成
+    ON_TASK_PROGRESS = "on_task_progress"         # 任务进度更新
+    ON_TASK_BLOCKED = "on_task_blocked"           # 任务被阻塞
+    ON_SUBTASK_ADDED = "on_subtask_added"         # 子任务添加
+
     # 上下文钩子
     ON_CONTEXT_OVERFLOW = "on_context_overflow"
     ON_TASK_COMPLETE = "on_task_complete"
@@ -50,6 +68,26 @@ class HookResult(str, Enum):
 
     CONTINUE = "continue"
     STOP = "stop"
+    MODIFY = "modify"
+
+
+class HookDecision(str, Enum):
+    """
+    v4.0: 钩子决策系统
+
+    用于 PRE_TOOL_USE 和 POST_TOOL_USE 钩子，支持精细化控制工具执行。
+
+    ALLOW: 允许继续执行（默认行为）
+    DENY: 拒绝执行，返回错误信息
+    ASK: 请求用户确认（交互式）
+    BLOCK: 阻止执行但提供替代上下文
+    MODIFY: 修改工具参数后执行
+    """
+
+    ALLOW = "allow"
+    DENY = "deny"
+    ASK = "ask"
+    BLOCK = "block"
     MODIFY = "modify"
 
 
@@ -383,6 +421,94 @@ class HookRegistry:
     def get_hook_count(self, hook_type: HookType) -> int:
         """获取特定类型钩子的数量"""
         return len(self._hooks.get(hook_type, []))
+
+    async def emit_decision(
+        self,
+        hook_type: HookType,
+        *args,
+        **kwargs,
+    ) -> tuple[HookDecision, str | None]:
+        """
+        v4.0: 触发钩子并收集决策
+
+        按优先级顺序执行钩子，返回第一个非 ALLOW 的决策（获胜决策）。
+        如果所有钩子都返回 ALLOW 或 None，则返回 (ALLOW, None)。
+
+        适用于 PRE_TOOL_USE 和 POST_TOOL_USE 场景。
+
+        Args:
+            hook_type: 钩子类型
+            *args: 位置参数
+            **kwargs: 关键字参数
+
+        Returns:
+            (HookDecision, str | None): 决策和可选的消息
+        """
+        self._ensure_sorted(hook_type)
+        hooks = self._hooks.get(hook_type, [])
+
+        logger.debug(
+            f"Emitting decision hook: {hook_type.value} to {len(hooks)} listeners"
+        )
+
+        # 默认决策
+        final_decision = HookDecision.ALLOW
+        final_message = None
+
+        for entry in hooks:
+            try:
+                result = entry.callback(*args, **kwargs)
+
+                # 处理协程
+                if asyncio.iscoroutine(result):
+                    result = await result
+
+                # 跳过 None
+                if result is None:
+                    continue
+
+                plugin_id = getattr(entry.plugin, "metadata", None)
+                plugin_id = plugin_id.id if plugin_id else str(id(entry.plugin))
+
+                # 解析决策
+                decision = None
+                message = None
+
+                if isinstance(result, HookDecision):
+                    decision = result
+                elif isinstance(result, tuple) and len(result) >= 2:
+                    decision, message = result[0], result[1]
+                elif isinstance(result, dict):
+                    decision = result.get("decision")
+                    message = result.get("message")
+                else:
+                    logger.warning(
+                        f"Invalid decision result from {plugin_id}: {type(result)}"
+                    )
+                    continue
+
+                # 第一个非 ALLOW 决策获胜
+                if decision and decision != HookDecision.ALLOW:
+                    final_decision = decision
+                    final_message = message
+
+                    logger.info(
+                        f"Hook {hook_type.value} from {plugin_id} "
+                        f"made decision: {decision.value}"
+                    )
+
+                    # 停止执行
+                    break
+
+            except Exception as e:
+                plugin_id = getattr(entry.plugin, "metadata", None)
+                plugin_id = plugin_id.id if plugin_id else str(id(entry.plugin))
+
+                logger.error(
+                    f"Error in decision hook {hook_type.value} from {plugin_id}: {e}"
+                )
+
+        return final_decision, final_message
 
     def clear(self, hook_type: HookType | None = None) -> None:
         """

@@ -1,0 +1,64 @@
+{
+  "name": "refactoring",
+  "description": "代码重构思维链，用于安全有效地改善代码结构",
+  "version": "1.0",
+  "author": "PyAgentForge Team",
+  "tags": ["refactoring", "code-quality", "clean-code"],
+  "phases": [
+    {
+      "name": "analyze_current",
+      "prompt": "1. 理解现有代码的功能\n2. 识别代码异味（code smells）\n3. 确定重构目标\n\n请列出需要改进的地方。",
+      "order": 0,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须说明重构目标", "type": "hard"}
+      ]
+    },
+    {
+      "name": "prepare",
+      "prompt": "1. 确保有足够的测试覆盖\n2. 如果没有测试，先编写测试\n3. 记录当前行为\n\n重构前必须确保有安全网。",
+      "order": 1,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须有测试覆盖", "type": "hard"},
+        {"description": "删除代码前必须确认无引用", "type": "hard"}
+      ]
+    },
+    {
+      "name": "design",
+      "prompt": "1. 设计新的代码结构\n2. 规划重构步骤（小步前进）\n3. 识别潜在风险\n\n请详细说明重构计划。",
+      "order": 2,
+      "is_required": true,
+      "constraints": [
+        {"description": "每个步骤必须可独立验证", "type": "hard"}
+      ]
+    },
+    {
+      "name": "implement",
+      "prompt": "1. 一次只做一个小改动\n2. 每步后运行测试\n3. 保持代码可工作状态\n\n小步重构，频繁验证。",
+      "order": 3,
+      "is_required": true,
+      "constraints": [
+        {"description": "每步必须运行测试", "type": "hard"},
+        {"description": "测试失败必须立即回退", "type": "hard"}
+      ]
+    },
+    {
+      "name": "verify",
+      "prompt": "1. 运行完整测试套件\n2. 检查重构是否达成目标\n3. 确认没有引入新问题\n\n请验证重构效果。",
+      "order": 4,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须运行所有测试", "type": "hard"},
+        {"description": "必须确认功能未改变", "type": "hard"}
+      ]
+    },
+    {
+      "name": "cleanup",
+      "prompt": "1. 清理临时代码\n2. 更新文档和注释\n3. 提交有意义的 commit message\n\n请完成最后的清理工作。",
+      "order": 5,
+      "is_required": false,
+      "constraints": []
+    }
+  ]
+}

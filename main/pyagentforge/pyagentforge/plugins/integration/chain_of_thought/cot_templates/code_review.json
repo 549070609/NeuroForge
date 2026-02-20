@@ -1,0 +1,58 @@
+{
+  "name": "code_review",
+  "description": "代码审查思维链，用于系统化地评估代码质量",
+  "version": "1.0",
+  "author": "PyAgentForge Team",
+  "tags": ["review", "code-quality", "best-practices"],
+  "phases": [
+    {
+      "name": "structure",
+      "prompt": "1. 理解代码整体结构\n2. 识别主要模块和职责\n3. 检查代码组织是否清晰\n\n请描述代码的整体架构。",
+      "order": 0,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "logic",
+      "prompt": "1. 跟踪关键逻辑流程\n2. 检查边界条件处理\n3. 验证算法正确性\n\n请列出逻辑检查的发现。",
+      "order": 1,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须检查边界条件", "type": "hard"}
+      ]
+    },
+    {
+      "name": "security",
+      "prompt": "1. 检查输入验证\n2. 识别潜在安全风险（SQL注入、XSS等）\n3. 检查敏感数据处理\n\n请列出安全问题（如有）。",
+      "order": 2,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须检查安全问题", "type": "hard"}
+      ]
+    },
+    {
+      "name": "performance",
+      "prompt": "1. 分析时间复杂度\n2. 识别潜在性能瓶颈\n3. 检查资源使用效率\n\n请提供性能评估。",
+      "order": 3,
+      "is_required": false,
+      "constraints": []
+    },
+    {
+      "name": "maintainability",
+      "prompt": "1. 检查命名规范\n2. 评估代码可读性\n3. 检查注释和文档\n\n请提供可维护性评估。",
+      "order": 4,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "recommendations",
+      "prompt": "1. 总结发现的问题（按优先级）\n2. 提供具体的改进建议\n3. 标注必须修复 vs 建议改进\n\n请提供审查结论和改进建议。",
+      "order": 5,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须按优先级排序问题", "type": "soft"},
+        {"description": "必须区分必须修复和建议改进", "type": "hard"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "name": "debugging",
+  "description": "代码调试思维链，用于系统化地定位和修复 bug",
+  "version": "1.0",
+  "author": "PyAgentForge Team",
+  "tags": ["debugging", "bug-fix", "code-analysis"],
+  "phases": [
+    {
+      "name": "reproduce",
+      "prompt": "1. 获取或创建最小复现步骤\n2. 确认问题确实存在\n3. 记录预期的正确行为\n\n请提供复现步骤和预期结果。",
+      "order": 0,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须提供复现步骤", "type": "hard"},
+        {"description": "必须说明预期行为", "type": "hard"}
+      ]
+    },
+    {
+      "name": "localize",
+      "prompt": "1. 使用日志、堆栈跟踪、断点定位问题区域\n2. 识别相关代码文件和函数\n3. 确定问题的影响范围\n\n请列出可疑的代码位置。",
+      "order": 1,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "hypothesize",
+      "prompt": "1. 基于定位结果提出假设\n2. 评估每个假设的可能性\n3. 设计验证方法\n\n请列出至少2个可能的假设。",
+      "order": 2,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须提出假设", "type": "hard"},
+        {"description": "假设数量不超过5个", "type": "soft"}
+      ]
+    },
+    {
+      "name": "verify",
+      "prompt": "1. 选择最可能的假设\n2. 设计验证实验\n3. 执行验证并记录结果\n\n请说明验证过程和结果。",
+      "order": 3,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "fix",
+      "prompt": "1. 确认根因\n2. 设计修复方案\n3. 实施修复\n4. 验证修复有效性\n\n修复前请确认理解了根本原因。",
+      "order": 4,
+      "is_required": true,
+      "constraints": [
+        {"description": "修复前必须确认根因", "type": "hard"},
+        {"description": "必须验证修复效果", "type": "hard"}
+      ]
+    },
+    {
+      "name": "prevent",
+      "prompt": "1. 添加测试防止回归\n2. 考虑类似问题是否存在于其他地方\n3. 更新文档或代码注释\n\n请说明如何防止此类问题再次发生。",
+      "order": 5,
+      "is_required": false,
+      "constraints": [
+        {"description": "建议添加测试用例", "type": "soft"}
+      ]
+    }
+  ]
+}

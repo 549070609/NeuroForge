@@ -1,0 +1,54 @@
+{
+  "name": "problem_solving",
+  "description": "通用问题解决思维链，适用于大多数问题分析和解决场景",
+  "version": "1.0",
+  "author": "PyAgentForge Team",
+  "tags": ["general", "problem-solving", "analysis"],
+  "phases": [
+    {
+      "name": "understand",
+      "prompt": "1. 明确问题定义\n2. 识别约束条件\n3. 确定成功标准\n\n请重述问题并列出所有已知的约束。",
+      "order": 0,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须输出问题重述", "type": "hard"},
+        {"description": "必须列出至少2个约束条件", "type": "soft"}
+      ]
+    },
+    {
+      "name": "analyze",
+      "prompt": "1. 分解问题为子问题\n2. 识别依赖关系\n3. 评估复杂度\n\n请列出主要的子问题和它们之间的关系。",
+      "order": 1,
+      "is_required": true,
+      "constraints": [
+        {"description": "子问题数量不超过7个", "type": "soft"}
+      ]
+    },
+    {
+      "name": "plan",
+      "prompt": "基于分析结果，制定执行计划。\n\n每个步骤应该清晰、可执行、可验证。",
+      "order": 2,
+      "is_required": true,
+      "constraints": [
+        {"description": "每个步骤必须可验证", "type": "hard"},
+        {"description": "计划必须包含验证步骤", "type": "hard"}
+      ]
+    },
+    {
+      "name": "execute",
+      "prompt": "按计划执行，记录每步结果。\n\n如果遇到问题，记录并调整策略。",
+      "order": 3,
+      "is_required": true,
+      "constraints": []
+    },
+    {
+      "name": "reflect",
+      "prompt": "1. 验证结果是否满足成功标准\n2. 总结经验和教训\n3. 记录可复用的模式\n\n请评估执行效果并提出改进建议。",
+      "order": 4,
+      "is_required": true,
+      "constraints": [
+        {"description": "必须验证结果", "type": "hard"}
+      ]
+    }
+  ]
+}

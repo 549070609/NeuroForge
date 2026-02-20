@@ -23,6 +23,11 @@ from pyagentforge.agents.registry import (
     AgentInstance,
     get_agent_registry,
 )
+from pyagentforge.agents.dynamic_prompt_builder import (
+    DynamicPromptBuilder,
+    PromptContext,
+    create_prompt_context,
+)
 
 __all__ = [
     # Types
@@ -48,4 +53,8 @@ __all__ = [
     "AgentRegistry",
     "AgentInstance",
     "get_agent_registry",
+    # Dynamic Prompt Builder
+    "DynamicPromptBuilder",
+    "PromptContext",
+    "create_prompt_context",
 ]

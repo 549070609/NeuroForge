@@ -26,7 +26,16 @@ class ClassificationResult:
     category: Category
     confidence: float  # 0.0 to 1.0
     matched_keywords: list[str] = field(default_factory=list)
-    method: str = "keyword"  # keyword, llm, fallback
+    method: str = "keyword"  # keyword, semantic, llm, fallback
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            "category": self.category.name if self.category else None,
+            "confidence": self.confidence,
+            "matched_keywords": self.matched_keywords,
+            "method": self.method,
+        }
 
 
 class CategoryRegistry:
@@ -34,12 +43,19 @@ class CategoryRegistry:
     Category Registry
 
     Manages categories and provides task classification.
+
+    Supports multiple classification methods:
+    - Keyword matching (default, fast)
+    - Semantic similarity (requires embeddings)
+    - LLM classification (intelligent but slower)
     """
 
     def __init__(self):
         """Initialize category registry"""
         self._categories: dict[str, Category] = dict(BUILTIN_CATEGORIES)
         self._llm_classifier: Any = None  # Optional LLM-based classifier
+        self._semantic_classifier: Any = None  # Optional semantic classifier
+        self._context_aware_enabled: bool = False  # Context-aware classification
 
     def register(self, category: Category) -> None:
         """
@@ -83,48 +99,142 @@ class CategoryRegistry:
         Set optional LLM-based classifier
 
         Args:
-            classifier: Classifier with async classify(text) method
+            classifier: Classifier with async classify(text, context) method
         """
         self._llm_classifier = classifier
+        logger.info("LLM classifier set")
+
+    def set_semantic_classifier(self, classifier: Any) -> None:
+        """
+        Set optional semantic classifier
+
+        Args:
+            classifier: Classifier with async classify(text, context) method
+        """
+        self._semantic_classifier = classifier
+        logger.info("Semantic classifier set")
+
+    def enable_context_aware(self, enabled: bool = True) -> None:
+        """
+        Enable or disable context-aware classification
+
+        Args:
+            enabled: Whether to enable context-aware mode
+        """
+        self._context_aware_enabled = enabled
+        logger.info(f"Context-aware classification: {'enabled' if enabled else 'disabled'}")
 
     def classify(
         self,
         task_description: str,
         use_llm: bool = False,
+        use_semantic: bool = False,
+        context: dict[str, Any] | None = None,
     ) -> ClassificationResult:
         """
-        Classify a task into a category
+        Classify a task into a category (synchronous version)
+
+        **⚠️ WARNING**: This method has limitations:
+        - In async context: Falls back to keyword matching (ignores use_llm/use_semantic)
+        - In sync context: Creates new event loop (may cause issues in some environments)
+
+        **Recommendation**: Use `classify_async()` when possible for consistent behavior.
 
         Args:
             task_description: Task description
-            use_llm: Use LLM-based classification if available
+            use_llm: Use LLM-based classification if available (only works in sync context)
+            use_semantic: Use semantic classification if available (only works in sync context)
+            context: Optional context for classification
 
         Returns:
             ClassificationResult
         """
-        # Try LLM-based classification first if enabled
+        import asyncio
+
+        # Try to run async version
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in an async context, but this is a sync method
+            # WARNING: Falls back to keyword matching, ignoring use_llm/use_semantic
+            logger.warning(
+                "classify() called in async context - falling back to keyword matching. "
+                "Use classify_async() for full functionality."
+            )
+            return self._classify_by_keywords(task_description, context)
+        except RuntimeError:
+            # No running loop, we can create one
+            # Note: This creates a new event loop each time, which can be inefficient
+            logger.debug("Creating new event loop for sync classify()")
+            return asyncio.run(self.classify_async(
+                task_description,
+                use_llm=use_llm,
+                use_semantic=use_semantic,
+                context=context,
+            ))
+
+    async def classify_async(
+        self,
+        task_description: str,
+        use_llm: bool = False,
+        use_semantic: bool = False,
+        context: dict[str, Any] | None = None,
+    ) -> ClassificationResult:
+        """
+        Classify a task into a category (async version)
+
+        Args:
+            task_description: Task description
+            use_llm: Use LLM-based classification if available
+            use_semantic: Use semantic classification if available
+            context: Optional context for classification
+
+        Returns:
+            ClassificationResult
+        """
+        # Try semantic classification first if enabled
+        if use_semantic and self._semantic_classifier:
+            try:
+                result = await self._semantic_classifier.classify(task_description, context)
+                if result and result.confidence >= 0.5:
+                    logger.debug(f"Semantic classification: {result.category.name} ({result.confidence:.2f})")
+                    return result
+            except Exception as e:
+                logger.warning(f"Semantic classification failed: {e}")
+
+        # Try LLM-based classification if enabled
         if use_llm and self._llm_classifier:
             try:
-                result = self._llm_classifier.classify(task_description)
+                result = await self._llm_classifier.classify(task_description, context)
                 if result:
+                    logger.debug(f"LLM classification: {result.category.name} ({result.confidence:.2f})")
                     return result
             except Exception as e:
                 logger.warning(f"LLM classification failed: {e}")
 
-        # Keyword-based classification
-        return self._classify_by_keywords(task_description)
+        # Keyword-based classification (fallback)
+        return self._classify_by_keywords(task_description, context)
 
-    def _classify_by_keywords(self, task_description: str) -> ClassificationResult:
+    def _classify_by_keywords(
+        self,
+        task_description: str,
+        context: dict[str, Any] | None = None,
+    ) -> ClassificationResult:
         """
         Classify task using keyword matching
 
         Args:
             task_description: Task description
+            context: Optional context (used for context-aware classification)
 
         Returns:
             ClassificationResult
         """
         task_lower = task_description.lower()
+
+        # Context-aware enhancement: add context to task text
+        if self._context_aware_enabled and context:
+            context_text = " ".join(str(v) for v in context.values() if v)
+            task_lower = f"{task_lower} {context_text.lower()}"
 
         best_category = None
         best_score = 0

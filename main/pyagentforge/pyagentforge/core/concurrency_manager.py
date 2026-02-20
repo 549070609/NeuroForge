@@ -33,16 +33,32 @@ class ConcurrencySlot:
     acquired_at: str = field(default_factory=lambda: datetime.now().isoformat())
     session_id: str = ""
     task_id: str = ""
+    settled: bool = False  # v4.0: 防止已取消任务占用槽位
 
 
 @dataclass
 class ConcurrencyConfig:
     """Concurrency configuration"""
 
-    # Per-model limits
+    # v4.0: Per-model limits (fine-grained control)
+    model_concurrency: dict[str, int] = field(default_factory=lambda: {
+        "gpt-4o": 2,
+        "gpt-4o-mini": 5,
+        "claude-sonnet-4-20250514": 2,
+        "claude-opus-4-6": 1,
+    })
+
+    # v4.0: Per-provider limits
+    provider_concurrency: dict[str, int] = field(default_factory=lambda: {
+        "openai": 10,
+        "anthropic": 5,
+        "google": 5,
+    })
+
+    # Legacy support (fallback when not in dict)
     max_per_model: int = 2
 
-    # Per-provider limits
+    # Per-provider limits (fallback)
     max_per_provider: int = 5
 
     # Per-agent limits (from agent metadata)
@@ -56,6 +72,9 @@ class ConcurrencyConfig:
 
     # Enable queuing
     enable_queue: bool = True
+
+    # v4.0: Default concurrency when not specified
+    default_concurrency: int = 3
 
 
 class ConcurrencyManager:
@@ -307,3 +326,69 @@ class ConcurrencyManager:
             if f"{resource_type.value}:{resource_id}" in slot.resource_id:
                 count += 1
         return count
+
+    # v4.0: Enhanced methods
+
+    def get_concurrency_limit(self, model: str) -> int:
+        """
+        v4.0: Get concurrency limit for a model
+
+        Args:
+            model: Model ID
+
+        Returns:
+            Concurrency limit for the model
+        """
+        # Check fine-grained config first
+        if model in self.config.model_concurrency:
+            return self.config.model_concurrency[model]
+
+        # Fallback to default
+        return self.config.max_per_model
+
+    def cancel_waiters(self, resource_id: str) -> None:
+        """
+        v4.0: Cancel all waiters for a resource
+
+        Useful when a task is cancelled or fails, to prevent
+        queued waiters from blocking indefinitely.
+
+        Args:
+            resource_id: Resource ID to cancel waiters for
+        """
+        if resource_id in self._waiters:
+            waiters = self._waiters[resource_id]
+            for event in waiters:
+                if not event.is_set():
+                    event.set()
+            self._waiters[resource_id] = []
+
+            logger.debug(
+                f"Cancelled {len(waiters)} waiters for resource: {resource_id}"
+            )
+
+    def clear(self) -> None:
+        """
+        v4.0: Clear all concurrency state
+
+        Releases all slots and clears waiters.
+        Use with caution - typically only during shutdown.
+        """
+        # Mark all slots as settled
+        for slot in self._active_slots.values():
+            slot.settled = True
+
+        # Clear active slots
+        self._active_slots.clear()
+
+        # Clear waiters
+        for waiters in self._waiters.values():
+            for event in waiters:
+                if not event.is_set():
+                    event.set()
+        self._waiters.clear()
+
+        # Reset stats
+        self._stats["current_active"] = 0
+
+        logger.warning("Cleared all concurrency state")

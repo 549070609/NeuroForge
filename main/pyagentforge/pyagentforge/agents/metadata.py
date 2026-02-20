@@ -6,7 +6,7 @@ Defines agent types with rich metadata for intelligent delegation.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 
 class AgentCategory(str, Enum):
@@ -27,6 +27,25 @@ class AgentCost(str, Enum):
     CHEAP = "cheap"  # Small/fast model
     MODERATE = "moderate"  # Standard model
     EXPENSIVE = "expensive"  # Large/slow model
+
+
+@dataclass
+class DelegationTrigger:
+    """
+    v4.0: Delegation Trigger
+
+    Defines when and why to delegate to this agent.
+    """
+
+    domain: str  # 工作领域 (如 "Frontend UI/UX")
+    trigger: str  # 何时委托 (如 "Visual changes only...")
+
+    def to_dict(self) -> dict[str, str]:
+        """Convert to dictionary"""
+        return {
+            "domain": self.domain,
+            "trigger": self.trigger,
+        }
 
 
 @dataclass
@@ -55,6 +74,14 @@ class AgentMetadata:
     supports_background: bool = True  # Can run in background
     max_concurrent: int = 3  # Max concurrent instances
 
+    # v4.0: 增强字段
+    triggers: list[DelegationTrigger] = field(default_factory=list)
+    dedicated_section: str | None = None  # 专用上下文区域
+    prompt_alias: str | None = None  # 提示别名
+    is_unstable_agent: bool = False  # 是否不稳定（需要后台转换）
+    reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
+    text_verbosity: Literal["low", "medium", "high"] = "medium"
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -70,6 +97,13 @@ class AgentMetadata:
             "is_readonly": self.is_readonly,
             "supports_background": self.supports_background,
             "max_concurrent": self.max_concurrent,
+            # v4.0: 新增字段
+            "triggers": [t.to_dict() for t in self.triggers],
+            "dedicated_section": self.dedicated_section,
+            "prompt_alias": self.prompt_alias,
+            "is_unstable_agent": self.is_unstable_agent,
+            "reasoning_effort": self.reasoning_effort,
+            "text_verbosity": self.text_verbosity,
         }
 
 
@@ -230,7 +264,7 @@ BUILTIN_AGENTS: dict[str, AgentMetadata] = {
         description="External documentation agent for fetching and summarizing documentation",
         category=AgentCategory.RESEARCH,
         cost=AgentCost.FREE,
-        tools=["web_fetch", "read"],
+        tools=["webfetch", "read"],
         system_prompt="""你是一个文档代理，专门负责获取和总结外部文档。
 
 你的职责:
