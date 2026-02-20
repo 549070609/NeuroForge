@@ -47,6 +47,14 @@ except ImportError as e:
     print_warning(f"部分工具导入失败: {e}")
     TOOLS_AVAILABLE = False
 
+# 导入小说创作子Agent工具
+try:
+    from novel_task_tool import NovelTaskTool, ParallelTaskTool
+    NOVEL_TOOLS_AVAILABLE = True
+except ImportError as e:
+    print_warning(f"小说子Agent工具导入失败: {e}")
+    NOVEL_TOOLS_AVAILABLE = False
+
 # ANSI 颜色代码
 class Colors:
     """终端颜色"""
@@ -216,9 +224,25 @@ class GLMAgentEngine:
             tool_registry.register(todo_write)
             tool_registry.register(TodoReadTool(todo_write))  # TodoReadTool 需要 TodoWriteTool
 
-            print_debug(f"已注册 {len(tool_registry.get_all())} 个工具")
+            print_debug(f"已注册 {len(tool_registry.get_all())} 个基础工具")
         else:
             print_warning("工具系统未启用")
+
+        # 为总编辑注册子Agent调用工具
+        if agent_info.name == "editor-in-chief" and NOVEL_TOOLS_AVAILABLE:
+            tool_registry.register(NovelTaskTool(
+                provider=provider,
+                tool_registry=tool_registry,
+                current_depth=0,
+                max_depth=2,
+            ))
+            tool_registry.register(ParallelTaskTool(
+                provider=provider,
+                tool_registry=tool_registry,
+                current_depth=0,
+                max_depth=2,
+            ))
+            print_debug("已注册小说创作子Agent工具 (Task, ParallelTask)")
 
         # 创建 Agent 配置
         config = AgentConfig(
@@ -294,6 +318,43 @@ class AgentManager:
     def _load_agents(self):
         """加载 Agent"""
         agents_data = [
+            # 总编辑 - 协调所有专业子Agent
+            AgentInfo(
+                name="editor-in-chief",
+                description="总编辑 - 自动协调专业设定团队，整合输出",
+                category="coordinator",
+                system_prompt="""你是小说创作的总编辑，负责协调专业团队完成构思工作。
+
+你的专业团队：
+1. **世界构建师** (world-builder) - 世界观、地理、历史、势力
+2. **人物设定师** (character-designer) - 角色形象、性格、关系
+3. **主题策划师** (theme-planner) - 核心主题、情感基调
+4. **风格设定师** (style-designer) - 叙事风格、语言特色
+5. **读者分析师** (audience-analyzer) - 目标读者、市场定位
+6. **情节架构师** (plot-architect) - 故事结构、冲突设计
+
+工作流程：
+1. 分析用户需求，判断需要哪些专业设定
+2. 使用 Task 工具调用对应的子Agent
+3. 整合各专业设定师的结果
+4. 输出完整、连贯的构思方案
+
+调用示例：
+- Task(subagent_type="world-builder", prompt="构建一个魔法与科技共存的世界...")
+- Task(subagent_type="character-designer", prompt="设计一个复仇心切的男主角...")
+
+如果需要多个专业设定，可以按顺序调用多个Task。
+
+重要规则：
+1. 先分析再分配，不要盲目调用
+2. 可以根据需要调用一个或多个子Agent
+3. 整合时要保证各设定之间的一致性
+4. 最终输出必须是完整的、可直接使用的构思方案
+5. 每次响应中调用Task工具不要超过3次
+
+请用专业但友好的语调与用户交流。
+回答要具体、有建设性，并提供可操作的建议。"""
+            ),
             AgentInfo(
                 name="novel-ideation",
                 description="构思专家 - 负责世界观构建、人物设定、主题确定",
@@ -403,8 +464,10 @@ class AgentManager:
             self.agents[agent.name] = agent
             self.engines[agent.name] = GLMAgentEngine(agent, self.provider)
 
-        # 默认选择第一个
-        if self.agents:
+        # 默认选择总编辑
+        if "editor-in-chief" in self.agents:
+            self.current_agent = "editor-in-chief"
+        elif self.agents:
             self.current_agent = list(self.agents.keys())[0]
 
     def list_agents(self) -> list[AgentInfo]:
@@ -699,10 +762,18 @@ def main():
     print_header()
 
     print(f"{Colors.BOLD}欢迎使用 AGent GLM AI 模式！{Colors.ENDC}\n")
-    print("本系统包含三个专业 Agent：")
-    print("  1. 构思专家 - 世界观、人物、主题")
-    print("  2. 大纲专家 - 章节规划、情节设计")
-    print("  3. 写手 - 章节撰写、场景描写\n")
+    print("本系统包含四个专业 Agent：")
+    print("  1. 总编辑 - 协调专业团队（默认）")
+    print("  2. 构思专家 - 世界观、人物、主题")
+    print("  3. 大纲专家 - 章节规划、情节设计")
+    print("  4. 写手 - 章节撰写、场景描写\n")
+    print("总编辑可调度的专业子Agent：")
+    print("  - world-builder (世界构建师)")
+    print("  - character-designer (人物设定师)")
+    print("  - theme-planner (主题策划师)")
+    print("  - style-designer (风格设定师)")
+    print("  - audience-analyzer (读者分析师)")
+    print("  - plot-architect (情节架构师)\n")
 
     print_info(f"当前 Agent: {agent_manager.current_agent}")
     print_separator()
