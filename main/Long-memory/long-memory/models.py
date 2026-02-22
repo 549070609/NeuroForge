@@ -36,6 +36,8 @@ class MemoryEntry:
     timestamp: str = ""                     # ISO8601 时间戳
     id: str = ""                            # 唯一标识 mem_xxx
     session_id: str = ""                    # 会话 ID
+    topic: str = ""                         # 记忆主题（用于分类）
+    summary: str = ""                       # 记忆摘要（1-2句话概括）
     message_type: MessageType = MessageType.USER
     source: MemorySource = MemorySource.MANUAL
     importance: float = 0.5                 # 重要性 0.0-1.0
@@ -63,6 +65,8 @@ class MemoryEntry:
             "content": self.content,
             "timestamp": self.timestamp,
             "session_id": self.session_id,
+            "topic": self.topic,
+            "summary": self.summary,
             "message_type": self.message_type.value,
             "source": self.source.value,
             "importance": self.importance,
@@ -78,6 +82,8 @@ class MemoryEntry:
             content=data.get("content", ""),
             timestamp=data.get("timestamp", ""),
             session_id=data.get("session_id", ""),
+            topic=data.get("topic", ""),
+            summary=data.get("summary", ""),
             message_type=MessageType(data.get("message_type", "user")),
             source=MemorySource(data.get("source", "manual")),
             importance=float(data.get("importance", 0.5)),
@@ -104,6 +110,8 @@ class MemorySearchResult:
             "score": round(self.score, 4),
             "timestamp": self.entry.timestamp,
             "session_id": self.entry.session_id,
+            "topic": self.entry.topic,
+            "summary": self.entry.summary,
             "message_type": self.entry.message_type.value,
             "source": self.entry.source.value,
             "importance": self.entry.importance,
@@ -122,6 +130,8 @@ class MemoryStats:
     total_count: int = 0
     by_type: Dict[str, int] = field(default_factory=dict)
     by_source: Dict[str, int] = field(default_factory=dict)
+    by_topic: Dict[str, int] = field(default_factory=dict)  # 按主题统计
+    by_tag: Dict[str, int] = field(default_factory=dict)    # 按标签统计
     avg_importance: float = 0.0
     oldest_timestamp: str = ""
     newest_timestamp: str = ""
@@ -133,6 +143,8 @@ class MemoryStats:
             "total_count": self.total_count,
             "by_type": self.by_type,
             "by_source": self.by_source,
+            "by_topic": self.by_topic,
+            "by_tag": self.by_tag,
             "avg_importance": round(self.avg_importance, 3),
             "oldest_timestamp": self.oldest_timestamp,
             "newest_timestamp": self.newest_timestamp,

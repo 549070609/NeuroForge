@@ -1,0 +1,46 @@
+# Full Preset
+# Complete platform with all plugins (API gateway interfaces moved to main/Service)
+
+preset: full
+enabled:
+  # Providers
+  - providers.anthropic
+  - providers.openai
+  - providers.google
+  # Protocol
+  - protocol.mcp_server
+  - protocol.mcp_client
+  - protocol.lsp
+  # Tools
+  - tools.web_tools
+  - tools.file_tools
+  - tools.interact_tools
+  # Middleware
+  - middleware.compaction
+  - middleware.failover
+  - middleware.thinking
+  # Integration
+  - integration.events
+  - integration.persistence
+  - integration.context_aware
+  - integration.parallel_executor
+  # Skills
+  - skills.skill_loader
+disabled: []
+plugin_dirs:
+  - plugins
+
+config:
+  middleware.compaction:
+    enabled: true
+    strategy: "agent"  # Use agent-based context compaction
+    trigger_threshold: 0.75
+    adaptive: true  # Enable adaptive threshold tuning
+    agent_summary_max_tokens: 2000
+
+  middleware.thinking:
+    level: "medium"
+    budget_tokens: 10000
+
+  integration.persistence:
+    storage_dir: "./sessions"

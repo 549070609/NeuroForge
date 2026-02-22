@@ -1,0 +1,31 @@
+identity:
+  name: {{ name }}
+  description: {{ description }}
+  tags:
+{% for tag in tags %}
+    - {{ tag }}
+{% endfor %}
+
+category: {{ category }}
+
+model:
+  provider: {{ model.provider }}
+  model: {{ model.model }}
+  temperature: 0.5
+  max_tokens: 8192
+
+limits:
+  max_iterations: 20
+  timeout: {{ limits.timeout }}
+
+capabilities:
+  tools:
+{% for tool in tools %}
+    - {{ tool }}
+{% endfor %}
+
+# 工具型 Agent 特性
+tool_execution:
+  parallel: false  # 串行执行工具
+  retry_on_error: true
+  max_retries: 3

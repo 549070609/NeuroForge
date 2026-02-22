@@ -1,0 +1,36 @@
+identity:
+  name: {{ name }}
+  description: {{ description }}
+  tags:
+{% for tag in tags %}
+    - {{ tag }}
+{% endfor %}
+
+category: {{ category }}
+
+model:
+  provider: {{ model.provider }}
+  model: {{ model.model }}
+  temperature: 0.3
+  max_tokens: 8192
+
+limits:
+  max_iterations: {{ limits.max_iterations }}
+  timeout: {{ limits.timeout }}
+
+{% if tools %}
+capabilities:
+  tools:
+{% for tool in tools %}
+    - {{ tool }}
+{% endfor %}
+  thinking: true
+{% else %}
+capabilities:
+  thinking: true
+{% endif %}
+
+# 推理型 Agent 特性
+reasoning:
+  max_thinking_tokens: 4000
+  show_thinking: false  # 是否向用户展示思考过程

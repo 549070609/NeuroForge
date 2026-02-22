@@ -1,0 +1,31 @@
+identity:
+  name: modifier-agent
+  description: Agent 修改器 - 负责修改和更新现有 Agent 配置
+  tags:
+    - modifier
+    - updater
+    - subagent
+
+category: meta
+cost: cheap
+
+model:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+  temperature: 0.3
+  max_tokens: 4096
+
+limits:
+  max_iterations: 5
+  timeout: 120
+
+capabilities:
+  tools:
+    - modify_agent
+    - edit_config
+    - write_prompt
+
+metadata:
+  version: "1.0.0"
+  parent: mate-agent
+  role: subagent

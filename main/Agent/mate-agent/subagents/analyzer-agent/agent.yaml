@@ -1,0 +1,32 @@
+identity:
+  name: analyzer-agent
+  description: Agent 分析器 - 负责分析需求和验证 Agent 配置
+  tags:
+    - analyzer
+    - validator
+    - subagent
+
+category: meta
+cost: cheap
+
+model:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+  temperature: 0.2
+  max_tokens: 4096
+
+limits:
+  max_iterations: 5
+  timeout: 120
+
+capabilities:
+  tools:
+    - analyze_requirements
+    - validate_agent
+    - check_dependencies
+    - list_agents
+
+metadata:
+  version: "1.0.0"
+  parent: mate-agent
+  role: subagent

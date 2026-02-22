@@ -2,7 +2,7 @@
 记忆存储工具
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pyagentforge.kernel.base_tool import BaseTool
 
 from ..models import MemoryEntry, MessageType, MemorySource
@@ -32,6 +32,11 @@ class MemoryStoreTool(BaseTool):
                 "type": "string",
                 "description": "要存储的记忆内容"
             },
+            "topic": {
+                "type": "string",
+                "description": "记忆主题（用于分类和召回）",
+                "examples": ["用户偏好", "项目配置", "代码片段", "学习笔记"]
+            },
             "importance": {
                 "type": "number",
                 "description": "重要性分数 0.0-1.0，默认 0.5。越高越重要。",
@@ -43,7 +48,8 @@ class MemoryStoreTool(BaseTool):
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "分类标签，用于后续过滤",
-                "default": []
+                "default": [],
+                "examples": [["偏好", "设置"], ["代码", "Python"], ["重要"]]
             },
             "message_type": {
                 "type": "string",
@@ -71,6 +77,7 @@ class MemoryStoreTool(BaseTool):
     async def execute(
         self,
         content: str,
+        topic: Optional[str] = None,
         importance: float = 0.5,
         tags: List[str] = None,
         message_type: str = "knowledge",
@@ -83,6 +90,7 @@ class MemoryStoreTool(BaseTool):
         entry = MemoryEntry(
             content=content,
             session_id=self._session_id,
+            topic=topic or "",
             message_type=MessageType(message_type),
             source=MemorySource.MANUAL,
             importance=importance,
@@ -92,4 +100,13 @@ class MemoryStoreTool(BaseTool):
         # 存储
         memory_id = await self._store.store(entry)
 
-        return f"已存储记忆 (ID: {memory_id})\n内容: {content[:100]}{'...' if len(content) > 100 else ''}\n重要性: {importance:.2f}"
+        # 格式化输出
+        result_parts = [f"已存储记忆 (ID: {memory_id})"]
+        if topic:
+            result_parts.append(f"主题: {topic}")
+        result_parts.append(f"内容: {content[:100]}{'...' if len(content) > 100 else ''}")
+        result_parts.append(f"重要性: {importance:.2f}")
+        if tags:
+            result_parts.append(f"标签: {', '.join(tags)}")
+
+        return "\n".join(result_parts)

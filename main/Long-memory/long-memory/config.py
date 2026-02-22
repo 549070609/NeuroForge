@@ -21,6 +21,12 @@ class LongMemoryConfig:
     default_search_limit: int = 5
     max_search_limit: int = 50
 
+    # 搜索模式配置
+    # exact: 精准模式 - 关键词/文本精确匹配
+    # fuzzy: 模糊模式 - 语义相似度搜索（默认）
+    default_search_mode: str = "fuzzy"
+    exact_match_threshold: float = 0.95  # 精准模式的相似度阈值
+
     # 自动记忆配置（中间件使用）
     auto_memory_enabled: bool = False
     auto_memory_min_importance: float = 0.6  # 最低重要性阈值
@@ -41,6 +47,8 @@ class LongMemoryConfig:
             collection_name=data.get("collection_name", "long_memory"),
             default_search_limit=data.get("default_search_limit", 5),
             max_search_limit=data.get("max_search_limit", 50),
+            default_search_mode=data.get("default_search_mode", "fuzzy"),
+            exact_match_threshold=data.get("exact_match_threshold", 0.95),
             auto_memory_enabled=data.get("auto_memory_enabled", False),
             auto_memory_min_importance=data.get("auto_memory_min_importance", 0.6),
             auto_memory_keywords=data.get("auto_memory_keywords", [
@@ -73,5 +81,9 @@ class LongMemoryConfig:
             errors.append("auto_memory_min_importance must be between 0 and 1")
         if self.embedding_batch_size < 1:
             errors.append("embedding_batch_size must be at least 1")
+        if self.default_search_mode not in ("exact", "fuzzy"):
+            errors.append("default_search_mode must be 'exact' or 'fuzzy'")
+        if self.exact_match_threshold < 0 or self.exact_match_threshold > 1:
+            errors.append("exact_match_threshold must be between 0 and 1")
 
         return errors

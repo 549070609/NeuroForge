@@ -1,0 +1,27 @@
+identity:
+  name: {{ name }}
+  description: {{ description }}
+  tags:
+{% for tag in tags %}
+    - {{ tag }}
+{% endfor %}
+
+category: {{ category }}
+
+model:
+  provider: {{ model.provider }}
+  model: {{ model.model }}
+  temperature: {{ model.temperature }}
+  max_tokens: {{ model.max_tokens }}
+
+limits:
+  max_iterations: {{ limits.max_iterations }}
+  timeout: {{ limits.timeout }}
+
+{% if tools %}
+capabilities:
+  tools:
+{% for tool in tools %}
+    - {{ tool }}
+{% endfor %}
+{% endif %}

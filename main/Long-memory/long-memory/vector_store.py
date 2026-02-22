@@ -4,7 +4,8 @@ ChromaDB 向量存储封装
 提供记忆的存储、搜索、删除等功能
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
+import json
 import logging
 
 try:
@@ -133,14 +134,40 @@ class ChromaVectorStore:
         query: str,
         n_results: int = 5,
         where: Optional[Dict[str, Any]] = None,
+        mode: Literal["exact", "fuzzy"] = "fuzzy",
     ) -> List[MemorySearchResult]:
         """
-        语义搜索记忆
+        搜索记忆
 
         Args:
             query: 查询文本
             n_results: 返回结果数量
             where: 过滤条件（ChromaDB where 子句）
+            mode: 搜索模式
+                - "fuzzy": 模糊搜索（语义相似度，默认）
+                - "exact": 精准搜索（关键词/文本精确匹配）
+
+        Returns:
+            搜索结果列表
+        """
+        if mode == "exact":
+            return await self._search_exact(query, n_results, where)
+        else:
+            return await self._search_fuzzy(query, n_results, where)
+
+    async def _search_fuzzy(
+        self,
+        query: str,
+        n_results: int,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> List[MemorySearchResult]:
+        """
+        模糊搜索（语义相似度）
+
+        Args:
+            query: 查询文本
+            n_results: 返回结果数量
+            where: 过滤条件
 
         Returns:
             搜索结果列表
@@ -150,7 +177,7 @@ class ChromaVectorStore:
         # 限制结果数量
         n_results = min(n_results, self._config.max_search_limit)
 
-        # 执行搜索
+        # 执行向量搜索
         results = self._collection.query(
             query_texts=[query],
             n_results=n_results,
@@ -180,6 +207,89 @@ class ChromaVectorStore:
                 ))
             except Exception as e:
                 logger.warning(f"Failed to parse search result {doc_id}: {e}")
+
+        return search_results
+
+    async def _search_exact(
+        self,
+        query: str,
+        n_results: int,
+        where: Optional[Dict[str, Any]] = None,
+    ) -> List[MemorySearchResult]:
+        """
+        精准搜索（关键词/文本精确匹配）
+
+        使用 ChromaDB 的 where_document 进行全文匹配
+
+        Args:
+            query: 查询文本
+            n_results: 返回结果数量
+            where: 元数据过滤条件
+
+        Returns:
+            搜索结果列表
+        """
+        self._ensure_initialized()
+
+        # 限制结果数量
+        n_results = min(n_results, self._config.max_search_limit)
+
+        # 使用 where_document 进行文档内容匹配
+        # ChromaDB 支持的 where_document 操作符：
+        # $contains - 包含指定文本（不区分大小写）
+        where_document = {"$contains": query}
+
+        # 执行搜索
+        results = self._collection.get(
+            where=where,
+            where_document=where_document,
+            limit=n_results,
+            include=["documents", "metadatas"]
+        )
+
+        # 解析结果
+        search_results = []
+
+        if not results["ids"]:
+            return search_results
+
+        for i, doc_id in enumerate(results["ids"]):
+            try:
+                metadata = results["metadatas"][i]
+                entry = MemoryEntry.from_dict(metadata)
+                document = results["documents"][i] if results.get("documents") else ""
+
+                # 计算匹配分数
+                # 精准模式下，检查查询词在文档中的出现情况
+                query_lower = query.lower()
+                doc_lower = document.lower() if document else ""
+
+                if query_lower == doc_lower:
+                    # 完全匹配
+                    score = 1.0
+                elif query_lower in doc_lower:
+                    # 包含匹配，根据匹配位置和频率计算分数
+                    # 出现次数越多，分数越高
+                    count = doc_lower.count(query_lower)
+                    # 出现位置越靠前，分数越高
+                    first_pos = doc_lower.find(query_lower)
+                    position_bonus = max(0, 1.0 - (first_pos / max(len(doc_lower), 1)))
+
+                    score = min(1.0, self._config.exact_match_threshold +
+                               (count * 0.02) + (position_bonus * 0.03))
+                else:
+                    # 不匹配（不应该发生，但保险起见）
+                    score = 0.0
+
+                search_results.append(MemorySearchResult(
+                    entry=entry,
+                    score=score,
+                ))
+            except Exception as e:
+                logger.warning(f"Failed to parse exact search result {doc_id}: {e}")
+
+        # 按分数排序
+        search_results.sort(key=lambda x: x.score, reverse=True)
 
         return search_results
 
@@ -285,6 +395,8 @@ class ChromaVectorStore:
 
         by_type: Dict[str, int] = {}
         by_source: Dict[str, int] = {}
+        by_topic: Dict[str, int] = {}
+        by_tag: Dict[str, int] = {}
         total_importance = 0.0
         timestamps = []
         sessions = set()
@@ -298,6 +410,20 @@ class ChromaVectorStore:
                 # 统计来源
                 source = metadata.get("source", "manual")
                 by_source[source] = by_source.get(source, 0) + 1
+
+                # 统计主题
+                topic = metadata.get("topic", "")
+                if topic:
+                    by_topic[topic] = by_topic.get(topic, 0) + 1
+
+                # 统计标签
+                tags_str = metadata.get("tags", "[]")
+                try:
+                    tags = json.loads(tags_str) if isinstance(tags_str, str) else tags_str
+                    for tag in tags:
+                        by_tag[tag] = by_tag.get(tag, 0) + 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
                 # 统计重要性
                 importance = float(metadata.get("importance", 0.5))
@@ -317,6 +443,8 @@ class ChromaVectorStore:
             total_count=total_count,
             by_type=by_type,
             by_source=by_source,
+            by_topic=by_topic,
+            by_tag=by_tag,
             avg_importance=total_importance / total_count if total_count > 0 else 0,
             oldest_timestamp=min(timestamps) if timestamps else "",
             newest_timestamp=max(timestamps) if timestamps else "",
@@ -349,6 +477,38 @@ class ChromaVectorStore:
                 logger.warning(f"Failed to parse memory {memory_id}: {e}")
 
         return None
+
+    async def update(self, entry: MemoryEntry) -> bool:
+        """
+        更新记忆条目
+
+        ChromaDB 不支持直接更新，所以使用 delete + re-add 模式
+
+        Args:
+            entry: 要更新的记忆条目
+
+        Returns:
+            更新是否成功
+        """
+        self._ensure_initialized()
+
+        try:
+            # 先删除旧记录
+            self._collection.delete(ids=[entry.id])
+
+            # 重新添加更新后的记录
+            self._collection.add(
+                ids=[entry.id],
+                documents=[entry.content],
+                metadatas=[entry.to_dict()],
+            )
+
+            logger.debug(f"Updated memory: {entry.id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to update memory {entry.id}: {e}")
+            return False
 
     async def clear(self) -> int:
         """

@@ -1,0 +1,31 @@
+identity:
+  name: builder-agent
+  description: Agent 构建器 - 负责实际创建 Agent 文件和配置
+  tags:
+    - builder
+    - file-creator
+    - subagent
+
+category: meta
+cost: cheap
+
+model:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+  temperature: 0.3
+  max_tokens: 4096
+
+limits:
+  max_iterations: 5
+  timeout: 120
+
+capabilities:
+  tools:
+    - create_agent
+    - render_template
+    - write_prompt
+
+metadata:
+  version: "1.0.0"
+  parent: mate-agent
+  role: subagent

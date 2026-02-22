@@ -1,0 +1,14 @@
+# Agent 底座配置
+# Agent Platform Configuration
+
+# 基础路径配置
+base_path: main/Agent
+mate_agent_dir: mate-agent
+
+# 加载配置
+auto_load: true
+hot_reload: false
+
+# 执行配置
+max_concurrent_per_agent: 3
+default_timeout: 300  # 秒

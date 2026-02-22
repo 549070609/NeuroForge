@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Configuration",
+  "description": "Configuration for LLM providers and models",
+  "type": "object",
+
+  "properties": {
+    "default_model": {
+      "type": "string",
+      "description": "Default model ID to use",
+      "default": "claude-sonnet-4-20250514"
+    },
+    "max_tokens": {
+      "type": "integer",
+      "description": "Default maximum output tokens",
+      "default": 4096,
+      "minimum": 1
+    },
+    "temperature": {
+      "type": "number",
+      "description": "Default temperature parameter",
+      "default": 1.0,
+      "minimum": 0.0,
+      "maximum": 2.0
+    },
+    "providers": {
+      "type": "object",
+      "description": "Provider configurations",
+      "additionalProperties": {
+        "$ref": "#/definitions/ProviderConfig"
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "Model configurations",
+      "additionalProperties": {
+        "$ref": "#/definitions/ModelConfig"
+      }
+    }
+  },
+
+  "definitions": {
+    "ProviderConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this provider is enabled",
+          "default": true
+        },
+        "api_key": {
+          "type": ["string", "null"],
+          "description": "API Key (optional, prefer environment variable)"
+        },
+        "api_key_env": {
+          "type": "string",
+          "description": "Environment variable name for API Key",
+          "default": ""
+        },
+        "base_url": {
+          "type": ["string", "null"],
+          "description": "API base URL"
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Request timeout in seconds",
+          "default": 120,
+          "minimum": 1
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Maximum retry attempts",
+          "default": 3,
+          "minimum": 0
+        },
+        "extra": {
+          "type": "object",
+          "description": "Additional provider-specific configuration",
+          "additionalProperties": true
+        }
+      }
+    },
+
+    "ModelConfig": {
+      "type": "object",
+      "required": ["id", "name", "provider", "api_type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Model ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Provider type",
+          "enum": ["anthropic", "openai", "google", "azure", "bedrock", "zhipu", "deepseek", "alibaba", "moonshot", "minimax", "baichuan", "yi", "ollama", "custom"]
+        },
+        "api_type": {
+          "type": "string",
+          "description": "API type",
+          "enum": [
+            "anthropic-messages",
+            "openai-completions",
+            "openai-responses",
+            "google-generative-ai",
+            "bedrock-converse-stream",
+            "custom"
+          ]
+        },
+        "supports_vision": {
+          "type": "boolean",
+          "description": "Whether the model supports images",
+          "default": false
+        },
+        "supports_tools": {
+          "type": "boolean",
+          "description": "Whether the model supports tool calling",
+          "default": true
+        },
+        "supports_streaming": {
+          "type": "boolean",
+          "description": "Whether the model supports streaming",
+          "default": true
+        },
+        "context_window": {
+          "type": "integer",
+          "description": "Context window size in tokens",
+          "default": 200000
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "description": "Maximum output tokens",
+          "default": 4096
+        },
+        "cost_input": {
+          "type": "number",
+          "description": "Input cost per million tokens (USD)",
+          "default": 0.0
+        },
+        "cost_output": {
+          "type": "number",
+          "description": "Output cost per million tokens (USD)",
+          "default": 0.0
+        },
+        "cost_cache_read": {
+          "type": "number",
+          "description": "Cache read cost per million tokens (USD)",
+          "default": 0.0
+        },
+        "cost_cache_write": {
+          "type": "number",
+          "description": "Cache write cost per million tokens (USD)",
+          "default": 0.0
+        },
+        "api_key": {
+          "type": ["string", "null"],
+          "description": "Model-level API Key (overrides provider config)"
+        },
+        "api_key_env": {
+          "type": ["string", "null"],
+          "description": "Model-level API Key environment variable name"
+        },
+        "base_url": {
+          "type": ["string", "null"],
+          "description": "Model-level API base URL (overrides provider config)"
+        },
+        "extra": {
+          "type": "object",
+          "description": "Additional model-specific configuration",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}
