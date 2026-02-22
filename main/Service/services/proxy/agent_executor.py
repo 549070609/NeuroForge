@@ -1,17 +1,16 @@
-"""
-Agent Executor - Agent 执行器
+﻿"""
+Agent Executor - Agent 鎵ц鍣?
 
-集成 pyagentforge 核心功能，在工作区域上下文中执行 Agent。
+闆嗘垚 pyagentforge 鏍稿績鍔熻兘锛屽湪宸ヤ綔鍖哄煙涓婁笅鏂囦腑鎵ц Agent銆?
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator
 
-# 延迟导入
+# 寤惰繜瀵煎叆
 # from pyagentforge.kernel.engine import AgentEngine, AgentConfig
 # from pyagentforge.kernel.base_provider import BaseProvider
 # from pyagentforge.tools.registry import ToolRegistry
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutionResult:
-    """执行结果"""
+    """鎵ц缁撴灉"""
 
     success: bool
     output: str
@@ -34,17 +33,17 @@ class ExecutionResult:
 
 class AgentExecutor:
     """
-    Agent 执行器
+    Agent 鎵ц鍣?
 
-    在工作区域上下文中执行 Agent，集成 pyagentforge 核心功能。
+    鍦ㄥ伐浣滃尯鍩熶笂涓嬫枃涓墽琛?Agent锛岄泦鎴?pyagentforge 鏍稿績鍔熻兘銆?
     """
 
     def __init__(self, workspace_context: Any) -> None:
         """
-        初始化执行器
+        鍒濆鍖栨墽琛屽櫒
 
         Args:
-            workspace_context: WorkspaceContext 实例
+            workspace_context: WorkspaceContext 瀹炰緥
         """
         self._workspace_context = workspace_context
         self._provider: Any = None
@@ -60,27 +59,27 @@ class AgentExecutor:
         system_prompt: str | None = None,
     ) -> None:
         """
-        初始化执行器
+        鍒濆鍖栨墽琛屽櫒
 
         Args:
-            agent_definition: Agent 定义 (来自 Agent 定义的 metadata)
-            system_prompt: 系统提示词 (可选)
+            agent_definition: Agent 瀹氫箟 (鏉ヨ嚜 Agent 瀹氫箟鐨?metadata)
+            system_prompt: 绯荤粺鎻愮ず璇?(鍙€?
         """
         if self._initialized:
             self._logger.warning("Executor already initialized")
             return
 
         try:
-            # 创建 Provider
+            # 鍒涘缓 Provider
             self._provider = self._create_provider(agent_definition)
 
-            # 创建工具注册表
+            # 鍒涘缓宸ュ叿娉ㄥ唽琛?
             self._tool_registry = self._create_tool_registry(agent_definition)
 
-            # 创建 Agent 配置
+            # 鍒涘缓 Agent 閰嶇疆
             self._config = self._create_agent_config(agent_definition, system_prompt)
 
-            # 创建 Agent 引擎
+            # 鍒涘缓 Agent 寮曟搸
             self._engine = self._create_engine()
 
             self._initialized = True
@@ -96,11 +95,11 @@ class AgentExecutor:
         context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """
-        执行 Agent
+        鎵ц Agent
 
         Args:
-            prompt: 用户输入
-            context: 执行上下文 (可选)
+            prompt: 鐢ㄦ埛杈撳叆
+            context: 鎵ц涓婁笅鏂?(鍙€?
 
         Returns:
             ExecutionResult
@@ -111,10 +110,10 @@ class AgentExecutor:
         self._logger.info(f"Executing agent with prompt length: {len(prompt)}")
 
         try:
-            # 合并上下文到提示词
+            # 鍚堝苟涓婁笅鏂囧埌鎻愮ず璇?
             full_prompt = self._build_prompt(prompt, context)
 
-            # 运行 Agent
+            # 杩愯 Agent
             output = await self._engine.run(full_prompt)
 
             return ExecutionResult(
@@ -140,14 +139,14 @@ class AgentExecutor:
         context: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
-        流式执行 Agent
+        娴佸紡鎵ц Agent
 
         Args:
-            prompt: 用户输入
-            context: 执行上下文 (可选)
+            prompt: 鐢ㄦ埛杈撳叆
+            context: 鎵ц涓婁笅鏂?(鍙€?
 
         Yields:
-            流式事件
+            娴佸紡浜嬩欢
         """
         if not self._initialized:
             raise RuntimeError("Executor not initialized. Call initialize() first.")
@@ -155,10 +154,10 @@ class AgentExecutor:
         self._logger.info(f"Starting streaming execution with prompt length: {len(prompt)}")
 
         try:
-            # 合并上下文到提示词
+            # 鍚堝苟涓婁笅鏂囧埌鎻愮ず璇?
             full_prompt = self._build_prompt(prompt, context)
 
-            # 流式运行 Agent
+            # 娴佸紡杩愯 Agent
             async for event in self._engine.run_stream(full_prompt):
                 yield event
 
@@ -167,35 +166,44 @@ class AgentExecutor:
             yield {"type": "error", "message": str(e)}
 
     def reset(self) -> None:
-        """重置执行器状态"""
+        """Reset executor state."""
         if self._engine:
             self._engine.reset()
         self._logger.info("Executor reset")
 
     def get_context_summary(self) -> dict[str, Any]:
-        """获取上下文摘要"""
+        """Get execution context summary."""
         if self._engine:
             return self._engine.get_context_summary()
         return {}
 
+    def _raise_missing_dependency(self, component: str, exc: ImportError) -> None:
+        """Fail fast when pyagentforge cannot be imported."""
+        message = (
+            f"pyagentforge is required to initialize {component}. "
+            "Install it or ensure 'main/agentforge-engine' is on PYTHONPATH."
+        )
+        self._logger.error(message)
+        raise RuntimeError(message) from exc
+
     def _create_provider(self, agent_definition: dict[str, Any]) -> Any:
         """
-        创建 Provider
+        鍒涘缓 Provider
 
         Args:
-            agent_definition: Agent 定义
+            agent_definition: Agent 瀹氫箟
 
         Returns:
-            Provider 实例
+            Provider 瀹炰緥
         """
         try:
             from pyagentforge.providers.factory import create_provider
 
-            # 从定义中获取模型配置
+            # 浠庡畾涔変腑鑾峰彇妯″瀷閰嶇疆
             model_config = agent_definition.get("model", {})
             model_id = model_config.get("id", "claude-sonnet-4-20250514")
 
-            # 创建 Provider
+            # 鍒涘缓 Provider
             provider = create_provider(
                 model_id,
                 temperature=model_config.get("temperature", 1.0),
@@ -205,44 +213,42 @@ class AgentExecutor:
             self._logger.info(f"Created provider for model: {model_id}")
             return provider
 
-        except ImportError:
-            self._logger.warning("pyagentforge not available, using mock provider")
-            return MockProvider()
+        except ImportError as exc:
+            self._raise_missing_dependency("provider", exc)
 
     def _create_tool_registry(self, agent_definition: dict[str, Any]) -> Any:
         """
-        创建工具注册表
+        鍒涘缓宸ュ叿娉ㄥ唽琛?
 
         Args:
-            agent_definition: Agent 定义
+            agent_definition: Agent 瀹氫箟
 
         Returns:
-            ToolRegistry 实例
+            ToolRegistry 瀹炰緥
         """
         try:
             from pyagentforge.tools.registry import ToolRegistry
-            from pyagentforge.kernel.executor import PermissionChecker
 
-            # 创建工具注册表
+            # 鍒涘缓宸ュ叿娉ㄥ唽琛?
             registry = ToolRegistry()
 
-            # 注册内置工具
+            # 娉ㄥ唽鍐呯疆宸ュ叿
             registry.register_builtin_tools()
 
-            # 从工作区域配置过滤工具
+            # 浠庡伐浣滃尯鍩熼厤缃繃婊ゅ伐鍏?
             capabilities = agent_definition.get("capabilities", {})
             allowed_tools = capabilities.get("tools", ["*"])
             denied_tools = capabilities.get("denied_tools", [])
 
-            # 如果有拒绝列表或非通配符允许列表，过滤工具
+            # 濡傛灉鏈夋嫆缁濆垪琛ㄦ垨闈為€氶厤绗﹀厑璁稿垪琛紝杩囨护宸ュ叿
             if denied_tools or "*" not in allowed_tools:
                 registry = registry.filter_by_permission(allowed_tools)
-                # 移除拒绝的工具
+                # 绉婚櫎鎷掔粷鐨勫伐鍏?
                 for tool_name in denied_tools:
                     if tool_name in registry._tools:
                         registry.unregister(tool_name)
 
-            # 创建权限检查器
+            # 鍒涘缓鏉冮檺妫€鏌ュ櫒
             from .permission_bridge import (
                 WorkspacePathValidator,
                 WorkspacePermissionChecker,
@@ -256,15 +262,14 @@ class AgentExecutor:
             )
             permission_checker = create_pyagentforge_permission_checker(ws_checker)
 
-            # 存储权限检查器供后续使用
+            # 瀛樺偍鏉冮檺妫€鏌ュ櫒渚涘悗缁娇鐢?
             self._permission_checker = permission_checker
 
             self._logger.info(f"Created tool registry with {len(registry)} tools")
             return registry
 
-        except ImportError:
-            self._logger.warning("pyagentforge not available, using mock registry")
-            return MockToolRegistry()
+        except ImportError as exc:
+            self._raise_missing_dependency("tool registry", exc)
 
     def _create_agent_config(
         self,
@@ -272,19 +277,19 @@ class AgentExecutor:
         system_prompt: str | None,
     ) -> Any:
         """
-        创建 Agent 配置
+        鍒涘缓 Agent 閰嶇疆
 
         Args:
-            agent_definition: Agent 定义
-            system_prompt: 系统提示词
+            agent_definition: Agent 瀹氫箟
+            system_prompt: 绯荤粺鎻愮ず璇?
 
         Returns:
-            AgentConfig 实例
+            AgentConfig 瀹炰緥
         """
         try:
             from pyagentforge.kernel.engine import AgentConfig
 
-            # 从定义中获取配置
+            # 浠庡畾涔変腑鑾峰彇閰嶇疆
             limits = agent_definition.get("limits", {})
             model_config = agent_definition.get("model", {})
 
@@ -300,16 +305,15 @@ class AgentExecutor:
 
             return config
 
-        except ImportError:
-            self._logger.warning("pyagentforge not available, using mock config")
-            return MockAgentConfig(system_prompt or "You are a helpful AI assistant.")
+        except ImportError as exc:
+            self._raise_missing_dependency("agent config", exc)
 
     def _create_engine(self) -> Any:
         """
-        创建 Agent 引擎
+        鍒涘缓 Agent 寮曟搸
 
         Returns:
-            AgentEngine 实例
+            AgentEngine 瀹炰緥
         """
         try:
             from pyagentforge.kernel.engine import AgentEngine
@@ -323,25 +327,24 @@ class AgentExecutor:
             self._logger.info(f"Created AgentEngine: session_id={engine.session_id}")
             return engine
 
-        except ImportError:
-            self._logger.warning("pyagentforge not available, using mock engine")
-            return MockAgentEngine()
+        except ImportError as exc:
+            self._raise_missing_dependency("agent engine", exc)
 
     def _build_prompt(self, prompt: str, context: dict[str, Any] | None) -> str:
         """
-        构建完整提示词
+        鏋勫缓瀹屾暣鎻愮ず璇?
 
         Args:
-            prompt: 用户输入
-            context: 执行上下文
+            prompt: 鐢ㄦ埛杈撳叆
+            context: 鎵ц涓婁笅鏂?
 
         Returns:
-            完整提示词
+            瀹屾暣鎻愮ず璇?
         """
         if not context:
             return prompt
 
-        # 添加工作区域上下文
+        # 娣诲姞宸ヤ綔鍖哄煙涓婁笅鏂?
         workspace_info = f"""Working directory: {self._workspace_context.resolved_root}
 Namespace: {self._workspace_context.config.namespace}
 Read-only: {self._workspace_context.config.is_readonly}
@@ -353,80 +356,7 @@ Read-only: {self._workspace_context.config.is_readonly}
         return f"{workspace_info}\n\nTask: {prompt}"
 
 
-# ==================== Mock 类 (用于测试或 pyagentforge 不可用时) ====================
 
 
-class MockProvider:
-    """Mock Provider"""
-
-    def __init__(self) -> None:
-        self.model = "mock-model"
-
-    async def create_message(self, **kwargs: Any) -> Any:
-        from dataclasses import dataclass
-
-        @dataclass
-        class MockResponse:
-            text: str = "Mock response - pyagentforge not available"
-            stop_reason: str = "end_turn"
-            has_tool_calls: bool = False
-            content: list = []
-            tool_calls: list = []
-
-        return MockResponse()
 
 
-class MockToolRegistry:
-    """Mock Tool Registry"""
-
-    def __init__(self) -> None:
-        self._tools: dict[str, Any] = {}
-
-    def get_schemas(self) -> list[dict]:
-        return []
-
-    def get(self, name: str) -> Any:
-        return None
-
-    def register(self, tool: Any) -> None:
-        pass
-
-    def unregister(self, name: str) -> bool:
-        return False
-
-    def __len__(self) -> int:
-        return 0
-
-
-@dataclass
-class MockAgentConfig:
-    """Mock Agent Config"""
-
-    system_prompt: str = "You are a helpful AI assistant."
-    max_tokens: int = 4096
-    temperature: float = 1.0
-    max_iterations: int = 100
-    permission_checker: Any = None
-
-
-class MockAgentEngine:
-    """Mock Agent Engine"""
-
-    def __init__(self) -> None:
-        self._session_id = "mock-session"
-
-    @property
-    def session_id(self) -> str:
-        return self._session_id
-
-    async def run(self, prompt: str) -> str:
-        return "Mock response - pyagentforge not available"
-
-    async def run_stream(self, prompt: str):
-        yield {"type": "complete", "text": "Mock response - pyagentforge not available"}
-
-    def reset(self) -> None:
-        pass
-
-    def get_context_summary(self) -> dict[str, Any]:
-        return {"session_id": self._session_id}

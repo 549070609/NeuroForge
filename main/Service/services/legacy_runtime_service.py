@@ -18,24 +18,6 @@ from .base import BaseService
 logger = logging.getLogger(__name__)
 
 
-class _MockRuntimeEngine:
-    """Fallback runtime engine when pyagentforge runtime cannot be created."""
-
-    def __init__(self, model: str) -> None:
-        self.model = model
-        self._session_id = f"session_{uuid.uuid4().hex[:12]}"
-
-    @property
-    def session_id(self) -> str:
-        return self._session_id
-
-    async def run(self, prompt: str) -> str:
-        return "Mock response - pyagentforge runtime unavailable"
-
-    async def run_stream(self, prompt: str) -> AsyncGenerator[dict[str, Any], None]:
-        yield {"type": "complete", "text": "Mock response - pyagentforge runtime unavailable"}
-
-
 class LegacyRuntimeService(BaseService):
     """Service implementation for migrated legacy runtime endpoints."""
 
@@ -114,8 +96,7 @@ class LegacyRuntimeService(BaseService):
                 context=context,
             )
         except Exception as exc:  # pragma: no cover - environment dependent
-            self._logger.warning("Using mock runtime engine: %s", exc)
-            return _MockRuntimeEngine(model=selected_model)
+            raise RuntimeError(f"Failed to create pyagentforge runtime engine: {exc}") from exc
 
     def _resolve_agent_profile(
         self,

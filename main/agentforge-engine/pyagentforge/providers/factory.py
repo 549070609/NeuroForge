@@ -32,6 +32,25 @@ class ModelAdapterFactory:
         self.registry = registry or get_registry()
         self._provider_cache: dict[str, BaseProvider] = {}
 
+    def _resolve_api_key(self, config: ModelConfig) -> str | None:
+        """Resolve API key from env first, then centralized JSON config."""
+        if config.api_key_env:
+            key = os.environ.get(config.api_key_env)
+            if key:
+                return key
+
+        try:
+            from pyagentforge.config.llm_config import get_llm_config_manager
+
+            manager = get_llm_config_manager()
+            provider = config.provider.value if hasattr(config.provider, "value") else str(config.provider)
+            key = manager.get_api_key(provider, config.id)
+            if key and config.api_key_env and not os.environ.get(config.api_key_env):
+                os.environ[config.api_key_env] = key
+            return key
+        except Exception:
+            return None
+
     def create_provider(
         self,
         model_id: str,
@@ -127,7 +146,7 @@ class ModelAdapterFactory:
         from pyagentforge.providers.anthropic_provider import AnthropicProvider
 
         # 从环境变量获取 API Key
-        api_key = os.environ.get(config.api_key_env) if config.api_key_env else None
+        api_key = self._resolve_api_key(config)
 
         return AnthropicProvider(
             api_key=api_key,
@@ -143,7 +162,7 @@ class ModelAdapterFactory:
         from pyagentforge.providers.openai_provider import OpenAIProvider
 
         # 从环境变量获取 API Key
-        api_key = os.environ.get(config.api_key_env) if config.api_key_env else None
+        api_key = self._resolve_api_key(config)
 
         provider_kwargs = {
             "api_key": api_key,
@@ -166,7 +185,7 @@ class ModelAdapterFactory:
         try:
             from pyagentforge.providers.google_provider import GoogleProvider
 
-            api_key = os.environ.get(config.api_key_env) if config.api_key_env else None
+            api_key = self._resolve_api_key(config)
 
             return GoogleProvider(
                 api_key=api_key,
@@ -188,7 +207,7 @@ class ModelAdapterFactory:
         try:
             from pyagentforge.providers.azure_provider import AzureProvider
 
-            api_key = os.environ.get(config.api_key_env) if config.api_key_env else None
+            api_key = self._resolve_api_key(config)
 
             return AzureProvider(
                 api_key=api_key,

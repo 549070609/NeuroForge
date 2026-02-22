@@ -128,7 +128,9 @@ class LLMConfigManager:
     """LLM 配置管理器"""
 
     DEFAULT_CONFIG_PATH = "llm_config.json"
+    DEFAULT_FALLBACK_PATH = "default_llm_config.json"
     ENV_CONFIG_PATH = "LLM_CONFIG_PATH"
+    MAIN_CONFIG_DIR = Path(__file__).resolve().parents[3]
 
     _instance: "LLMConfigManager | None" = None
     _config: LLMConfig | None = None
@@ -140,19 +142,24 @@ class LLMConfigManager:
         return cls._instance
 
     def get_config_path(self) -> Path:
-        """获取配置文件路径"""
-        # 优先使用环境变量
+        """Get LLM config path."""
         env_path = os.environ.get(self.ENV_CONFIG_PATH)
         if env_path:
             return Path(env_path)
 
-        # 其次查找默认路径
+        main_path = self.MAIN_CONFIG_DIR / self.DEFAULT_CONFIG_PATH
+        if main_path.exists():
+            return main_path
+
         cwd_path = Path.cwd() / self.DEFAULT_CONFIG_PATH
         if cwd_path.exists():
             return cwd_path
 
-        # 最后使用包内默认配置
-        return Path(__file__).parent / "default_llm_config.json"
+        main_default_path = self.MAIN_CONFIG_DIR / self.DEFAULT_FALLBACK_PATH
+        if main_default_path.exists():
+            return main_default_path
+
+        return Path(__file__).parent / self.DEFAULT_FALLBACK_PATH
 
     def load_config(self, config_path: str | Path | None = None) -> LLMConfig:
         """
