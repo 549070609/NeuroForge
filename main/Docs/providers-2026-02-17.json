@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "exportedAt": "2026-02-17T16:20:42.683Z",
+  "providers": [
+    {
+      "id": "77e5d61b-91fb-400f-ab40-fc99550eaae9",
+      "name": "RightCode",
+      "settingsConfig": {
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://right.codes/codex/v1",
+          "ANTHROPIC_AUTH_TOKEN": "sk-c023c1de2e37462bbd9c8ed51692462a",
+          "ANTHROPIC_MODEL": "gpt-5.3-codex",
+          "ANTHROPIC_REASONING_MODEL": "gpt-5.3-codex",
+          "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.3-codex",
+          "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.3-codex",
+          "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.3-codex"
+        }
+      },
+      "websiteUrl": "https://www.right.codes",
+      "apiKeyUrl": "https://www.right.codes/register?aff=CCSWITCH",
+      "notes": "",
+      "icon": "rc",
+      "iconColor": "#E96B2C",
+      "category": "third_party",
+      "createdAt": "2026-02-17T09:23:26.805Z",
+      "updatedAt": "2026-02-17T09:33:14.542Z"
+    },
+    {
+      "id": "54c5a116-e4c2-4a58-8fcd-1c4a20556b37",
+      "name": "Zhipu GLM",
+      "settingsConfig": {
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://open.bigmodel.cn/api/anthropic",
+          "ANTHROPIC_AUTH_TOKEN": "04aa34059bb6418ca8e50c4fdc0a5a1d.Ovzk8yQtECZYMSAh",
+          "ANTHROPIC_MODEL": "glm-5",
+          "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5",
+          "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5",
+          "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5"
+        }
+      },
+      "websiteUrl": "https://open.bigmodel.cn",
+      "apiKeyUrl": "https://www.bigmodel.cn/claude-code?ic=RRVJPB5SII",
+      "notes": "",
+      "icon": "zhipu",
+      "iconColor": "#0F62FE",
+      "category": "cn_official",
+      "createdAt": "2026-02-17T10:15:06.431Z",
+      "updatedAt": "2026-02-17T10:15:06.431Z"
+    }
+  ]
+}

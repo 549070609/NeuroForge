@@ -1,0 +1,3 @@
+# 主动感知器 PoC 依赖
+aton-format>=2.0.0
+toon-formatter>=1.0.0
