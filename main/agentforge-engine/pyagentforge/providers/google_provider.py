@@ -6,7 +6,7 @@ Google Generative AI Provider
 
 from typing import Any, AsyncIterator
 
-from pyagentforge.core.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 from pyagentforge.core.thinking import ThinkingBlock
 from pyagentforge.providers.base import BaseProvider
 from pyagentforge.utils.logging import get_logger

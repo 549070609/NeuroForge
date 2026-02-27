@@ -9,7 +9,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
-from pyagentforge.core.message import (
+from pyagentforge.kernel.message import (
     ProviderResponse,
     TextBlock,
     ToolUseBlock,
@@ -152,9 +152,6 @@ class OpenAIProvider(BaseProvider):
                         else:
                             tool_input = {}
                     except json.JSONDecodeError as e:
-                        # JSON 解析失败，记录错误并使用空字典
-                        import logging
-                        logger = logging.getLogger(__name__)
                         logger.warning(
                             f"Failed to parse tool arguments as JSON: {e}. "
                             f"Tool: {tc.function.name}, Arguments: {tc.function.arguments}"
@@ -256,7 +253,74 @@ class OpenAIProvider(BaseProvider):
 
         stream = await self.client.chat.completions.create(**params)
 
-        async for chunk in stream:
-            yield chunk
+        full_text = ""
+        tool_calls_map: dict[int, dict[str, Any]] = {}
+        finish_reason = "end_turn"
+        prompt_tokens = 0
+        completion_tokens = 0
 
-        # 最终响应会在流结束后单独处理
+        async for chunk in stream:
+            if not chunk.choices:
+                if hasattr(chunk, "usage") and chunk.usage:
+                    prompt_tokens = chunk.usage.prompt_tokens or 0
+                    completion_tokens = chunk.usage.completion_tokens or 0
+                continue
+
+            choice = chunk.choices[0]
+            delta = choice.delta
+
+            if delta and delta.content:
+                full_text += delta.content
+                yield {"type": "text_delta", "text": delta.content}
+
+            if delta and delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_calls_map:
+                        tool_calls_map[idx] = {
+                            "id": tc_delta.id or "",
+                            "name": "",
+                            "arguments": "",
+                        }
+                    entry = tool_calls_map[idx]
+                    if tc_delta.id:
+                        entry["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            entry["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            entry["arguments"] += tc_delta.function.arguments
+
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
+
+            if hasattr(chunk, "usage") and chunk.usage:
+                prompt_tokens = chunk.usage.prompt_tokens or 0
+                completion_tokens = chunk.usage.completion_tokens or 0
+
+        content: list[TextBlock | ToolUseBlock] = []
+        if full_text:
+            content.append(TextBlock(text=full_text))
+
+        for _idx in sorted(tool_calls_map):
+            tc_data = tool_calls_map[_idx]
+            try:
+                tool_input = json.loads(tc_data["arguments"]) if tc_data["arguments"] else {}
+            except json.JSONDecodeError:
+                tool_input = {}
+            content.append(
+                ToolUseBlock(id=tc_data["id"], name=tc_data["name"], input=tool_input)
+            )
+
+        if finish_reason == "tool_calls":
+            stop_reason = "tool_use"
+        elif finish_reason == "length":
+            stop_reason = "max_tokens"
+        else:
+            stop_reason = "end_turn"
+
+        yield ProviderResponse(
+            content=content,
+            stop_reason=stop_reason,
+            usage={"input_tokens": prompt_tokens, "output_tokens": completion_tokens},
+        )

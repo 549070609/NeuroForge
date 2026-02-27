@@ -7,7 +7,7 @@ LLM 提供商基类
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pyagentforge.core.message import ProviderResponse
+from pyagentforge.kernel.message import ProviderResponse
 
 
 class BaseProvider(ABC):

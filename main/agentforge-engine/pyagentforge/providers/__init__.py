@@ -5,7 +5,7 @@ LLM 提供商模块
 """
 
 from pyagentforge.providers.base import BaseProvider
-from pyagentforge.core.message import ProviderResponse
+from pyagentforge.kernel.message import ProviderResponse
 from pyagentforge.providers.anthropic_provider import AnthropicProvider
 from pyagentforge.providers.openai_provider import OpenAIProvider
 from pyagentforge.providers.google_provider import GoogleProvider

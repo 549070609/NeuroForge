@@ -1,0 +1,11 @@
+{
+  "mode": "llm",
+  "provider": "custom",
+  "api_key": "sk-c023c1de2e37462bbd9c8ed51692462a",
+  "base_url": "https://right.codes/codex/v1",
+  "model": "gpt-5.2-high",
+  "temperature": 0.4,
+  "max_tokens": 4096,
+  "passive_system_prompt": "",
+  "active_system_prompt": ""
+}

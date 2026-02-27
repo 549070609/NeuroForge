@@ -181,15 +181,26 @@ class AgentEngine:
         )
         return "Error: Maximum iterations reached"
 
+    PHASE_LABELS = {
+        1: "快速响应",
+        2: "深度分析",
+        3: "总结建议",
+    }
+
     async def run_stream(self, prompt: str):
         """
-        流式运行 Agent
+        流式运行 Agent（分阶段输出）
+
+        每个迭代对应一个 phase：
+          Phase 1 - 快速响应：直接回应用户命令（文本 + 工具调用）
+          Phase 2 - 深度分析：基于工具结果输出结构化分析
+          Phase 3+ - 总结建议：最终输出
 
         Args:
             prompt: 用户输入
 
         Yields:
-            流式响应事件
+            带 phase 标记的流式响应事件
         """
         logger.info(
             f"Starting Agent stream: session_id={self._session_id}, prompt_len={len(prompt)}"
@@ -204,14 +215,25 @@ class AgentEngine:
 
         # 执行循环
         iteration = 0
+        phase = 0
         max_iterations = self.config.max_iterations
 
         while iteration < max_iterations:
             iteration += 1
+            phase += 1
+            phase_label = self.PHASE_LABELS.get(phase, f"阶段 {phase}")
 
             logger.info(
-                f"[Agent Stream] Iteration {iteration}/{max_iterations}"
+                f"[Agent Stream] Phase {phase} ({phase_label}), "
+                f"iteration {iteration}/{max_iterations}"
             )
+
+            # yield 阶段开始事件
+            yield {
+                "type": "phase_start",
+                "phase": phase,
+                "phase_label": phase_label,
+            }
 
             # 插件钩子: on_before_llm_call
             messages = self.context.get_messages_for_api()
@@ -233,7 +255,7 @@ class AgentEngine:
                 if isinstance(event, ProviderResponse):
                     final_response = event
                 else:
-                    yield {"type": "stream", "event": event}
+                    yield {"type": "stream", "event": event, "phase": phase}
 
             if final_response is None:
                 logger.warning(
@@ -250,7 +272,7 @@ class AgentEngine:
                     final_response = modified[0]
 
             logger.info(
-                f"[Agent Stream] Response: stop_reason={final_response.stop_reason}, "
+                f"[Agent Stream] Phase {phase}: stop_reason={final_response.stop_reason}, "
                 f"has_tools={final_response.has_tool_calls}"
             )
 
@@ -261,7 +283,11 @@ class AgentEngine:
                 if self.plugin_manager:
                     await self.plugin_manager.emit_hook("on_task_complete", final_response.text)
 
-                yield {"type": "complete", "text": final_response.text}
+                yield {
+                    "type": "complete",
+                    "text": final_response.text,
+                    "phase": phase,
+                }
                 return
 
             # 添加助手消息（包含工具调用）
@@ -269,7 +295,7 @@ class AgentEngine:
 
             # 记录工具调用
             tool_names = [tc.name for tc in final_response.tool_calls]
-            logger.info(f"[Agent Stream] Tool calls: {tool_names}")
+            logger.info(f"[Agent Stream] Phase {phase} tool calls: {tool_names}")
 
             # 执行工具并 yield 结果
             for tool_call in final_response.tool_calls:
@@ -277,6 +303,7 @@ class AgentEngine:
                     "type": "tool_start",
                     "tool_name": tool_call.name,
                     "tool_id": tool_call.id,
+                    "phase": phase,
                 }
 
                 result = await self.executor.execute(tool_call, self.ask_callback)
@@ -286,6 +313,7 @@ class AgentEngine:
                     "type": "tool_result",
                     "tool_id": tool_call.id,
                     "result": result,
+                    "phase": phase,
                 }
 
             # 检查是否需要截断上下文

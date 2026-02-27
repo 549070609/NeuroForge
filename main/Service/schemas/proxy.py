@@ -101,7 +101,11 @@ class ProxyExecuteResponse(BaseModel):
 
 
 class ProxyStreamEvent(BaseModel):
-    """流式事件"""
+    """流式事件
+
+    phase 字段标识当前输出所处的执行阶段（从 1 开始递增）。
+    前端可据此实现分段渲染：Phase 1 快速直达回复、Phase 2+ 深度分析。
+    """
 
     type: Literal[
         "stream",
@@ -109,7 +113,11 @@ class ProxyStreamEvent(BaseModel):
         "tool_result",
         "complete",
         "error",
+        "phase_start",
     ] = Field(description="事件类型")
+    phase: int | None = Field(default=None, description="当前执行阶段 (1=快速响应, 2+=深度分析)")
+    # For phase_start events
+    phase_label: str | None = Field(default=None, description="阶段标签 (如 '快速响应', '深度分析')")
     # For stream events
     event: Any | None = Field(default=None, description="流式事件数据")
     # For tool_start events

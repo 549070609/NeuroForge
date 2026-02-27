@@ -9,7 +9,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from anthropic.types import Message as AnthropicMessage
 
-from pyagentforge.core.message import (
+from pyagentforge.kernel.message import (
     ProviderResponse,
     TextBlock,
     ToolUseBlock,

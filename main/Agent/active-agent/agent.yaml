@@ -1,0 +1,67 @@
+identity:
+  name: active-agent
+  description: 主动型感知 Agent - 通过感知器监控实时数据，主动发起对话和响应
+  tags:
+    - monitor
+    - proactive
+    - perception
+    - military
+
+category: monitor
+cost: standard
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.2
+  max_tokens: 3072
+  reasoning_effort: low
+
+limits:
+  max_iterations: 10
+  timeout: 300
+
+capabilities:
+  tools:
+    - parse_log
+    - perceive
+    - execute_decision
+    - read_logs
+    - generate_mock_data
+    - threat_analysis
+    - situation_report
+
+  thinking: false
+
+perception:
+  enabled: true
+  plugin: perception
+  config:
+    log_path: data/battlefield_logs/
+    cron_expr: "*/10 * * * * *"
+    filter_rules:
+      error_triggers: find_user
+      warn_triggers: find_user
+    event_triggers:
+      - log.written
+      - battlefield.event
+
+metadata:
+  version: "1.0.0"
+  author: "NeuroForge Demo"
+  created: "2026-02-27"
+  description_zh: |
+    主动型感知 Agent，通过感知器监控实时数据流，自动检测异常并主动发起对话。
+
+    核心能力:
+    - 实时监控：持续监听数据源，检测异常事件
+    - 日志解析：解析多种格式的日志数据
+    - 威胁分析：对检测到的异常进行深度分析
+    - 主动通知：发现问题时主动向用户发起对话
+    - 态势报告：生成战场态势综合报告
+
+    Demo 主题: 使命召唤（Call of Duty）军事游戏
+    - 监控战场通信日志
+    - 检测敌方行动异常
+    - 分析战术态势变化
+    - 主动报告关键情报

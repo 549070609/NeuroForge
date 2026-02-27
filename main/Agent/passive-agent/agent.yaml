@@ -1,0 +1,51 @@
+identity:
+  name: passive-agent
+  description: 通用被动型助手 - 响应用户请求，提供编程与写作能力
+  tags:
+    - assistant
+    - coding
+    - writing
+    - passive
+
+category: assistant
+cost: standard
+
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  temperature: 0.4
+  max_tokens: 8192
+
+limits:
+  max_iterations: 10
+  timeout: 300
+
+capabilities:
+  tools:
+    - code_generate
+    - code_review
+    - text_write
+    - text_summarize
+    - format_convert
+
+  thinking: false
+
+metadata:
+  version: "1.0.0"
+  author: "NeuroForge Demo"
+  created: "2026-02-27"
+  description_zh: |
+    被动型通用 Agent，等待用户指令并响应。
+
+    核心能力:
+    - 代码生成：根据需求生成高质量代码
+    - 代码审查：分析代码质量并给出改进建议
+    - 文档撰写：撰写技术文档、README、API 文档
+    - 文本摘要：对长文本进行精炼摘要
+    - 格式转换：在不同格式间转换内容（Markdown/JSON/YAML 等）
+
+    适用场景:
+    - 日常编程辅助
+    - 代码质量提升
+    - 技术文档编写
+    - 内容整理与转换

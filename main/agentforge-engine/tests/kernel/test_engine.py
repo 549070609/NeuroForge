@@ -214,7 +214,7 @@ class TestAgentEngineStreaming:
     async def test_run_stream_yields_events(
         self, mock_provider: MockProvider, tool_registry: ToolRegistry
     ):
-        """Test that run_stream yields proper events."""
+        """Test that run_stream yields proper events with phase info."""
         engine = AgentEngine(
             provider=mock_provider,
             tool_registry=tool_registry,
@@ -224,9 +224,13 @@ class TestAgentEngineStreaming:
         async for event in engine.run_stream("Hello"):
             events.append(event)
 
-        assert len(events) == 1
-        assert events[0]["type"] == "complete"
-        assert events[0]["text"] == "Streaming response"
+        assert len(events) == 2
+        assert events[0]["type"] == "phase_start"
+        assert events[0]["phase"] == 1
+        assert events[0]["phase_label"] == "快速响应"
+        assert events[1]["type"] == "complete"
+        assert events[1]["text"] == "Streaming response"
+        assert events[1]["phase"] == 1
 
 
 class TestAgentEngineMaxIterations:
@@ -661,7 +665,7 @@ class TestAgentEngineStreamingWithTools:
     async def test_run_stream_with_tool_calls(
         self, mock_provider_with_tools: MockProvider, tool_registry: ToolRegistry
     ):
-        """Test that run_stream handles tool calls correctly."""
+        """Test that run_stream handles tool calls with phased output."""
         engine = AgentEngine(
             provider=mock_provider_with_tools,
             tool_registry=tool_registry,
@@ -671,21 +675,31 @@ class TestAgentEngineStreamingWithTools:
         async for event in engine.run_stream("Use tool"):
             events.append(event)
 
-        # Should have tool_start, tool_result, and complete events
         event_types = [e["type"] for e in events]
+        assert "phase_start" in event_types
         assert "tool_start" in event_types
         assert "tool_result" in event_types
         assert "complete" in event_types
 
-        # Check tool_start event
+        # Phase 1: tool calls
+        phase_starts = [e for e in events if e["type"] == "phase_start"]
+        assert len(phase_starts) >= 2
+        assert phase_starts[0]["phase"] == 1
+        assert phase_starts[0]["phase_label"] == "快速响应"
+        assert phase_starts[1]["phase"] == 2
+        assert phase_starts[1]["phase_label"] == "深度分析"
+
+        # Check tool_start event has phase info
         tool_start_events = [e for e in events if e["type"] == "tool_start"]
         assert len(tool_start_events) == 1
         assert tool_start_events[0]["tool_name"] == "mock_tool"
+        assert tool_start_events[0]["phase"] == 1
 
-        # Check complete event
+        # Check complete event has phase info
         complete_events = [e for e in events if e["type"] == "complete"]
         assert len(complete_events) == 1
         assert complete_events[0]["text"] == "Final result"
+        assert complete_events[0]["phase"] == 2
 
 
 class TestAgentEngineAutoClassify:

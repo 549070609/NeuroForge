@@ -10,7 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pyagentforge.providers.openai_provider import OpenAIProvider
-from pyagentforge.core.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 
 
 class TestOpenAIProvider:
@@ -360,18 +360,29 @@ class TestOpenAIProvider:
 
     @pytest.mark.asyncio
     async def test_stream_message_yields_chunks(self):
-        """Test that stream_message yields response chunks."""
+        """Test that stream_message yields text deltas and a final ProviderResponse."""
         provider = OpenAIProvider(api_key="test-key", model="gpt-4")
 
-        # Mock streaming response
+        def _make_chunk(content=None, finish_reason=None, usage=None):
+            delta = MagicMock()
+            delta.content = content
+            delta.tool_calls = None
+            choice = MagicMock()
+            choice.delta = delta
+            choice.finish_reason = finish_reason
+            chunk = MagicMock()
+            chunk.choices = [choice]
+            chunk.usage = usage
+            return chunk
+
         async def mock_stream():
-            chunks = [
-                MagicMock(choices=[MagicMock(delta=MagicMock(content="Hello"))]),
-                MagicMock(choices=[MagicMock(delta=MagicMock(content=" world"))]),
-                MagicMock(choices=[MagicMock(delta=MagicMock(content="!"))]),
-            ]
-            for chunk in chunks:
-                yield chunk
+            yield _make_chunk(content="Hello")
+            yield _make_chunk(content=" world")
+            yield _make_chunk(content="!", finish_reason="stop")
+            final_usage = MagicMock()
+            final_usage.prompt_tokens = 1
+            final_usage.completion_tokens = 1
+            yield _make_chunk(finish_reason=None, usage=final_usage)
 
         with patch.object(
             provider.client.chat.completions,
@@ -379,15 +390,24 @@ class TestOpenAIProvider:
             new_callable=AsyncMock,
             return_value=mock_stream(),
         ):
-            chunks = []
-            async for chunk in provider.stream_message(
+            events = []
+            async for event in provider.stream_message(
                 system="You are helpful.",
                 messages=[{"role": "user", "content": "Hi"}],
                 tools=[],
             ):
-                chunks.append(chunk)
+                events.append(event)
 
-        assert len(chunks) == 3
+        text_deltas = [e for e in events if isinstance(e, dict) and e.get("type") == "text_delta"]
+        assert len(text_deltas) == 3
+        assert text_deltas[0]["text"] == "Hello"
+        assert text_deltas[1]["text"] == " world"
+        assert text_deltas[2]["text"] == "!"
+
+        final = events[-1]
+        assert isinstance(final, ProviderResponse)
+        assert final.text == "Hello world!"
+        assert final.stop_reason == "end_turn"
 
     @pytest.mark.asyncio
     async def test_create_message_with_custom_parameters(self):

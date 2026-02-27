@@ -32,7 +32,7 @@ class GLMEndpoint(str, Enum):
 # 使用模块级延迟导入函数
 def _import_dependencies():
     """延迟导入依赖以避免循环导入"""
-    from pyagentforge.core.message import (
+    from pyagentforge.kernel.message import (
         ProviderResponse,
         TextBlock,
         ToolUseBlock,
