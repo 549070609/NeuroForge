@@ -130,7 +130,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
 
 def run() -> None:
-    """Run the server (entry point for CLI)."""
+    """Run the server."""
     import uvicorn
 
     settings = get_settings()

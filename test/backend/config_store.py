@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "mode": "mock",  # "mock" | "llm"
     "provider": "anthropic",  # "anthropic" | "openai" | "custom"
     "api_type": "openai-completions",  # "openai-completions" | "anthropic-messages"
     "auth_header_type": "bearer",  # "bearer" | "api-key" | "x-api-key" (custom only)
@@ -107,10 +106,6 @@ class ConfigStore:
                 self._config[k] = v
         self._save()
         return self.get_safe_config()
-
-    @property
-    def is_llm_mode(self) -> bool:
-        return self._config.get("mode") == "llm" and bool(self._config.get("api_key"))
 
     @property
     def api_key(self) -> str:

@@ -108,7 +108,8 @@
 ## 7. 快速验证
 
 ```bash
-python main/CLI/start_cli_chat.py
+cd main/Service
+uvicorn Service.gateway.app:create_app --factory --reload --port 8000
 ```
 
 若进入真实 provider 调用并出现鉴权报错，通常说明配置路径已正确生效。

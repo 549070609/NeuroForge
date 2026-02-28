@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from ...schemas.proxy import (
+    AgentConfigOverride,
     ProxyExecuteRequest,
     ProxyExecuteResponse,
     ProxyStatsResponse,
@@ -159,10 +160,16 @@ async def create_session(request: SessionCreate) -> SessionResponse:
     service = get_proxy_service()
 
     try:
+        agent_config = (
+            request.agent_config.model_dump(exclude_none=True)
+            if request.agent_config
+            else None
+        )
         session = await service.create_session(
             workspace_id=request.workspace_id,
             agent_id=request.agent_id,
             metadata=request.metadata,
+            agent_config=agent_config,
         )
         return SessionResponse(**session.to_dict())
 

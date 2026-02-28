@@ -107,10 +107,11 @@ Practical recommendation:
 
 ## Quick Check
 
-After editing config, start CLI chat with:
+After editing config, verify the configuration by starting the Service API:
 
 ```bash
-python main/CLI/start_cli_chat.py
+cd main/Service
+uvicorn Service.gateway.app:create_app --factory --reload --port 8000
 ```
 
 If startup reaches provider authentication errors, config path is likely correct and runtime is using real provider calls.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Agent Executor - Agent 鎵ц鍣?
 
 闆嗘垚 pyagentforge 鏍稿績鍔熻兘锛屽湪宸ヤ綔鍖哄煙涓婁笅鏂囦腑鎵ц Agent銆?
@@ -57,6 +57,7 @@ class AgentExecutor:
         self,
         agent_definition: dict[str, Any],
         system_prompt: str | None = None,
+        config_overrides: dict[str, Any] | None = None,
     ) -> None:
         """
         鍒濆鍖栨墽琛屽櫒
@@ -70,16 +71,23 @@ class AgentExecutor:
             return
 
         try:
-            # 鍒涘缓 Provider
+            # 应用运行时配置覆盖（优先级高于 agent.yaml）
+            if config_overrides:
+                agent_definition = self._apply_config_overrides(agent_definition, config_overrides)
+                if config_overrides.get("system_prompt"):
+                    system_prompt = config_overrides["system_prompt"]
+                self._logger.info("Applied config overrides: %s", list(config_overrides.keys()))
+
+            # 创建 Provider
             self._provider = self._create_provider(agent_definition)
 
-            # 鍒涘缓宸ュ叿娉ㄥ唽琛?
+            # 创建工具注册表
             self._tool_registry = self._create_tool_registry(agent_definition)
 
-            # 鍒涘缓 Agent 閰嶇疆
+            # 创建 Agent 配置
             self._config = self._create_agent_config(agent_definition, system_prompt)
 
-            # 鍒涘缓 Agent 寮曟搸
+            # 创建 Agent 引擎
             self._engine = self._create_engine()
 
             self._initialized = True
@@ -176,6 +184,46 @@ class AgentExecutor:
         if self._engine:
             return self._engine.get_context_summary()
         return {}
+
+    def _apply_config_overrides(
+        self,
+        definition: dict[str, Any],
+        overrides: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        将运行时配置覆盖合并到 agent 定义字典。
+
+        支持的覆盖字段:
+          model 层: provider, model, temperature, max_tokens
+          limits 层: max_iterations, timeout
+          其他: system_prompt (由 initialize 直接处理), extra (透传)
+
+        Args:
+            definition: 原始 agent 定义（来自 agent.yaml）
+            overrides: 运行时覆盖字典
+
+        Returns:
+            深拷贝后已合并覆盖的 agent 定义
+        """
+        import copy
+
+        definition = copy.deepcopy(definition)
+
+        _model_keys = {"provider", "model", "temperature", "max_tokens"}
+        _limit_keys = {"max_iterations", "timeout"}
+
+        for key, value in overrides.items():
+            if value is None:
+                continue
+            if key in _model_keys:
+                definition.setdefault("model", {})[key] = value
+            elif key in _limit_keys:
+                definition.setdefault("limits", {})[key] = value
+            elif key == "extra" and isinstance(value, dict):
+                definition.setdefault("extra", {}).update(value)
+            # "system_prompt" is handled in initialize()
+
+        return definition
 
     def _raise_missing_dependency(self, component: str, exc: ImportError) -> None:
         """Fail fast when pyagentforge cannot be imported."""

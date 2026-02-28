@@ -201,6 +201,7 @@ class AgentProxyService(BaseService):
         workspace_id: str,
         agent_id: str,
         metadata: dict[str, Any] | None = None,
+        agent_config: dict[str, Any] | None = None,
     ) -> SessionState:
         """
         创建会话
@@ -209,6 +210,7 @@ class AgentProxyService(BaseService):
             workspace_id: 工作区域 ID
             agent_id: Agent ID
             metadata: 元数据
+            agent_config: 运行时配置覆盖（优先级高于 agent.yaml）
 
         Returns:
             SessionState
@@ -224,14 +226,19 @@ class AgentProxyService(BaseService):
         if not workspace:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        # 创建执行器
-        executor = await self._create_executor(workspace, agent_id)
+        # 创建执行器（携带运行时配置覆盖）
+        executor = await self._create_executor(workspace, agent_id, config_overrides=agent_config)
+
+        # 将 agent_config 持久化到 metadata，供执行器缓存失效时重建使用
+        merged_metadata = dict(metadata or {})
+        if agent_config:
+            merged_metadata["_agent_config"] = agent_config
 
         # 创建会话
         session = await self._session_manager.create_session(
             workspace_id=workspace_id,
             agent_id=agent_id,
-            metadata=metadata,
+            metadata=merged_metadata,
             executor=executor,
         )
 
@@ -295,12 +302,15 @@ class AgentProxyService(BaseService):
 
         executor = self._executor_cache.get(session_id)
         if not executor or not executor._initialized:
-            # 重新创建执行器
+            # 重新创建执行器（从 session metadata 恢复配置覆盖）
             workspace = self._workspace_manager.get_workspace(session.workspace_id)
             if not workspace:
                 raise ValueError(f"Workspace not found: {session.workspace_id}")
 
-            executor = await self._create_executor(workspace, session.agent_id)
+            saved_config = session.metadata.get("_agent_config") if session.metadata else None
+            executor = await self._create_executor(
+                workspace, session.agent_id, config_overrides=saved_config
+            )
             self._executor_cache[session_id] = executor
 
         # 添加用户消息到历史
@@ -348,7 +358,10 @@ class AgentProxyService(BaseService):
                 yield {"type": "error", "message": f"Workspace not found: {session.workspace_id}"}
                 return
 
-            executor = await self._create_executor(workspace, session.agent_id)
+            saved_config = session.metadata.get("_agent_config") if session.metadata else None
+            executor = await self._create_executor(
+                workspace, session.agent_id, config_overrides=saved_config
+            )
             self._executor_cache[session_id] = executor
 
         # 添加用户消息到历史
@@ -374,6 +387,7 @@ class AgentProxyService(BaseService):
         self,
         workspace: WorkspaceContext,
         agent_id: str,
+        config_overrides: dict[str, Any] | None = None,
     ) -> AgentExecutor:
         """
         创建 Agent 执行器
@@ -381,6 +395,7 @@ class AgentProxyService(BaseService):
         Args:
             workspace: 工作区域上下文
             agent_id: Agent ID
+            config_overrides: 运行时配置覆盖，优先级高于 agent.yaml
 
         Returns:
             AgentExecutor 实例
@@ -391,9 +406,9 @@ class AgentProxyService(BaseService):
         # 读取系统提示词
         system_prompt = await self._get_system_prompt(agent_id)
 
-        # 创建执行器
+        # 创建执行器（传入运行时覆盖）
         executor = AgentExecutor(workspace)
-        await executor.initialize(agent_definition, system_prompt)
+        await executor.initialize(agent_definition, system_prompt, config_overrides=config_overrides)
 
         return executor
 

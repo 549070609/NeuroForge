@@ -20,36 +20,50 @@ from ws_manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
+# Tool definitions reflect the actual BaseTool subclasses registered in
+# EngineManager._create_active_engine() via active_tools_impl.py.
 TOOL_DEFINITIONS = {
-    "parse_log": {
-        "name": "parse_log",
-        "description": "解析战场通信日志",
-        "parameters": {"raw_data": "string", "format": "string"},
-    },
     "perceive": {
         "name": "perceive",
-        "description": "感知和分析日志数据，识别威胁级别",
-        "parameters": {"data": "object", "rules": "object"},
+        "description": "分析战场事件列表，识别威胁等级，决定是否上报",
+        "parameters": {"events": "array"},
+        "category": "perception",
     },
     "threat_analysis": {
         "name": "threat_analysis",
-        "description": "对检测到的威胁进行深度分析",
-        "parameters": {"threat_data": "object"},
+        "description": "深度分析特定威胁，输出评估等级和战术建议",
+        "parameters": {"event_type": "string", "level": "string", "message": "string"},
+        "category": "analysis",
     },
     "situation_report": {
         "name": "situation_report",
-        "description": "生成战场态势综合报告",
+        "description": "基于事件列表生成结构化战场态势报告",
         "parameters": {"events": "array"},
-    },
-    "generate_mock_data": {
-        "name": "generate_mock_data",
-        "description": "生成模拟战场日志数据",
-        "parameters": {"scenario": "string", "count": "integer"},
+        "category": "reporting",
     },
     "situation_compare": {
         "name": "situation_compare",
-        "description": "调取态势流式数据进行比对分析",
-        "parameters": {"snapshot": "object"},
+        "description": "比对态势快照，分析威胁演变趋势",
+        "parameters": {"stats": "object", "recent_events": "array"},
+        "category": "analysis",
+    },
+    "generate_mock_data": {
+        "name": "generate_mock_data",
+        "description": "生成模拟战场事件数据（ambush/air_strike/recon/supply_run/random）",
+        "parameters": {"scenario": "string", "count": "integer"},
+        "category": "utility",
+    },
+    "websearch": {
+        "name": "websearch",
+        "description": "搜索外部情报和威胁数据库",
+        "parameters": {"query": "string"},
+        "category": "intelligence",
+    },
+    "webfetch": {
+        "name": "webfetch",
+        "description": "获取外部情报网页内容",
+        "parameters": {"url": "string"},
+        "category": "intelligence",
     },
 }
 

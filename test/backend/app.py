@@ -1,13 +1,15 @@
 """
 Agent Demo Backend Server
 
-FastAPI application providing WebSocket-based chat for passive and active agents,
-mock data generation, tool capability demonstration, and real LLM integration.
+FastAPI application providing WebSocket-based chat for passive and active agents.
+LLM calls are driven by pyagentforge AgentEngine, which handles the full
+tool-calling loop, context management, and streaming.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -23,14 +25,15 @@ from active_handler import (
     trigger_mock_data,
 )
 from config_store import ConfigStore
-from llm_provider import LLMBridge, get_bridge_from_config
+from engine_manager import ACTIVE_SYSTEM_PROMPT, EngineManager
+from llm_provider import get_provider_from_config
 from passive_handler import get_tool_list as passive_tools
 from ws_manager import ConnectionManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="NeuroForge Agent Demo", version="2.0.0")
+app = FastAPI(title="NeuroForge Agent Demo", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,9 +46,11 @@ app.add_middleware(
 passive_manager = ConnectionManager()
 active_manager = ConnectionManager()
 
+# Active agent per-session state (still needed for monitor loop + frontend display)
 active_session_events: dict[str, list[dict[str, Any]]] = {}
 active_session_alerts: dict[str, list[str]] = {}
-session_histories: dict[str, list[dict[str, Any]]] = {}
+# Per-session agent config overrides (set via WS "set_agent_config" or REST)
+active_session_agent_config: dict[str, dict[str, Any]] = {}
 
 MAX_SESSION_EVENTS = 200
 MAX_SESSION_ALERTS = 50
@@ -58,6 +63,11 @@ MONITOR_INTERVAL_SECONDS = 15
 _welcomed_sessions: set[str] = set()
 
 
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
@@ -66,6 +76,19 @@ class ChatRequest(BaseModel):
 class TriggerMockRequest(BaseModel):
     session_id: str
     scenario: str | None = None
+
+
+class AgentConfigRequest(BaseModel):
+    """运行时 Agent 配置覆盖（优先级高于 agent.yaml 默认值）"""
+
+    session_id: str
+    provider: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    max_iterations: int | None = None
+    system_prompt: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -80,61 +103,29 @@ class ConfigUpdateRequest(BaseModel):
     max_tokens: int | None = None
 
 
-PASSIVE_SYSTEM_PROMPT = """你是一个高效的编程与写作助手。你擅长：
-1. 根据需求生成高质量代码（Python、JavaScript、TypeScript 等）
-2. 审查代码质量并给出改进建议
-3. 撰写技术文档、README、API 文档
-4. 对长文本进行精炼摘要
-5. 在不同格式间转换内容
-
-请用中文回复。当用户请求代码时，直接给出代码和简要说明。"""
-
-ACTIVE_SYSTEM_PROMPT = """你是代号 Overwatch 的战场感知 Agent，向指挥官报告关键情报。
-
-格式要求：
-- 军事通信风格，简洁精准，直接给结论和建议
-- 不输出解释性废话，不重复已知信息
-- 用 🔴🟡🟢 标记威胁级别
-- 优先使用 Markdown 表格呈现结构化数据（事件列表、威胁详情、状态统计等）
-- 表格之外仅保留一行结论/建议
-- 用中文回复
-
-输出示例格式：
-**🔴 态势标题** · 统计摘要
-
-| 指标 | 值 |
-| --- | --- |
-| 字段1 | 数据1 |
-| 字段2 | 数据2 |
-
-→ 一句话结论或行动建议"""
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
 def _cleanup_active_session(session_id: str) -> None:
-    """Remove in-memory state for an active session.
-
-    Preserves ``_welcomed_sessions`` so that reconnecting clients do not
-    receive the welcome message a second time.  Session IDs are per-page-load
-    UUIDs, so the set stays bounded.
-    """
+    """Remove in-memory state for an active session."""
     active_session_events.pop(session_id, None)
     active_session_alerts.pop(session_id, None)
-    session_histories.pop(f"active-{session_id}", None)
+    active_session_agent_config.pop(session_id, None)
+    EngineManager.destroy_active(session_id)
 
 
 def _trim_session_data(session_id: str) -> None:
-    """Keep session data within size limits to prevent unbounded growth."""
     evts = active_session_events.get(session_id)
     if evts and len(evts) > MAX_SESSION_EVENTS:
         active_session_events[session_id] = evts[-MAX_SESSION_EVENTS:]
-
     alerts = active_session_alerts.get(session_id)
     if alerts and len(alerts) > MAX_SESSION_ALERTS:
         active_session_alerts[session_id] = alerts[-MAX_SESSION_ALERTS:]
 
 
 def _cancel_monitor(session_id: str) -> None:
-    """Cancel any running monitor task for the session."""
     task = _monitor_tasks.pop(session_id, None)
     if task and not task.done():
         task.cancel()
@@ -144,14 +135,7 @@ MONITOR_DISCONNECT_TIMEOUT_S = 60
 
 
 async def _run_auto_monitor(session_id: str, scenario: str | None) -> None:
-    """
-    Continuously push mock battlefield data to a session at a fixed interval.
-
-    Runs until cancelled (stop_monitor received) or no connections remain for
-    longer than ``MONITOR_DISCONNECT_TIMEOUT_S``.  Pauses gracefully while no
-    WebSocket connections are present so that reconnecting clients automatically
-    resume the event stream without a race condition.
-    """
+    """Continuously push mock battlefield data at a fixed interval."""
     logger.info("Auto monitor started: session=%s scenario=%s", session_id, scenario)
 
     await active_manager.send_to_session(session_id, {
@@ -196,8 +180,6 @@ async def _run_auto_monitor(session_id: str, scenario: str | None) -> None:
     except Exception as e:
         logger.error("Auto monitor error session=%s: %s", session_id, e)
     finally:
-        # Only remove from tracking if this task is still the registered one.
-        # A newer start_monitor may have already replaced it in _monitor_tasks.
         current_task = asyncio.current_task()
         if _monitor_tasks.get(session_id) is current_task:
             _monitor_tasks.pop(session_id, None)
@@ -205,7 +187,96 @@ async def _run_auto_monitor(session_id: str, scenario: str | None) -> None:
             _cleanup_active_session(session_id)
 
 
-# ==================== Config Endpoints ====================
+# ---------------------------------------------------------------------------
+# Stream helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_delta(raw_event: Any) -> str:
+    """Extract text delta from a provider stream event (OpenAI or Anthropic format)."""
+    if isinstance(raw_event, dict):
+        if raw_event.get("type") == "text_delta":
+            return raw_event.get("text", "")
+        return ""
+    # Anthropic SDK: ContentBlockDeltaEvent
+    if hasattr(raw_event, "type") and getattr(raw_event, "type", None) == "content_block_delta":
+        delta = getattr(raw_event, "delta", None)
+        if delta:
+            return getattr(delta, "text", "") or ""
+    return ""
+
+
+def _map_engine_event(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Map an AgentEngine stream event to a WebSocket message dict (or None to skip)."""
+    etype = event.get("type")
+
+    if etype == "phase_start":
+        label = event.get("phase_label", "")
+        return {"type": "thinking", "content": f"[{label}] 正在处理..."}
+
+    if etype == "stream":
+        delta = _extract_delta(event.get("event"))
+        if delta:
+            return {"type": "stream_delta", "content": delta}
+        return None
+
+    if etype == "tool_start":
+        tool_name = event.get("tool_name", "")
+        return {
+            "type": "tool_call",
+            "tool": tool_name,
+            "description": f"执行 {tool_name}...",
+            "status": "executing",
+        }
+
+    if etype == "tool_result":
+        result_str = str(event.get("result", ""))
+        if len(result_str) > 500:
+            result_str = result_str[:500] + "...(截断)"
+        return {
+            "type": "tool_result",
+            "tool": event.get("tool_id", ""),
+            "result": {"output": result_str},
+            "status": "completed",
+        }
+
+    if etype == "error":
+        return {"type": "agent_reply", "content": f"⚠️ {event.get('message', '未知错误')}"}
+
+    return None
+
+
+async def _stream_to_ws(
+    engine: Any,
+    message: str,
+    session_id: str,
+    manager: ConnectionManager,
+    extra_reply_fields: dict[str, Any] | None = None,
+) -> str:
+    """
+    Drive engine.run_stream() and forward each event to the WebSocket.
+    Returns the final reply text.
+    """
+    full_text = ""
+    async for event in engine.run_stream(message):
+        etype = event.get("type")
+        if etype == "complete":
+            text = event.get("text", "")
+            full_text = text
+            reply: dict[str, Any] = {"type": "agent_reply", "content": text}
+            if extra_reply_fields:
+                reply.update(extra_reply_fields)
+            await manager.send_to_session(session_id, reply)
+        else:
+            ws_msg = _map_engine_event(event)
+            if ws_msg:
+                await manager.send_to_session(session_id, ws_msg)
+    return full_text
+
+
+# ---------------------------------------------------------------------------
+# Config endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/api/config")
@@ -218,7 +289,11 @@ async def get_config():
 async def update_config(req: ConfigUpdateRequest):
     store = ConfigStore.get()
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
-    return store.update(updates)
+    result = store.update(updates)
+    # Invalidate all cached engines so next call uses the new config
+    EngineManager.reset_all()
+    logger.info("Config updated — all engines reset")
+    return result
 
 
 class TestConnectionRequest(BaseModel):
@@ -232,31 +307,44 @@ class TestConnectionRequest(BaseModel):
 
 @app.post("/api/config/test")
 async def test_connection(req: TestConnectionRequest | None = None):
-    """Test LLM connection. Uses request body values if provided, else saved config."""
+    """Test LLM connection using a minimal one-shot call."""
+    from llm_provider import create_provider
+
     store = ConfigStore.get()
-    provider = (req and req.provider) or store.provider
+    provider_name = (req and req.provider) or store.provider
     api_type = (req and req.api_type) or store.api_type
-    auth_header_type = (req and req.auth_header_type) or store.auth_header_type or "bearer"
-    api_key_raw = (req and req.api_key) or store.api_key
-    api_key = (api_key_raw or "").strip()
+    api_key = ((req and req.api_key) or store.api_key or "").strip()
     model = (req and req.model) or store.model
     base_url = (req and req.base_url) or store.base_url
 
     if not api_key:
         return {"success": False, "error": "API Key 未配置"}
 
-    bridge = LLMBridge(
-        provider=provider,
+    provider = create_provider(
+        provider_name=provider_name,
         api_key=api_key,
         model=model,
         base_url=base_url,
         temperature=0.3,
         max_tokens=256,
         api_type=api_type,
-        auth_header_type=auth_header_type,
     )
-    result = await bridge.test_connection()
-    return result
+    if provider is None:
+        return {"success": False, "error": f"不支持的 provider: {provider_name}"}
+
+    try:
+        response = await asyncio.wait_for(
+            provider.create_message(
+                system="Reply with exactly: CONNECTION_OK",
+                messages=[{"role": "user", "content": "ping"}],
+                tools=[],
+                max_tokens=256,
+            ),
+            timeout=30.0,
+        )
+        return {"success": True, "response": response.text[:200]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/config/models")
@@ -264,7 +352,9 @@ async def list_models(provider: str = "anthropic"):
     return {"models": ConfigStore.get_models_for_provider(provider)}
 
 
-# ==================== REST Endpoints ====================
+# ---------------------------------------------------------------------------
+# REST endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/api/health")
@@ -273,16 +363,38 @@ async def health():
     return {
         "status": "ok",
         "service": "agent-demo",
-        "mode": "llm" if store.is_llm_mode else "mock",
-        "model": store.model if store.is_llm_mode else "mock",
+        "model": store.model,
     }
 
 
 @app.post("/api/chat/passive")
 async def chat_passive(req: ChatRequest):
+    """REST (non-streaming) passive chat — uses engine.run()."""
     sid = req.session_id or str(uuid.uuid4())
-    events = await _handle_passive(sid, req.message)
-    return {"events": events, "session_id": sid}
+    provider = get_provider_from_config()
+    engine = EngineManager.get_or_create_passive(sid, provider)
+    t0 = time.monotonic()
+    try:
+        result = await engine.run(req.message)
+        elapsed = time.monotonic() - t0
+        logger.info("REST passive engine run %.2fs model=%s", elapsed, provider.model)
+        return {
+            "events": [
+                {
+                    "type": "tool_result",
+                    "tool": "llm_call",
+                    "result": {"model": provider.model, "elapsed_s": round(elapsed, 2)},
+                    "status": "completed",
+                },
+                {"type": "agent_reply", "content": result},
+            ],
+            "session_id": sid,
+        }
+    except Exception as e:
+        return {
+            "events": [{"type": "agent_reply", "content": f"LLM 调用失败: {e}"}],
+            "session_id": sid,
+        }
 
 
 @app.post("/api/active/trigger-mock")
@@ -319,103 +431,107 @@ async def create_session():
     return {"session_id": sid}
 
 
-# ==================== LLM Chat Logic ====================
+@app.put("/api/active/agent-config")
+async def set_active_agent_config(req: AgentConfigRequest):
+    """
+    设置指定 session 的 active-agent 运行时配置覆盖。
+
+    调用后，该 session 下次创建引擎时将使用新配置；
+    已缓存的引擎会因 fingerprint 变化而自动重建。
+    """
+    overrides: dict[str, Any] = {
+        k: v
+        for k, v in req.model_dump(exclude={"session_id"}).items()
+        if v is not None
+    }
+    if overrides:
+        active_session_agent_config[req.session_id] = overrides
+        # 销毁旧引擎，下次调用时按新配置重建
+        EngineManager.destroy_active(req.session_id)
+        logger.info(
+            "Agent config updated for session=%s: %s", req.session_id, list(overrides.keys())
+        )
+    else:
+        active_session_agent_config.pop(req.session_id, None)
+        EngineManager.destroy_active(req.session_id)
+        logger.info("Agent config cleared for session=%s", req.session_id)
+
+    return {
+        "session_id": req.session_id,
+        "agent_config": active_session_agent_config.get(req.session_id, {}),
+    }
 
 
-async def _handle_passive(session_id: str, message: str) -> list[dict[str, Any]]:
-    """Handle passive agent message via LLM."""
-    bridge = get_bridge_from_config()
-    if bridge is None:
-        return [{"type": "agent_reply", "content": "⚠️ LLM 未配置，请在设置中填写 API Key。"}]
+@app.get("/api/active/agent-config/{session_id}")
+async def get_active_agent_config(session_id: str):
+    """获取指定 session 当前的 active-agent 运行时配置覆盖。"""
+    return {
+        "session_id": session_id,
+        "agent_config": active_session_agent_config.get(session_id, {}),
+    }
 
-    history = session_histories.setdefault(f"passive-{session_id}", [])
-    history.append({"role": "user", "content": message})
 
-    events: list[dict[str, Any]] = []
+# ---------------------------------------------------------------------------
+# LLM chat logic (engine-driven)
+# ---------------------------------------------------------------------------
 
+
+async def _stream_passive_to_ws(session_id: str, message: str) -> None:
+    """Stream passive agent response to WebSocket via AgentEngine."""
+    provider = get_provider_from_config()
+    engine = EngineManager.get_or_create_passive(session_id, provider)
     try:
         t0 = time.monotonic()
-        result = await bridge.chat(
-            system_prompt=PASSIVE_SYSTEM_PROMPT,
-            messages=history[-20:],
-        )
-        elapsed = time.monotonic() - t0
-        logger.info("Passive LLM call took %.2fs (model=%s)", elapsed, bridge.model)
-
-        reply = result["text"]
-        history.append({"role": "assistant", "content": reply})
-
-        usage = result.get("usage", {})
-        events.append({
-            "type": "tool_result",
-            "tool": "llm_call",
-            "result": {
-                "model": bridge.model,
-                "elapsed_s": round(elapsed, 2),
-                "input_tokens": usage.get("input_tokens", 0),
-                "output_tokens": usage.get("output_tokens", 0),
-            },
-            "status": "completed",
+        await _stream_to_ws(engine, message, session_id, passive_manager)
+        logger.info("Passive stream %.2fs session=%s model=%s", time.monotonic() - t0, session_id, provider.model)
+    except Exception as e:
+        logger.error("Passive stream error session=%s: %s", session_id, e)
+        await passive_manager.send_to_session(session_id, {
+            "type": "agent_reply",
+            "content": f"LLM 调用失败: {e}",
         })
-        events.append({"type": "agent_reply", "content": reply})
-    except Exception as e:
-        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}"})
-
-    return events
 
 
-async def _handle_active(session_id: str, message: str, battlefield_events: list[dict]) -> list[dict[str, Any]]:
-    """Handle active agent message via LLM."""
-    bridge = get_bridge_from_config()
-    if bridge is None:
-        return [{"type": "agent_reply", "content": "⚠️ LLM 未配置，请在设置中填写 API Key。"}]
+async def _stream_active_to_ws(session_id: str, message: str) -> None:
+    """Stream active agent response to WebSocket via AgentEngine."""
+    provider = get_provider_from_config()
 
-    history = session_histories.setdefault(f"active-{session_id}", [])
-
-    context_parts: list[str] = []
-    if battlefield_events:
-        for evt in battlefield_events[-8:]:
-            context_parts.append(f"[{evt.get('level', '?')}] {evt.get('message', '')}")
-
-    context = "\n".join(context_parts) if context_parts else ""
+    # Inject battlefield context into the user message
+    session_evts = active_session_events.get(session_id, [])
+    context_parts = [
+        f"[{evt.get('level', '?')}] {evt.get('message', '')}"
+        for evt in session_evts[-8:]
+    ]
     user_msg = message
-    if context:
-        user_msg = f"战场数据:\n{context}\n\n指令: {message}"
-    history.append({"role": "user", "content": user_msg})
+    if context_parts:
+        user_msg = f"战场数据:\n" + "\n".join(context_parts) + f"\n\n指令: {message}"
 
-    events: list[dict[str, Any]] = []
+    agent_cfg = active_session_agent_config.get(session_id)
+    engine = EngineManager.get_or_create_active(session_id, provider, config_overrides=agent_cfg)
     try:
         t0 = time.monotonic()
-        result = await bridge.chat(
-            system_prompt=ACTIVE_SYSTEM_PROMPT,
-            messages=history[-20:],
-        )
-        elapsed = time.monotonic() - t0
-        logger.info("Active LLM call took %.2fs (model=%s)", elapsed, bridge.model)
-
-        reply = result["text"]
-        history.append({"role": "assistant", "content": reply})
-        events.append({"type": "agent_reply", "content": reply})
+        await _stream_to_ws(engine, user_msg, session_id, active_manager)
+        logger.info("Active stream %.2fs session=%s model=%s", time.monotonic() - t0, session_id, provider.model)
     except Exception as e:
-        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}"})
-
-    return events
+        logger.error("Active stream error session=%s: %s", session_id, e)
+        await active_manager.send_to_session(session_id, {
+            "type": "agent_reply",
+            "content": f"LLM 调用失败: {e}",
+        })
 
 
 async def _handle_active_proactive(session_id: str, battlefield_events: list[dict]) -> str | None:
-    """Generate LLM-summarized proactive message for CRITICAL/WARNING events.
-
-    The LLM output is appended with the original event records so the commander
-    can see both the AI analysis and the raw communications.
     """
-    bridge = get_bridge_from_config()
-    if bridge is None:
+    One-shot LLM call to summarize CRITICAL/WARNING events for a proactive alert.
+    Uses the provider directly (no session history) to keep alerts independent.
+    """
+    provider = get_provider_from_config()
+    if provider is None:
         return None
 
     critical = [e for e in battlefield_events if e.get("level") == "CRITICAL"]
     warnings = [e for e in battlefield_events if e.get("level") == "WARNING"]
     important = critical + warnings
-
     if not important:
         return None
 
@@ -423,24 +539,25 @@ async def _handle_active_proactive(session_id: str, battlefield_events: list[dic
         f"- [{evt.get('level')}][{evt.get('event_type', '?')}] {evt.get('message', '')}"
         for evt in important
     ]
-    event_context = "\n".join(event_lines)
-
     prompt = (
-        f"{event_context}\n\n"
+        "\n".join(event_lines) + "\n\n"
         f"🔴×{len(critical)} 🟡×{len(warnings)} — "
-        f"用表格列出关键事件（级别/类型/事件/位置），再用一句话给出行动建议。"
+        "用表格列出关键事件（级别/类型/事件/位置），再用一句话给出行动建议。"
     )
 
     try:
         t0 = time.monotonic()
-        result = await bridge.chat(
-            system_prompt=ACTIVE_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
+        response = await asyncio.wait_for(
+            provider.create_message(
+                system=ACTIVE_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[],
+                max_tokens=1024,
+            ),
+            timeout=60.0,
         )
-        elapsed = time.monotonic() - t0
-        logger.info("Proactive LLM call took %.2fs (model=%s)", elapsed, bridge.model)
-
-        return result["text"]
+        logger.info("Proactive LLM %.2fs model=%s", time.monotonic() - t0, provider.model)
+        return response.text
     except Exception as e:
         logger.error("Proactive LLM call failed: %s", e)
         return None
@@ -452,10 +569,8 @@ async def _send_proactive_alert(
     perception: dict[str, Any],
     show_thinking: bool = False,
 ) -> None:
-    """Generate and send a proactive alert for CRITICAL/WARNING events via LLM."""
-    bridge = get_bridge_from_config()
-    if not bridge:
-        return
+    """Generate and push a proactive alert for CRITICAL/WARNING events."""
+    provider = get_provider_from_config()
 
     if show_thinking:
         await active_manager.send_to_session(session_id, {
@@ -477,103 +592,59 @@ async def _send_proactive_alert(
     })
 
 
-# ==================== Situation Compare ====================
-
-
-SITUATION_COMPARE_PROMPT = """你收到了一份战场态势数据快照，请进行以下分析：
-
-1. **总体态势评估**：基于数据给出当前战场态势等级
-2. **关键变化识别**：识别最值得关注的事件和趋势
-3. **威胁比对分析**：对比不同级别事件的分布，判断威胁演变方向
-4. **行动建议**：给出具体的指挥决策建议
-
-态势数据：
-{situation_context}
-
-请按军事通信风格简洁报告，用 🔴🟡🟢 标记威胁级别。"""
+# ---------------------------------------------------------------------------
+# Situation compare (engine-driven)
+# ---------------------------------------------------------------------------
 
 
 async def _handle_fetch_situation(session_id: str, data: dict[str, Any]) -> None:
-    """Handle a situation compare request from the frontend."""
+    """Handle a situation compare request using the active AgentEngine."""
     snapshot = data.get("snapshot", {})
     stats = snapshot.get("stats", {})
     recent_events = snapshot.get("recentEvents", [])
 
-    bridge = get_bridge_from_config()
-    model_name = bridge.model if bridge else "mock"
+    provider = get_provider_from_config()
 
     await active_manager.send_to_session(session_id, {
         "type": "thinking",
-        "content": f"Overwatch 正在调取态势数据进行比对分析 ({model_name})...",
+        "content": f"Overwatch 正在调取态势数据进行比对分析 ({ConfigStore.get().model})...",
     })
 
-    await active_manager.send_to_session(session_id, {
-        "type": "tool_call",
-        "tool": "situation_compare",
-        "description": "比对分析态势流式数据",
-        "status": "executing",
-    })
-
+    # Build structured prompt with the situation data embedded
     session_evts = active_session_events.get(session_id, [])
+    events_for_analysis = recent_events or session_evts[-10:]
 
-    event_lines = []
-    for evt in (recent_events or session_evts[-10:]):
-        lvl = evt.get("level", "INFO")
-        msg = evt.get("message", "")
-        etype = evt.get("event_type", "?")
-        event_lines.append(f"[{lvl}][{etype}] {msg}")
+    stats_json = json.dumps(stats, ensure_ascii=False)
+    events_json = json.dumps(events_for_analysis[:10], ensure_ascii=False)
 
-    situation_context = (
-        f"事件统计: 🔴 关键 {stats.get('critical', 0)} | "
-        f"🟡 警告 {stats.get('warning', 0)} | "
-        f"🟢 常规 {stats.get('info', 0)} | "
-        f"总计 {stats.get('total', 0)}\n\n"
-        f"最近事件:\n" + "\n".join(event_lines)
+    user_message = (
+        "请使用 situation_compare 工具分析以下态势数据，然后生成完整战场评估报告：\n\n"
+        f"统计数据：{stats_json}\n\n"
+        f"最近事件：{events_json}"
     )
 
-    await active_manager.send_to_session(session_id, {
-        "type": "tool_result",
-        "tool": "situation_compare",
-        "result": {
-            "stats": stats,
-            "event_count": len(event_lines),
-            "status": "data_captured",
-        },
-        "status": "completed",
-    })
-
-    reply_content: str | None = None
-
-    if bridge:
-        try:
-            prompt = SITUATION_COMPARE_PROMPT.format(situation_context=situation_context)
-            history = session_histories.setdefault(f"active-{session_id}", [])
-            history.append({"role": "user", "content": prompt})
-
-            t0 = time.monotonic()
-            result = await bridge.chat(
-                system_prompt=ACTIVE_SYSTEM_PROMPT,
-                messages=history[-20:],
-            )
-            elapsed = time.monotonic() - t0
-            logger.info("Situation compare LLM call took %.2fs (model=%s)", elapsed, bridge.model)
-
-            reply_content = result["text"]
-            history.append({"role": "assistant", "content": reply_content})
-        except Exception as e:
-            logger.error("Situation compare LLM call failed: %s", e)
-
-    if not reply_content:
-        reply_content = "⚠️ LLM 未配置或调用失败，无法生成态势分析。请在设置中配置 API Key。"
-
-    await active_manager.send_to_session(session_id, {
-        "type": "agent_reply",
-        "content": reply_content,
-        "situationSnapshot": snapshot if snapshot else None,
-    })
+    agent_cfg = active_session_agent_config.get(session_id)
+    engine = EngineManager.get_or_create_active(session_id, provider, config_overrides=agent_cfg)
+    try:
+        await _stream_to_ws(
+            engine,
+            user_message,
+            session_id,
+            active_manager,
+            extra_reply_fields={"situationSnapshot": snapshot if snapshot else None},
+        )
+    except Exception as e:
+        logger.error("Situation compare failed session=%s: %s", session_id, e)
+        await active_manager.send_to_session(session_id, {
+            "type": "agent_reply",
+            "content": f"⚠️ 态势分析失败: {e}",
+            "situationSnapshot": snapshot if snapshot else None,
+        })
 
 
-# ==================== WebSocket Endpoints ====================
+# ---------------------------------------------------------------------------
+# WebSocket endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.websocket("/ws/passive/{session_id}")
@@ -592,24 +663,20 @@ async def ws_passive(websocket: WebSocket, session_id: str):
             if not message:
                 continue
 
-            bridge = get_bridge_from_config()
-            model_name = bridge.model if bridge else "mock"
             await passive_manager.send_to_session(session_id, {
                 "type": "thinking",
-                "content": f"正在调用 {model_name} ...",
+                "content": f"正在调用 {ConfigStore.get().model} ...",
             })
 
-            events = await _handle_passive(session_id, message)
-            for event in events:
-                await passive_manager.send_to_session(session_id, event)
+            await _stream_passive_to_ws(session_id, message)
 
     except WebSocketDisconnect:
         await passive_manager.disconnect(session_id, websocket)
-        session_histories.pop(f"passive-{session_id}", None)
+        EngineManager.destroy_passive(session_id)
     except Exception as e:
         logger.error("Passive WS error: %s", e)
         await passive_manager.disconnect(session_id, websocket)
-        session_histories.pop(f"passive-{session_id}", None)
+        EngineManager.destroy_passive(session_id)
 
 
 @app.websocket("/ws/active/{session_id}")
@@ -617,14 +684,10 @@ async def ws_active(websocket: WebSocket, session_id: str):
     await active_manager.connect(session_id, websocket)
     active_session_events.setdefault(session_id, [])
 
-    store = ConfigStore.get()
-    mode_label = f"模式: {'LLM (' + store.model + ')' if store.is_llm_mode else 'Mock'}"
-
     welcome_msg = (
-        f"**Overwatch 已上线** · {mode_label}\n\n"
+        f"**Overwatch 已上线** · 模型: {ConfigStore.get().model}\n\n"
         f"监控已启动，事件将持续推送。直接输入指令即可。"
     )
-    # Only send the welcome message on the very first connection for this session
     if session_id not in _welcomed_sessions:
         _welcomed_sessions.add(session_id)
         active_session_alerts.setdefault(session_id, []).append(welcome_msg)
@@ -643,14 +706,34 @@ async def ws_active(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "pong"})
                 continue
 
-            if msg_type == "start_monitor":
-                # Cancel any existing monitor task, then start a fresh loop
+            if msg_type == "set_agent_config":
+                # 上游通过 WS 动态更新本 session 的 agent 配置
+                overrides: dict[str, Any] = {
+                    k: v
+                    for k, v in data.items()
+                    if k not in {"type"} and v is not None
+                }
+                if overrides:
+                    active_session_agent_config[session_id] = overrides
+                    EngineManager.destroy_active(session_id)
+                    logger.info(
+                        "WS agent config set session=%s keys=%s", session_id, list(overrides.keys())
+                    )
+                else:
+                    active_session_agent_config.pop(session_id, None)
+                    EngineManager.destroy_active(session_id)
+                await websocket.send_json({
+                    "type": "status",
+                    "content": "agent_config_updated",
+                    "agent_config": active_session_agent_config.get(session_id, {}),
+                })
+
+            elif msg_type == "start_monitor":
                 scenario = data.get("scenario")
                 _cancel_monitor(session_id)
                 task = asyncio.create_task(_run_auto_monitor(session_id, scenario))
                 _monitor_tasks[session_id] = task
                 logger.info("Auto monitor started via WS: session=%s scenario=%s", session_id, scenario)
-                # ACK so the frontend knows the message was received
                 await websocket.send_json({"type": "status", "content": "monitor_started"})
 
             elif msg_type == "stop_monitor":
@@ -678,17 +761,12 @@ async def ws_active(websocket: WebSocket, session_id: str):
                 if summary_ctx:
                     message = f"{summary_ctx}\n\n**指挥官指令：** {message}"
 
-                bridge = get_bridge_from_config()
-                model_name = bridge.model if bridge else "mock"
                 await active_manager.send_to_session(session_id, {
                     "type": "thinking",
-                    "content": f"Overwatch 分析中 ({model_name})...",
+                    "content": f"Overwatch 分析中 ({ConfigStore.get().model})...",
                 })
 
-                session_evts = active_session_events.get(session_id, [])
-                events = await _handle_active(session_id, message, session_evts)
-                for event in events:
-                    await active_manager.send_to_session(session_id, event)
+                await _stream_active_to_ws(session_id, message)
 
     except WebSocketDisconnect:
         await active_manager.disconnect(session_id, websocket)

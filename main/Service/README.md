@@ -7,7 +7,7 @@ Service-oriented architecture layer providing REST API and Agent proxy services.
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          External Clients                            │
-│                     (CLI / Web / IDE / API)                          │
+│                        (Web / IDE / API)                             │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
                                ▼

@@ -47,6 +47,25 @@ class WorkspaceListResponse(BaseModel):
     total: int = Field(description="总数")
 
 
+# ==================== Agent Config Override Schemas ====================
+
+
+class AgentConfigOverride(BaseModel):
+    """Agent 运行时配置覆盖
+
+    所有字段均为可选，仅提供的字段会覆盖 agent.yaml 中的默认值。
+    优先级：运行时覆盖 > agent.yaml 定义 > 系统默认值。
+    """
+
+    provider: str | None = Field(default=None, description="LLM 提供商 (anthropic/openai/google)")
+    model: str | None = Field(default=None, description="模型 ID")
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="温度参数")
+    max_tokens: int | None = Field(default=None, gt=0, description="最大 token 数")
+    max_iterations: int | None = Field(default=None, gt=0, description="最大迭代次数")
+    system_prompt: str | None = Field(default=None, description="覆盖系统提示词")
+    extra: dict[str, Any] | None = Field(default=None, description="其他扩展配置")
+
+
 # ==================== Session Schemas ====================
 
 
@@ -56,6 +75,9 @@ class SessionCreate(BaseModel):
     workspace_id: str = Field(description="工作区域 ID")
     agent_id: str = Field(description="Agent ID")
     metadata: dict[str, Any] | None = Field(default=None, description="元数据")
+    agent_config: AgentConfigOverride | None = Field(
+        default=None, description="Agent 运行时配置覆盖（优先级高于 agent.yaml）"
+    )
 
 
 class SessionResponse(BaseModel):
