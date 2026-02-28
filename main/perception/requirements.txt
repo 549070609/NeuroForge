@@ -1,3 +1,13 @@
-# 主动感知器 PoC 依赖
+# 主动感知器依赖
+#
+# 注意：aton-format 与 toon-formatter 为 OntoMind 内部包，
+# 不在公共 PyPI 上发布，需通过内部私有源安装：
+#
+#   pip install --index-url <PRIVATE_PYPI_URL> aton-format toon-formatter
+#
+# 若使用本地源码安装（开发模式）：
+#   pip install -e path/to/aton-format
+#   pip install -e path/to/toon-formatter
+#
 aton-format>=2.0.0
 toon-formatter>=1.0.0

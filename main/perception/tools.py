@@ -28,8 +28,9 @@ class ParseLogTool(BaseTool):
     description = """Parse ATON or TOON format log text into Python structure.
 
 Input: raw log text (ATON or TOON format)
-Output: parsed dict or list
+Output: JSON-serialized dict or list
 Format is auto-detected, or specify fmt='aton' or fmt='toon'
+Raises on unrecognized format or parse failure.
 """
     parameters_schema: dict[str, Any] = {
         "type": "object",
@@ -43,18 +44,20 @@ Format is auto-detected, or specify fmt='aton' or fmt='toon'
                 "enum": ["aton", "toon"],
                 "description": "Explicit format (optional, auto-detect if omitted)",
             },
+            "strict": {
+                "type": "boolean",
+                "description": "Enable strict parsing mode for TOON (rejects minor format deviations). Default false.",
+                "default": False,
+            },
         },
         "required": ["raw"],
     }
     timeout = 30
     risk_level = "low"
 
-    async def execute(self, raw: str, fmt: str | None = None) -> str:
-        try:
-            result = parse_log(raw, fmt)
-            return json.dumps(result, ensure_ascii=False, indent=2)
-        except Exception as e:
-            return f"Parse failed: {e}"
+    async def execute(self, raw: str, fmt: str | None = None, strict: bool = False) -> str:
+        result = parse_log(raw, fmt, strict=strict)
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 class PerceiveTool(BaseTool):
@@ -84,6 +87,7 @@ Uses configurable rules (error_triggers, warn_triggers, levels)
     risk_level = "low"
 
     def __init__(self, default_rules: dict[str, Any] | None = None):
+        super().__init__()
         self.default_rules = default_rules or {}
 
     async def execute(
@@ -135,6 +139,7 @@ Requires executor to be wired with engine/event_bus/config.
         default_rules: dict[str, Any] | None = None,
         executor: DecisionExecutor | None = None,
     ):
+        super().__init__()
         self.default_rules = default_rules or {}
         self._executor = executor
 
@@ -205,6 +210,7 @@ Supports: path (file or dir), pattern (glob), level_filter (regex), max_lines
     risk_level = "low"
 
     def __init__(self, default_path: str = "./logs"):
+        super().__init__()
         self.default_path = default_path
 
     async def execute(
@@ -220,17 +226,26 @@ Supports: path (file or dir), pattern (glob), level_filter (regex), max_lines
 
         lines: list[str] = []
         pattern_re = re.compile(level_filter) if level_filter else None
+        truncated_files = 0
 
         if base.is_file():
             lines.extend(_read_file(base, pattern_re, max_lines))
         else:
-            for f in sorted(base.glob(pattern))[:50]:
-                if f.is_file():
-                    lines.extend(_read_file(f, pattern_re, max_lines))
+            all_files = [f for f in sorted(base.glob(pattern)) if f.is_file()]
+            truncated_files = max(0, len(all_files) - 50)
+            for f in all_files[:50]:
+                lines.extend(_read_file(f, pattern_re, max_lines))
 
         if not lines:
             return "No matching log content"
-        return "\n".join(lines)
+
+        result = "\n".join(lines)
+        if truncated_files:
+            result += (
+                f"\n\n[Warning: File limit reached — showing first 50 of "
+                f"{50 + truncated_files} matched files; {truncated_files} file(s) omitted]"
+            )
+        return result
 
 
 def _read_file(

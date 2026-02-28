@@ -35,7 +35,11 @@ async def _default_find_user(
     logger: Any | None,
 ) -> ExecutionResult:
     """
-    默认 find_user 实现：优先 EventBus，其次 callback，最后 log。
+    默认 find_user 实现：优先 EventBus，其次 callback，最后 log（无渠道时）。
+
+    失败语义：
+    - EventBus 已配置但 publish 抛异常 → 视为通知失败，不静默降级为成功
+    - 无任何渠道配置（event_bus=None 且 notify_callback=None）→ 仅日志，视为预期行为返回 True
     """
     payload = {
         "reason": result.reason,
@@ -43,7 +47,13 @@ async def _default_find_user(
         "metadata": result.metadata or {},
         "source": "perception",
     }
-    content = f"[Perception Alert] {result.reason}\nData: {json.dumps(result.data, ensure_ascii=False)}"
+    # default=str 防止 datetime / 自定义对象导致 TypeError
+    content = (
+        f"[Perception Alert] {result.reason}\n"
+        f"Data: {json.dumps(result.data, ensure_ascii=False, default=str)}"
+    )
+
+    event_bus_error: str | None = None
 
     # 1. EventBus 事件
     if event_bus:
@@ -56,6 +66,7 @@ async def _default_find_user(
                     pub("perception.alert", payload)
                 return ExecutionResult(True, "Notification sent via EventBus", {"channel": "event_bus"})
         except Exception as e:
+            event_bus_error = str(e)
             if logger:
                 logger.warning(f"EventBus publish failed: {e}")
 
@@ -72,7 +83,15 @@ async def _default_find_user(
                 logger.warning(f"Notify callback failed: {e}")
             return ExecutionResult(False, f"Callback failed: {e}")
 
-    # 3. 仅日志
+    # 3. EventBus 已配置但失败，且无 callback 兜底 → 通知实际未送达，返回失败
+    if event_bus_error is not None:
+        return ExecutionResult(
+            False,
+            f"Notification failed: EventBus error: {event_bus_error}",
+            {"channel": "event_bus", "error": event_bus_error},
+        )
+
+    # 4. 无任何渠道配置 → 仅日志（预期的"无通知"行为）
     if logger:
         logger.warning(f"Perception find_user (no channel): {content}")
     return ExecutionResult(True, "Logged (no notification channel configured)", {"channel": "log"})
@@ -132,7 +151,7 @@ async def _run_http(config: dict, logger: Any | None) -> ExecutionResult:
         req = urllib.request.Request(url, data=data, method=method)
         for k, v in headers.items():
             req.add_header(k, str(v))
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=config.get("timeout", 30)) as resp:
             text = resp.read().decode(errors="ignore")
             return (resp.status, text)
 

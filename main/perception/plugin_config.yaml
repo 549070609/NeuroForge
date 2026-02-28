@@ -7,8 +7,13 @@ preset: standard
 enabled:
   - integration.perception
 
+# plugin_dirs 路径说明：
+#   此配置文件假设进程的工作目录（CWD）为 main/（即 NeuroForge/main/）。
+#   若从其他目录启动，请将 "." 替换为 perception/ 目录的绝对路径，例如：
+#     - "/absolute/path/to/NeuroForge/main/perception"
+#   或通过启动脚本将 CWD 切换到 main/ 后再加载此配置。
 plugin_dirs:
-  - "."   # 相对于 Agent-Learn/main，插件位于 main/perception/
+  - "."   # 相对路径，CWD 须为 main/；perception/ 插件位于 main/perception/
 
 config:
   integration.perception:
@@ -28,6 +33,7 @@ config:
       #   type: http
       #   url: "https://example.com/webhook"
       #   method: POST
+      #   timeout: 30          # 请求超时（秒），默认 30
       #   body: { "source": "perception", "reason": "{{reason}}" }
     call_agent:               # decision=call_agent 时委派
       target_agent: main
@@ -40,4 +46,8 @@ config:
       # - event_type: "system.alert"
     webhook:                  # Story 6.3: Webhook 触发
       path: "/perception/webhook"
-      secret: null            # 设为字符串启用 HMAC-SHA256 签名校验
+      # ⚠️  安全警告：secret: null 表示禁用 HMAC-SHA256 签名校验，
+      # 任何人均可无需认证地触发感知决策。
+      # 生产环境中务必设置为随机强密钥字符串，例如：
+      #   secret: "your-strong-random-secret-here"
+      secret: null

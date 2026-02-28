@@ -20,6 +20,8 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 DEFAULT_CONFIG: dict[str, Any] = {
     "mode": "mock",  # "mock" | "llm"
     "provider": "anthropic",  # "anthropic" | "openai" | "custom"
+    "api_type": "openai-completions",  # "openai-completions" | "anthropic-messages"
+    "auth_header_type": "bearer",  # "bearer" | "api-key" | "x-api-key" (custom only)
     "api_key": "",
     "base_url": "",
     "model": "claude-sonnet-4-20250514",
@@ -63,6 +65,8 @@ class ConfigStore:
             try:
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                     saved = json.load(f)
+                if isinstance(saved.get("api_key"), str):
+                    saved["api_key"] = saved["api_key"].strip()
                 self._config.update(saved)
                 logger.info("Loaded config from %s", CONFIG_PATH)
             except Exception as e:
@@ -98,6 +102,8 @@ class ConfigStore:
     def update(self, updates: dict[str, Any]) -> dict[str, Any]:
         for k, v in updates.items():
             if k in DEFAULT_CONFIG:
+                if k == "api_key" and isinstance(v, str):
+                    v = v.strip()  # Remove accidental whitespace
                 self._config[k] = v
         self._save()
         return self.get_safe_config()
@@ -108,7 +114,7 @@ class ConfigStore:
 
     @property
     def api_key(self) -> str:
-        return self._config.get("api_key", "")
+        return (self._config.get("api_key", "") or "").strip()
 
     @property
     def provider(self) -> str:
@@ -119,8 +125,16 @@ class ConfigStore:
         return self._config.get("model", "claude-sonnet-4-20250514")
 
     @property
+    def api_type(self) -> str:
+        return self._config.get("api_type", "openai-completions")
+
+    @property
+    def auth_header_type(self) -> str:
+        return self._config.get("auth_header_type", "bearer")
+
+    @property
     def base_url(self) -> str:
-        return self._config.get("base_url", "")
+        return (self._config.get("base_url", "") or "").strip()
 
     @property
     def temperature(self) -> float:

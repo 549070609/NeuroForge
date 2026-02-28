@@ -26,6 +26,31 @@ class PerceptionResult:
     metadata: dict[str, Any] | None = None
 
 
+# 错误严重度级别 → 使用 error_triggers
+_ERROR_SEVERITY = frozenset({"error", "critical", "fatal", "crit"})
+# 警告严重度级别 → 使用 warn_triggers
+_WARN_SEVERITY = frozenset({"warn", "warning"})
+
+# 别名扩展表：用户在 levels 中写 "warn" 时自动覆盖 "warning"，
+# 写 "error" 时自动覆盖 "critical"/"fatal"/"crit"，反之亦然。
+_LEVEL_ALIAS_GROUPS: list[frozenset[str]] = [
+    _ERROR_SEVERITY,
+    _WARN_SEVERITY,
+]
+
+
+def _expand_levels(levels: list) -> frozenset[str]:
+    """将 levels 列表展开为包含别名的集合（不区分大小写）。"""
+    expanded: set[str] = set()
+    for raw in levels:
+        lvl = str(raw).lower()
+        expanded.add(lvl)
+        for group in _LEVEL_ALIAS_GROUPS:
+            if lvl in group:
+                expanded.update(group)
+    return frozenset(expanded)
+
+
 def perceive(
     data: dict | list,
     rules: dict[str, Any] | None = None,
@@ -35,13 +60,24 @@ def perceive(
 
     Args:
         data: 解析后的 Python 结构（来自 parse_log）
-        rules: 可配置规则，如 {"error_triggers": "find_user", "levels": ["error", "warn"]}
+        rules: 可配置规则，例如：
+            {
+                "levels": ["error", "warn", "critical"],  # 监听的级别白名单
+                "error_triggers": "find_user",            # error/critical/fatal 时的决策
+                "warn_triggers": "find_user",             # warn/warning 时的决策
+            }
 
     Returns:
         PerceptionResult 包含决策类型、原因、数据
+
+    Notes:
+        levels 白名单中不存在的级别将被跳过，不触发任何决策。
+        不在已知严重度分组（_ERROR_SEVERITY / _WARN_SEVERITY）中的自定义级别
+        若出现在 levels 白名单内，将保守地使用 error_triggers。
     """
     rules = rules or {}
-    levels = rules.get("levels", ["error", "warn"])
+    # 展开别名后的级别集合，例如 ["warn"] 自动覆盖 "warning"
+    levels_set = _expand_levels(rules.get("levels", ["error", "warn"]))
     error_triggers = rules.get("error_triggers", "find_user")
     warn_triggers = rules.get("warn_triggers", "find_user")
 
@@ -56,22 +92,35 @@ def perceive(
             continue
 
         level_lower = str(level).lower()
-        if level_lower == "error":
+
+        # 跳过不在 levels 白名单中的级别
+        if level_lower not in levels_set:
+            continue
+
+        if level_lower in _ERROR_SEVERITY:
             decision = _to_decision_type(error_triggers)
             return PerceptionResult(
                 decision=decision,
-                reason=f"Detected error level event: {evt.get('message', evt)}",
+                reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
                 data=evt,
-                metadata={"level": "error", "rule": "error_triggers"},
+                metadata={"level": level_lower, "rule": "error_triggers"},
             )
-        if level_lower in ("warn", "warning"):
+        if level_lower in _WARN_SEVERITY:
             decision = _to_decision_type(warn_triggers)
             return PerceptionResult(
                 decision=decision,
-                reason=f"Detected warn level event: {evt.get('message', evt)}",
+                reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
                 data=evt,
-                metadata={"level": "warn", "rule": "warn_triggers"},
+                metadata={"level": level_lower, "rule": "warn_triggers"},
             )
+        # 自定义级别在 levels 白名单内但不属于已知分组 → 保守触发 error_triggers
+        decision = _to_decision_type(error_triggers)
+        return PerceptionResult(
+            decision=decision,
+            reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
+            data=evt,
+            metadata={"level": level_lower, "rule": "error_triggers"},
+        )
 
     # 默认：无异常，不触发
     return PerceptionResult(
@@ -83,18 +132,20 @@ def perceive(
 
 
 def _extract_events(data: dict | list) -> list[dict | Any]:
-    """从解析数据中提取事件列表"""
+    """
+    从解析数据中提取事件列表。
+
+    匹配顺序：
+    1. data 本身为列表 → 直接使用
+    2. dict 中的已知容器键（events / logs / records / data / items）
+    3. 其他情况 → 返回空列表（不猜测语义不明的任意列表字段）
+    """
     if isinstance(data, list):
         return list(data)
     if isinstance(data, dict):
-        # 常见键名
         for key in ("events", "logs", "records", "data", "items"):
             if key in data and isinstance(data[key], list):
                 return data[key]
-        # 取第一个列表类型的值
-        for v in data.values():
-            if isinstance(v, list):
-                return v
     return []
 
 

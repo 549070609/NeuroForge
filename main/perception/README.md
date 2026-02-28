@@ -5,11 +5,14 @@
 ## 快速开始
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（aton-format / toon-formatter 为内部私有包，需通过内部 PyPI 安装）
+pip install --index-url <PRIVATE_PYPI_URL> aton-format toon-formatter
 
-# 运行解析验证（从 perception 目录）
-python test_parser.py
+# 本地源码开发模式安装
+pip install -e path/to/aton-format -e path/to/toon-formatter
+
+# 运行单元测试（无需外部包，覆盖 detector / perceive / executor）
+py -m pytest tests/ -v
 
 # 验证插件加载（从 main 目录，需先 pip install -e agentforge-engine）
 cd .. && python -m perception.test_plugin_load

@@ -55,11 +55,11 @@ class PerceptionPlugin(Plugin):
         await super().on_plugin_load(context)
         config = context.config or {}
         self._log_path = config.get("log_path", "./logs")
-        self._rules = config.get("filter_rules", {})
+        filter_rules = config.get("filter_rules", {})
         self._default_rules = {
-            "levels": self._rules.get("level", ["error", "warn"]),
-            "error_triggers": self._rules.get("error_triggers", "find_user"),
-            "warn_triggers": self._rules.get("warn_triggers", "find_user"),
+            "levels": filter_rules.get("level", ["error", "warn"]),
+            "error_triggers": filter_rules.get("error_triggers", "find_user"),
+            "warn_triggers": filter_rules.get("warn_triggers", "find_user"),
         }
 
     async def on_plugin_activate(self) -> None:
@@ -81,21 +81,28 @@ class PerceptionPlugin(Plugin):
         config = self.context.config or {}
         log = self.context.logger
 
-        # --- Epic 4: 决策执行器 ---
-        try:
-            from executor import DecisionExecutor
-        except ImportError:
-            from .executor import DecisionExecutor
         event_bus = getattr(engine, "event_bus", None) or getattr(engine, "eventBus", None)
-        self._executor = DecisionExecutor(
-            engine=engine,
-            event_bus=event_bus,
-            engine_factory=getattr(engine, "create_engine", None),
-            execute_actions=config.get("execute_actions") or {},
-            call_agent_config=config.get("call_agent") or {},
-            logger=log,
-        )
-        self._execute_tool.set_executor(self._executor)
+
+        # --- Epic 4: 决策执行器（初始化失败时降级，不阻断 engine 启动）---
+        try:
+            try:
+                from executor import DecisionExecutor
+            except ImportError:
+                from .executor import DecisionExecutor
+            self._executor = DecisionExecutor(
+                engine=engine,
+                event_bus=event_bus,
+                engine_factory=getattr(engine, "create_engine", None),
+                execute_actions=config.get("execute_actions") or {},
+                call_agent_config=config.get("call_agent") or {},
+                logger=log,
+            )
+            self._execute_tool.set_executor(self._executor)
+        except Exception as e:
+            log.warning(
+                f"Perception: executor initialization failed, execute_decision tool disabled: {e}"
+            )
+            self._executor = None
 
         # --- Epic 6: 触发与调度 ---
         automation = self._ensure_automation(engine, event_bus)
@@ -199,6 +206,19 @@ class PerceptionPlugin(Plugin):
                 return {"status": "skipped", "reason": "no log data in payload"}
 
             result = perceive(parsed, self._default_rules)
+
+            if self._executor is None:
+                return {
+                    "status": "warning",
+                    "decision": result.decision.value,
+                    "reason": result.reason,
+                    "execution": {
+                        "success": False,
+                        "message": "Executor not configured: on_engine_start was not called or failed",
+                    },
+                    "executor": "not_configured",
+                }
+
             exec_result = await execute_decision(result, executor=self._executor)
             return {
                 "status": "ok",

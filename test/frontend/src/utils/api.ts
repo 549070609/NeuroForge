@@ -1,29 +1,36 @@
-const BASE = "";
+/** API base URL. In dev, use backend host directly (same as WebSocket) to avoid proxy issues. */
+function getApiBase(): string {
+  if (import.meta.env.DEV) {
+    const host = import.meta.env.VITE_BACKEND_HOST ?? "localhost:8080";
+    return `http://${host}`;
+  }
+  return "";
+}
 
 export async function createSession(): Promise<string> {
-  const res = await fetch(`${BASE}/api/session/create`, { method: "POST" });
+  const res = await fetch(`${getApiBase()}/api/session/create`, { method: "POST" });
   const data = await res.json();
   return data.session_id;
 }
 
 export async function fetchPassiveTools() {
-  const res = await fetch(`${BASE}/api/tools/passive`);
+  const res = await fetch(`${getApiBase()}/api/tools/passive`);
   return res.json();
 }
 
 export async function fetchActiveTools() {
-  const res = await fetch(`${BASE}/api/tools/active`);
+  const res = await fetch(`${getApiBase()}/api/tools/active`);
   return res.json();
 }
 
 export async function fetchScenarios(): Promise<string[]> {
-  const res = await fetch(`${BASE}/api/scenarios`);
+  const res = await fetch(`${getApiBase()}/api/scenarios`);
   const data = await res.json();
   return data.scenarios;
 }
 
 export async function triggerMock(sessionId: string, scenario?: string) {
-  const res = await fetch(`${BASE}/api/active/trigger-mock`, {
+  const res = await fetch(`${getApiBase()}/api/active/trigger-mock`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, scenario }),
@@ -48,6 +55,8 @@ export function getWsUrl(path: string): string {
 export interface AppConfig {
   mode: string;
   provider: string;
+  api_type: string;
+  auth_header_type: string;
   api_key_set: boolean;
   api_key_preview: string;
   base_url: string;
@@ -62,12 +71,12 @@ export interface ModelOption {
 }
 
 export async function fetchConfig(): Promise<AppConfig> {
-  const res = await fetch(`${BASE}/api/config`);
+  const res = await fetch(`${getApiBase()}/api/config`);
   return res.json();
 }
 
 export async function updateConfig(updates: Record<string, unknown>): Promise<AppConfig> {
-  const res = await fetch(`${BASE}/api/config`, {
+  const res = await fetch(`${getApiBase()}/api/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
@@ -76,23 +85,39 @@ export async function updateConfig(updates: Record<string, unknown>): Promise<Ap
 }
 
 export async function testConnection(
-  params?: { provider?: string; api_key?: string; base_url?: string; model?: string }
+  params?: {
+    provider?: string;
+    api_type?: string;
+    auth_header_type?: string;
+    api_key?: string;
+    base_url?: string;
+    model?: string;
+  }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
-  const res = await fetch(`${BASE}/api/config/test`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params || {}),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${getApiBase()}/api/config/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params || {}),
+    });
+    return res.json();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const hint =
+      msg === "Failed to fetch"
+        ? "无法连接后端服务，请确认后端 (localhost:8080) 是否已启动"
+        : msg;
+    return { success: false, error: hint };
+  }
 }
 
 export async function fetchModelsForProvider(provider: string): Promise<ModelOption[]> {
-  const res = await fetch(`${BASE}/api/config/models?provider=${provider}`);
+  const res = await fetch(`${getApiBase()}/api/config/models?provider=${provider}`);
   const data = await res.json();
   return data.models;
 }
 
 export async function fetchHealth(): Promise<{ status: string; mode: string; model: string }> {
-  const res = await fetch(`${BASE}/api/health`);
+  const res = await fetch(`${getApiBase()}/api/health`);
   return res.json();
 }

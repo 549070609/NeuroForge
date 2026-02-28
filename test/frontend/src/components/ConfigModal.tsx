@@ -14,7 +14,18 @@ interface Props {
 const PROVIDERS = [
   { id: "anthropic", name: "Anthropic (Claude)" },
   { id: "openai", name: "OpenAI (GPT)" },
-  { id: "custom", name: "自定义 (OpenAI 兼容)" },
+  { id: "custom", name: "自定义 (Custom Endpoint)" },
+];
+
+const CUSTOM_API_TYPES = [
+  { id: "openai-completions", name: "OpenAI 兼容格式" },
+  { id: "anthropic-messages", name: "Anthropic Messages 格式" },
+];
+
+const AUTH_HEADER_TYPES = [
+  { id: "bearer", name: "Bearer (Authorization)" },
+  { id: "api-key", name: "api-key" },
+  { id: "x-api-key", name: "x-api-key" },
 ];
 
 export default function ConfigModal({ open, onClose }: Props) {
@@ -24,6 +35,8 @@ export default function ConfigModal({ open, onClose }: Props) {
   const [localProvider, setLocalProvider] = useState("anthropic");
   const [localModel, setLocalModel] = useState("");
   const [customModel, setCustomModel] = useState("");
+  const [localApiType, setLocalApiType] = useState("openai-completions");
+  const [localAuthHeaderType, setLocalAuthHeaderType] = useState("bearer");
   const [localBaseUrl, setLocalBaseUrl] = useState("");
   const [localTemp, setLocalTemp] = useState(0.4);
   const [localMaxTokens, setLocalMaxTokens] = useState(4096);
@@ -39,6 +52,8 @@ export default function ConfigModal({ open, onClose }: Props) {
         setConfig(c);
         setLocalProvider(c.provider);
         setLocalModel(c.model);
+        setLocalApiType(c.api_type || "openai-completions");
+        setLocalAuthHeaderType(c.auth_header_type || "bearer");
         setLocalBaseUrl(c.base_url || "");
         setLocalTemp(c.temperature);
         setLocalMaxTokens(c.max_tokens);
@@ -61,6 +76,8 @@ export default function ConfigModal({ open, onClose }: Props) {
       const currentModel = localProvider === "custom" && customModel ? customModel : localModel;
       const res = await testConnection({
         provider: localProvider,
+        api_type: localProvider === "custom" ? localApiType : undefined,
+        auth_header_type: localProvider === "custom" ? localAuthHeaderType : undefined,
         api_key: apiKey || undefined,
         base_url: localBaseUrl || undefined,
         model: currentModel || undefined,
@@ -83,6 +100,8 @@ export default function ConfigModal({ open, onClose }: Props) {
     const updates: Record<string, unknown> = {
       mode: localMode,
       provider: localProvider,
+      api_type: localApiType,
+      auth_header_type: localAuthHeaderType,
       model: localProvider === "custom" && customModel ? customModel : localModel,
       base_url: localBaseUrl,
       temperature: localTemp,
@@ -145,9 +164,11 @@ export default function ConfigModal({ open, onClose }: Props) {
                 <select
                   value={localProvider}
                   onChange={(e) => {
-                    setLocalProvider(e.target.value);
+                    const p = e.target.value;
+                    setLocalProvider(p);
                     setLocalModel("");
                     setCustomModel("");
+                    if (p !== "custom") setLocalApiType("openai-completions");
                   }}
                   className="w-full bg-[#0a0a0f] border border-gray-800 rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-emerald-700/60"
                 >
@@ -177,20 +198,62 @@ export default function ConfigModal({ open, onClose }: Props) {
                 />
               </div>
 
-              {/* Base URL (custom only) */}
+              {/* Base URL + API Type (custom only) */}
               {localProvider === "custom" && (
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Globe size={12} />
-                    Base URL
-                  </label>
-                  <input
-                    value={localBaseUrl}
-                    onChange={(e) => setLocalBaseUrl(e.target.value)}
-                    placeholder="https://api.example.com/v1"
-                    className="w-full bg-[#0a0a0f] border border-gray-800 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-emerald-700/60"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Globe size={12} />
+                      Base URL
+                    </label>
+                    <input
+                      value={localBaseUrl}
+                      onChange={(e) => setLocalBaseUrl(e.target.value)}
+                      placeholder="https://api.example.com/v1"
+                      className="w-full bg-[#0a0a0f] border border-gray-800 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-emerald-700/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">
+                      API 协议格式
+                    </label>
+                    <div className="flex gap-2">
+                      {CUSTOM_API_TYPES.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setLocalApiType(t.id)}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            localApiType === t.id
+                              ? "bg-emerald-600 text-white"
+                              : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">
+                      认证方式 (401 可尝试切换)
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {AUTH_HEADER_TYPES.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setLocalAuthHeaderType(t.id)}
+                          className={`py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                            localAuthHeaderType === t.id
+                              ? "bg-emerald-600 text-white"
+                              : "bg-gray-800 text-gray-400 hover:text-gray-200"
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Model */}

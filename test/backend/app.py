@@ -19,15 +19,12 @@ from pydantic import BaseModel
 
 from active_handler import (
     AVAILABLE_SCENARIOS,
-    generate_proactive_message,
-    generate_proactive_summary,
     get_tool_list as active_tools,
-    handle_active_message,
     trigger_mock_data,
 )
 from config_store import ConfigStore
 from llm_provider import LLMBridge, get_bridge_from_config
-from passive_handler import get_tool_list as passive_tools, handle_passive_message
+from passive_handler import get_tool_list as passive_tools
 from ws_manager import ConnectionManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -74,6 +71,8 @@ class TriggerMockRequest(BaseModel):
 class ConfigUpdateRequest(BaseModel):
     mode: str | None = None
     provider: str | None = None
+    api_type: str | None = None
+    auth_header_type: str | None = None
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
@@ -224,6 +223,8 @@ async def update_config(req: ConfigUpdateRequest):
 
 class TestConnectionRequest(BaseModel):
     provider: str | None = None
+    api_type: str | None = None
+    auth_header_type: str | None = None
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
@@ -234,7 +235,10 @@ async def test_connection(req: TestConnectionRequest | None = None):
     """Test LLM connection. Uses request body values if provided, else saved config."""
     store = ConfigStore.get()
     provider = (req and req.provider) or store.provider
-    api_key = (req and req.api_key) or store.api_key
+    api_type = (req and req.api_type) or store.api_type
+    auth_header_type = (req and req.auth_header_type) or store.auth_header_type or "bearer"
+    api_key_raw = (req and req.api_key) or store.api_key
+    api_key = (api_key_raw or "").strip()
     model = (req and req.model) or store.model
     base_url = (req and req.base_url) or store.base_url
 
@@ -248,6 +252,8 @@ async def test_connection(req: TestConnectionRequest | None = None):
         base_url=base_url,
         temperature=0.3,
         max_tokens=256,
+        api_type=api_type,
+        auth_header_type=auth_header_type,
     )
     result = await bridge.test_connection()
     return result
@@ -317,10 +323,10 @@ async def create_session():
 
 
 async def _handle_passive(session_id: str, message: str) -> list[dict[str, Any]]:
-    """Handle passive agent message — use real LLM if configured, else mock."""
+    """Handle passive agent message via LLM."""
     bridge = get_bridge_from_config()
     if bridge is None:
-        return await handle_passive_message(message)
+        return [{"type": "agent_reply", "content": "⚠️ LLM 未配置，请在设置中填写 API Key。"}]
 
     history = session_histories.setdefault(f"passive-{session_id}", [])
     history.append({"role": "user", "content": message})
@@ -353,29 +359,25 @@ async def _handle_passive(session_id: str, message: str) -> list[dict[str, Any]]
         })
         events.append({"type": "agent_reply", "content": reply})
     except Exception as e:
-        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}\n\n已回退到 Mock 模式。"})
-        mock_events = await handle_passive_message(message)
-        events.extend(mock_events)
+        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}"})
 
     return events
 
 
 async def _handle_active(session_id: str, message: str, battlefield_events: list[dict]) -> list[dict[str, Any]]:
-    """Handle active agent message — use real LLM if configured, else mock."""
+    """Handle active agent message via LLM."""
     bridge = get_bridge_from_config()
     if bridge is None:
-        return await handle_active_message(message, battlefield_events)
+        return [{"type": "agent_reply", "content": "⚠️ LLM 未配置，请在设置中填写 API Key。"}]
 
     history = session_histories.setdefault(f"active-{session_id}", [])
 
     context_parts: list[str] = []
-
     if battlefield_events:
         for evt in battlefield_events[-8:]:
             context_parts.append(f"[{evt.get('level', '?')}] {evt.get('message', '')}")
 
     context = "\n".join(context_parts) if context_parts else ""
-
     user_msg = message
     if context:
         user_msg = f"战场数据:\n{context}\n\n指令: {message}"
@@ -393,12 +395,9 @@ async def _handle_active(session_id: str, message: str, battlefield_events: list
 
         reply = result["text"]
         history.append({"role": "assistant", "content": reply})
-
         events.append({"type": "agent_reply", "content": reply})
     except Exception as e:
-        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}\n\n已回退到 Mock 模式。"})
-        mock_events = await handle_active_message(message, battlefield_events)
-        events.extend(mock_events)
+        events.append({"type": "agent_reply", "content": f"LLM 调用失败: {e}"})
 
     return events
 
@@ -453,39 +452,29 @@ async def _send_proactive_alert(
     perception: dict[str, Any],
     show_thinking: bool = False,
 ) -> None:
-    """Generate and send a proactive alert for CRITICAL/WARNING events.
-
-    Tries LLM summarization first; falls back to template if LLM is
-    unavailable or the call fails.
-    """
+    """Generate and send a proactive alert for CRITICAL/WARNING events via LLM."""
     bridge = get_bridge_from_config()
+    if not bridge:
+        return
 
-    msg: str | None = None
-    summary: str | None = None
-
-    if bridge:
-        if show_thinking:
-            await active_manager.send_to_session(session_id, {
-                "type": "thinking",
-                "content": "AI 获取到关键信息，正在分析...",
-            })
-        msg = await _handle_active_proactive(session_id, events)
-        if msg:
-            summary = msg[:80].replace("\n", " ").strip("* #")
-
-    if not msg:
-        msg = generate_proactive_message(perception)
-        if msg:
-            summary = generate_proactive_summary(perception)
-
-    if msg and summary:
-        active_session_alerts.setdefault(session_id, []).append(msg)
+    if show_thinking:
         await active_manager.send_to_session(session_id, {
-            "type": "agent_proactive",
-            "content": msg,
-            "priority": perception["priority"],
-            "summary": summary,
+            "type": "thinking",
+            "content": "AI 获取到关键信息，正在分析...",
         })
+
+    msg = await _handle_active_proactive(session_id, events)
+    if not msg:
+        return
+
+    summary = msg[:80].replace("\n", " ").strip("* #")
+    active_session_alerts.setdefault(session_id, []).append(msg)
+    await active_manager.send_to_session(session_id, {
+        "type": "agent_proactive",
+        "content": msg,
+        "priority": perception["priority"],
+        "summary": summary,
+    })
 
 
 # ==================== Situation Compare ====================
@@ -575,58 +564,13 @@ async def _handle_fetch_situation(session_id: str, data: dict[str, Any]) -> None
             logger.error("Situation compare LLM call failed: %s", e)
 
     if not reply_content:
-        reply_content = _generate_mock_situation_compare(stats, recent_events or session_evts[-10:])
+        reply_content = "⚠️ LLM 未配置或调用失败，无法生成态势分析。请在设置中配置 API Key。"
 
     await active_manager.send_to_session(session_id, {
         "type": "agent_reply",
         "content": reply_content,
         "situationSnapshot": snapshot if snapshot else None,
     })
-
-
-def _generate_mock_situation_compare(
-    stats: dict[str, Any],
-    events: list[dict[str, Any]],
-) -> str:
-    """Generate a mock situation comparison report when LLM is unavailable."""
-    critical = stats.get("critical", 0)
-    warning = stats.get("warning", 0)
-    info = stats.get("info", 0)
-    total = stats.get("total", 0)
-
-    if critical > 0:
-        level = "🔴 **RED — 高度危险**"
-        action = "建议立即启动应急响应协议，优先处置关键威胁"
-    elif warning > 2:
-        level = "🟡 **YELLOW — 态势紧张**"
-        action = "建议提升警戒等级，密切关注警告事件演变"
-    elif warning > 0:
-        level = "🟡 **YELLOW — 需关注**"
-        action = "态势可控，建议加强相关区域巡逻"
-    else:
-        level = "🟢 **GREEN — 态势正常**"
-        action = "继续常规监控，无需特殊行动"
-
-    critical_events = [e for e in events if e.get("level") == "CRITICAL"]
-    warning_events = [e for e in events if e.get("level") == "WARNING"]
-    key_events = critical_events + warning_events
-
-    event_section = ""
-    if key_events:
-        lines = []
-        for evt in key_events[:5]:
-            marker = "🔴" if evt.get("level") == "CRITICAL" else "🟡"
-            lines.append(f"  {marker} [{evt.get('event_type', '?')}] {evt.get('message', '')}")
-        event_section = f"\n**关键事件：**\n" + "\n".join(lines) + "\n"
-
-    return (
-        f"📊 **态势比对报告**\n\n"
-        f"**当前态势等级：** {level}\n"
-        f"**事件分布：** 🔴×{critical} 🟡×{warning} 🟢×{info} （共{total}条）\n"
-        f"{event_section}\n"
-        f"**趋势判断：** {'威胁持续升级，需要即时干预' if critical > 0 else '态势波动在可控范围'}\n\n"
-        f"→ **建议：** {action}"
-    )
 
 
 # ==================== WebSocket Endpoints ====================

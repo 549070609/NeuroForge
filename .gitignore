@@ -5,6 +5,8 @@
 CLAUDE.md
 .obsidian/
 .claude/
+_bmad/
+_bmad-output/
 
 # Python
 __pycache__/

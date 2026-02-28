@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 ENGINE_PATH = str(Path(__file__).resolve().parents[2] / "main" / "agentforge-engine")
@@ -41,13 +43,17 @@ class LLMBridge:
         base_url: str = "",
         temperature: float = 0.4,
         max_tokens: int = 4096,
+        api_type: str = "openai-completions",
+        auth_header_type: str = "bearer",
     ) -> None:
         self.provider_name = provider
-        self.api_key = api_key
+        self.api_key = (api_key or "").strip()
         self.model = model
-        self.base_url = base_url
+        self.base_url = (base_url or "").strip()
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.api_type = api_type
+        self.auth_header_type = auth_header_type or "bearer"
         self._provider: Any = None
 
     async def _get_provider(self) -> Any:
@@ -56,8 +62,14 @@ class LLMBridge:
 
         if self.provider_name == "anthropic":
             self._provider = await self._create_anthropic()
-        elif self.provider_name in ("openai", "custom"):
+        elif self.provider_name == "openai":
             self._provider = await self._create_openai()
+        elif self.provider_name == "custom":
+            # Route by api_type: Anthropic Messages API or OpenAI-compatible
+            if self.api_type == "anthropic-messages":
+                self._provider = await self._create_anthropic()
+            else:
+                self._provider = await self._create_openai()
         else:
             raise ValueError(f"Unsupported provider: {self.provider_name}")
 
@@ -68,12 +80,19 @@ class LLMBridge:
         if _ensure_engine_path():
             try:
                 from pyagentforge.providers.anthropic_provider import AnthropicProvider
-                return AnthropicProvider(
+                from anthropic import AsyncAnthropic
+                client_kwargs: dict[str, Any] = {"api_key": self.api_key}
+                if self.base_url:
+                    client_kwargs["base_url"] = self.base_url
+                provider = AnthropicProvider(
                     api_key=self.api_key,
                     model=self.model,
                     max_tokens=self.max_tokens,
                     temperature=self.temperature,
                 )
+                if self.base_url:
+                    provider.client = AsyncAnthropic(**client_kwargs)
+                return provider
             except ImportError:
                 _engine_import_failed = True
                 logger.info("pyagentforge not available, using anthropic SDK directly")
@@ -83,11 +102,13 @@ class LLMBridge:
             model=self.model,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
+            base_url=self.base_url or None,
         )
 
     async def _create_openai(self) -> Any:
-        global _engine_import_failed
-        if _ensure_engine_path():
+        # Custom auth headers (api-key/x-api-key) require _DirectOpenAIProvider; pyagentforge doesn't support them
+        use_custom_auth = self.auth_header_type in ("api-key", "x-api-key")
+        if not use_custom_auth and _ensure_engine_path():
             try:
                 from pyagentforge.providers.openai_provider import OpenAIProvider
                 kwargs: dict[str, Any] = {
@@ -100,8 +121,9 @@ class LLMBridge:
                     kwargs["base_url"] = self.base_url
                 return OpenAIProvider(**kwargs)
             except ImportError:
-                _engine_import_failed = True
-                logger.info("pyagentforge not available, using openai SDK directly")
+                pass
+            _engine_import_failed = True
+            logger.info("pyagentforge not available, using openai SDK directly")
 
         return _DirectOpenAIProvider(
             api_key=self.api_key,
@@ -109,6 +131,7 @@ class LLMBridge:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             base_url=self.base_url or None,
+            auth_header_type=self.auth_header_type,
         )
 
     async def chat(
@@ -186,13 +209,22 @@ class LLMBridge:
 class _DirectAnthropicProvider:
     """Fallback: use anthropic SDK directly without pyagentforge."""
 
-    def __init__(self, api_key: str, model: str, max_tokens: int, temperature: float):
-        import httpx
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        base_url: str | None = None,
+    ):
         from anthropic import AsyncAnthropic
-        self.client = AsyncAnthropic(
-            api_key=api_key,
-            timeout=httpx.Timeout(120.0, connect=10.0),
-        )
+        client_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": httpx.Timeout(120.0, connect=10.0),
+        }
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = AsyncAnthropic(**client_kwargs)
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -213,17 +245,77 @@ class _DirectAnthropicProvider:
         return _ProviderResponseAdapter(response)
 
 
+class _StripAuthTransport(httpx.AsyncBaseTransport):
+    """httpx transport that removes the auto-generated Authorization header and
+    injects a custom auth header instead (e.g. api-key, x-api-key).
+
+    Used when the upstream proxy authenticates via a non-Bearer header.  Without
+    this, the OpenAI SDK sends *both* ``Authorization: Bearer <key>`` AND the
+    custom header; many proxy back-ends forward the Bearer token to the real LLM
+    which rejects it with 401 "令牌已过期或验证不正确".
+    """
+
+    def __init__(
+        self,
+        auth_header: str,
+        api_key: str,
+        wrapped: httpx.AsyncBaseTransport,
+    ) -> None:
+        self._auth_header = auth_header
+        self._api_key = api_key
+        self._wrapped = wrapped
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        # Remove the Bearer token the OpenAI SDK injected, then set the real header.
+        request.headers.pop("authorization", None)
+        request.headers[self._auth_header] = self._api_key
+        return await self._wrapped.handle_async_request(request)
+
+
 class _DirectOpenAIProvider:
     """Fallback: use openai SDK directly without pyagentforge."""
 
-    def __init__(self, api_key: str, model: str, max_tokens: int, temperature: float, base_url: str | None = None):
-        import httpx
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        base_url: str | None = None,
+        auth_header_type: str = "bearer",
+    ):
         from openai import AsyncOpenAI
-        self.client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            timeout=httpx.Timeout(120.0, connect=10.0),
-        )
+
+        timeout = httpx.Timeout(120.0, connect=10.0)
+
+        if auth_header_type == "bearer":
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=timeout,
+            )
+        else:
+            # Some APIs (Azure, proxies, etc.) authenticate via a custom header
+            # (api-key / x-api-key) instead of Bearer.  We wrap the default
+            # httpx transport to strip the SDK-injected Authorization header and
+            # replace it with the correct custom header so only ONE auth header
+            # reaches the server.
+            inner_transport = httpx.AsyncHTTPTransport()
+            transport = _StripAuthTransport(
+                auth_header=auth_header_type,
+                api_key=api_key,
+                wrapped=inner_transport,
+            )
+            http_client = httpx.AsyncClient(
+                transport=transport,
+                timeout=timeout,
+            )
+            self.client = AsyncOpenAI(
+                api_key="placeholder",  # required by SDK; overridden by transport
+                base_url=base_url,
+                http_client=http_client,
+            )
+
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -308,15 +400,19 @@ def get_bridge(
     base_url: str = "",
     temperature: float = 0.4,
     max_tokens: int = 4096,
+    api_type: str = "openai-completions",
+    auth_header_type: str = "bearer",
 ) -> LLMBridge:
     """Get or create a cached LLM bridge instance."""
     global _bridge_instance
     if (
         _bridge_instance is not None
-        and _bridge_instance.api_key == api_key
+        and _bridge_instance.api_key == (api_key or "").strip()
         and _bridge_instance.model == model
         and _bridge_instance.provider_name == provider
-        and _bridge_instance.base_url == base_url
+        and _bridge_instance.base_url == (base_url or "").strip()
+        and _bridge_instance.api_type == api_type
+        and _bridge_instance.auth_header_type == auth_header_type
     ):
         return _bridge_instance
 
@@ -327,6 +423,8 @@ def get_bridge(
         base_url=base_url,
         temperature=temperature,
         max_tokens=max_tokens,
+        api_type=api_type,
+        auth_header_type=auth_header_type,
     )
     return _bridge_instance
 
@@ -344,4 +442,6 @@ def get_bridge_from_config() -> LLMBridge | None:
         base_url=store.base_url,
         temperature=store.temperature,
         max_tokens=store.max_tokens,
+        api_type=store.api_type,
+        auth_header_type=store.auth_header_type,
     )
