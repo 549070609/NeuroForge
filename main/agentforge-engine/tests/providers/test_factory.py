@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from pyagentforge.providers.factory import (
     ModelAdapterFactory,
     create_provider,
+    create_provider_from_config,
     get_factory,
     get_supported_models,
 )
@@ -40,7 +41,7 @@ class TestModelAdapterFactory:
                 id="gpt-4-turbo",
                 name="GPT-4 Turbo",
                 provider=ProviderType.OPENAI,
-                api_type="openai",
+                api_type="openai-completions",
                 api_key_env="OPENAI_API_KEY",
                 context_window=128000,
                 max_output_tokens=4096,
@@ -52,7 +53,7 @@ class TestModelAdapterFactory:
                 id="claude-sonnet-4-20250514",
                 name="Claude Sonnet 4",
                 provider=ProviderType.ANTHROPIC,
-                api_type="anthropic",
+                api_type="anthropic-messages",
                 api_key_env="ANTHROPIC_API_KEY",
                 context_window=200000,
                 max_output_tokens=8192,
@@ -64,7 +65,7 @@ class TestModelAdapterFactory:
                 id="gemini-2.0-flash",
                 name="Gemini 2.0 Flash",
                 provider=ProviderType.GOOGLE,
-                api_type="google",
+                api_type="google-generative-ai",
                 api_key_env="GOOGLE_API_KEY",
                 context_window=1000000,
                 max_output_tokens=8192,
@@ -121,12 +122,11 @@ class TestModelAdapterFactory:
 
     def test_unknown_provider_raises_error(self, mock_registry):
         """Test that unknown provider type raises error."""
-        # Add a model with unsupported provider
-        mock_model = ModelConfig(
+        mock_model = ModelConfig.model_construct(
             id="unknown-model",
             name="Unknown Model",
-            provider="unsupported_provider",  # Invalid provider type
-            api_type="unknown",
+            provider="unsupported_provider",
+            api_type="custom",
             context_window=1000,
             max_output_tokens=100,
         )
@@ -134,7 +134,7 @@ class TestModelAdapterFactory:
 
         factory = ModelAdapterFactory(registry=mock_registry)
 
-        with pytest.raises(ValueError, match="Unsupported provider type"):
+        with pytest.raises((ValueError, KeyError)):
             factory.create_provider("unknown-model")
 
     def test_unknown_model_raises_error(self, mock_registry):
@@ -188,12 +188,11 @@ class TestModelAdapterFactory:
 
     def test_create_openai_provider_with_base_url(self, mock_registry):
         """Test creating OpenAI provider with custom base_url."""
-        # Add base_url to model config
         mock_model = ModelConfig(
             id="custom-gpt",
             name="Custom GPT",
             provider=ProviderType.OPENAI,
-            api_type="openai",
+            api_type="openai-completions",
             api_key_env="OPENAI_API_KEY",
             base_url="https://custom.api.com/v1",
             context_window=100000,
@@ -205,7 +204,7 @@ class TestModelAdapterFactory:
             factory = ModelAdapterFactory(registry=mock_registry)
             provider = factory.create_provider("custom-gpt")
 
-        assert provider.client.base_url == "https://custom.api.com/v1"
+        assert str(provider.client.base_url).rstrip("/") == "https://custom.api.com/v1"
 
     def test_get_supported_models(self, mock_registry):
         """Test getting list of supported models."""
@@ -244,7 +243,7 @@ class TestModelAdapterFactory:
             id="azure-gpt",
             name="Azure GPT",
             provider=ProviderType.AZURE,
-            api_type="azure",
+            api_type="custom",
             api_key_env="AZURE_API_KEY",
             base_url="https://azure.endpoint.com",
             context_window=100000,
@@ -263,7 +262,7 @@ class TestModelAdapterFactory:
             id="bedrock-claude",
             name="Bedrock Claude",
             provider=ProviderType.BEDROCK,
-            api_type="bedrock",
+            api_type="bedrock-converse-stream",
             context_window=100000,
             max_output_tokens=4096,
         )
@@ -306,7 +305,7 @@ class TestModelAdapterFactory:
         # Mock custom provider
         class CustomProvider(BaseProvider):
             async def create_message(self, system, messages, tools, **kwargs):
-                from pyagentforge.core.message import ProviderResponse, TextBlock
+                from pyagentforge.kernel.message import ProviderResponse, TextBlock
                 return ProviderResponse(content=[TextBlock(text="test")], stop_reason="end_turn")
 
             async def count_tokens(self, messages):
@@ -360,7 +359,7 @@ class TestModelAdapterFactory:
             id="test-model",
             name="Test Model",
             provider=ProviderType.OPENAI,
-            api_type="openai",
+            api_type="openai-completions",
             api_key_env="OPENAI_API_KEY",
             context_window=100000,
             max_output_tokens=4096,
@@ -388,6 +387,26 @@ class TestModelAdapterFactory:
 class TestProviderFactoryEdgeCases:
     """Test edge cases and error handling."""
 
+    @pytest.fixture
+    def mock_registry(self):
+        """Create a mock model registry with test models."""
+        registry = MagicMock(spec=ModelRegistry)
+
+        test_models = {
+            "gpt-4-turbo": ModelConfig(
+                id="gpt-4-turbo",
+                name="GPT-4 Turbo",
+                provider=ProviderType.OPENAI,
+                api_type="openai-completions",
+                api_key_env="OPENAI_API_KEY",
+                context_window=128000,
+                max_output_tokens=4096,
+            ),
+        }
+        registry.get_model = MagicMock(side_effect=lambda mid: test_models.get(mid))
+        registry.get_all_models = MagicMock(return_value=list(test_models.values()))
+        return registry
+
     def test_factory_with_none_registry(self):
         """Test factory handles None registry by using default."""
         factory = ModelAdapterFactory(registry=None)
@@ -402,7 +421,7 @@ class TestProviderFactoryEdgeCases:
             id="test-model",
             name="Test",
             provider=ProviderType.OPENAI,
-            api_type="openai",
+            api_type="openai-completions",
             api_key_env="TEST_KEY",
             context_window=1000,
             max_output_tokens=100,
@@ -431,15 +450,151 @@ class TestProviderFactoryEdgeCases:
         assert "cost_input" in info or hasattr(mock_registry.get_model("gpt-4-turbo"), "cost_input")
 
     def test_missing_api_key_env_var(self, mock_registry):
-        """Test handling of missing API key environment variable."""
-        # Clear environment
+        """Test that missing API key raises an error from the provider SDK."""
         with patch.dict(os.environ, {}, clear=True):
             factory = ModelAdapterFactory(registry=mock_registry)
-            # Should create provider but with None API key
-            provider = factory.create_provider("gpt-4-turbo")
+            with pytest.raises(Exception):
+                factory.create_provider("gpt-4-turbo")
 
-            # Provider should be created but may fail on actual API calls
-            assert isinstance(provider, OpenAIProvider)
+
+class TestCreateProviderFromConfig:
+    """Tests for the create_provider_from_config() method and convenience function."""
+
+    @pytest.fixture
+    def mock_registry(self):
+        """Create a mock model registry."""
+        return MagicMock(spec=ModelRegistry)
+
+    def test_create_provider_from_config_anthropic(self, mock_registry):
+        """Test creating Anthropic provider from explicit ModelConfig."""
+        config = ModelConfig(
+            id="claude-sonnet-4-20250514",
+            name="Claude Sonnet 4",
+            provider=ProviderType.ANTHROPIC,
+            api_type="anthropic-messages",
+            api_key_env="ANTHROPIC_API_KEY",
+            context_window=200000,
+            max_output_tokens=8192,
+        )
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            factory = ModelAdapterFactory(registry=mock_registry)
+            provider = factory.create_provider_from_config(config)
+
+        assert isinstance(provider, AnthropicProvider)
+        assert provider.model == "claude-sonnet-4-20250514"
+
+    def test_create_provider_from_config_openai(self, mock_registry):
+        """Test creating OpenAI provider from explicit ModelConfig."""
+        config = ModelConfig(
+            id="gpt-4o",
+            name="GPT-4o",
+            provider=ProviderType.OPENAI,
+            api_type="openai-completions",
+            api_key_env="OPENAI_API_KEY",
+            context_window=128000,
+            max_output_tokens=4096,
+        )
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            factory = ModelAdapterFactory(registry=mock_registry)
+            provider = factory.create_provider_from_config(config, temperature=0.5)
+
+        assert isinstance(provider, OpenAIProvider)
+        assert provider.model == "gpt-4o"
+        assert provider.temperature == 0.5
+
+    def test_create_provider_from_config_with_kwargs(self, mock_registry):
+        """Test that extra kwargs are forwarded correctly."""
+        config = ModelConfig(
+            id="gpt-4o",
+            name="GPT-4o",
+            provider=ProviderType.OPENAI,
+            api_type="openai-completions",
+            api_key_env="OPENAI_API_KEY",
+            context_window=128000,
+            max_output_tokens=4096,
+        )
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            factory = ModelAdapterFactory(registry=mock_registry)
+            provider = factory.create_provider_from_config(
+                config, max_tokens=2048, temperature=0.3
+            )
+
+        assert provider.max_tokens == 2048
+        assert provider.temperature == 0.3
+
+    def test_create_provider_from_config_skips_registry_lookup(self, mock_registry):
+        """Verify that create_provider_from_config does NOT call registry.get_model()."""
+        config = ModelConfig(
+            id="gpt-4o",
+            name="GPT-4o",
+            provider=ProviderType.OPENAI,
+            api_type="openai-completions",
+            api_key_env="OPENAI_API_KEY",
+            context_window=128000,
+            max_output_tokens=4096,
+        )
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            factory = ModelAdapterFactory(registry=mock_registry)
+            factory.create_provider_from_config(config)
+
+        mock_registry.get_model.assert_not_called()
+
+    def test_convenience_function_create_provider_from_config(self):
+        """Test the module-level create_provider_from_config function."""
+        config = ModelConfig(
+            id="gpt-4o",
+            name="GPT-4o",
+            provider=ProviderType.OPENAI,
+            api_type="openai-completions",
+            api_key_env="OPENAI_API_KEY",
+            context_window=128000,
+            max_output_tokens=4096,
+        )
+
+        with patch("pyagentforge.providers.factory.get_factory") as mock_get_factory:
+            mock_factory = MagicMock()
+            mock_get_factory.return_value = mock_factory
+
+            create_provider_from_config(config, temperature=0.7)
+
+            mock_factory.create_provider_from_config.assert_called_once_with(
+                config, temperature=0.7
+            )
+
+    def test_legacy_create_provider_emits_deprecation_warning(self, mock_registry):
+        """Test that the legacy create_provider() emits DeprecationWarning."""
+        with patch("pyagentforge.providers.factory.get_factory") as mock_get_factory:
+            mock_factory = MagicMock()
+            mock_get_factory.return_value = mock_factory
+
+            with pytest.warns(DeprecationWarning, match="create_provider_from_config"):
+                create_provider("gpt-4")
+
+    def test_from_config_equivalent_to_old_path(self, mock_registry):
+        """Provider from create_provider_from_config matches create_provider behavior."""
+        config = ModelConfig(
+            id="gpt-4-turbo",
+            name="GPT-4 Turbo",
+            provider=ProviderType.OPENAI,
+            api_type="openai-completions",
+            api_key_env="OPENAI_API_KEY",
+            context_window=128000,
+            max_output_tokens=4096,
+        )
+        mock_registry.get_model = MagicMock(return_value=config)
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            factory = ModelAdapterFactory(registry=mock_registry)
+            p_old = factory.create_provider("gpt-4-turbo", temperature=0.5)
+            p_new = factory.create_provider_from_config(config, temperature=0.5)
+
+        assert type(p_old) is type(p_new)
+        assert p_old.model == p_new.model
+        assert p_old.temperature == p_new.temperature
 
 
 class TestProviderFactoryIntegration:

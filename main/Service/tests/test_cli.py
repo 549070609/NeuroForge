@@ -68,7 +68,7 @@ else:
 # ============================================================
 print("[DEBUG] 开始注册 GLM Provider (在导入 Service 模块之前)...")
 try:
-    from pyagentforge.kernel.model_registry import (
+    from pyagentforge import (
         ProviderType,
         ModelConfig,
         get_registry,

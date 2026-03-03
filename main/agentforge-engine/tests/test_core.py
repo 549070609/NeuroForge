@@ -5,7 +5,7 @@
 import pytest
 
 from pyagentforge.core.context import ContextManager
-from pyagentforge.core.message import (
+from pyagentforge.kernel.message import (
     Message,
     ProviderResponse,
     TextBlock,

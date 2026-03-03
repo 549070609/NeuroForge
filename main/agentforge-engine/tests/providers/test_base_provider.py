@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from pyagentforge.providers.base import BaseProvider
-from pyagentforge.core.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 
 
 class ConcreteProvider(BaseProvider):

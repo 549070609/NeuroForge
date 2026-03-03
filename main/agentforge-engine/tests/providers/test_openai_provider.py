@@ -38,7 +38,7 @@ class TestOpenAIProvider:
             base_url="https://custom.api.com/v1",
         )
 
-        assert provider.client.base_url == "https://custom.api.com/v1"
+        assert str(provider.client.base_url).rstrip("/") == "https://custom.api.com/v1"
 
     def test_convert_tools_to_openai(self):
         """Test tool format conversion to OpenAI format."""

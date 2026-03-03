@@ -1,57 +1,85 @@
-# LLM 阅读适配规范
+# LLM Configuration
 
-## 目标
+## Config Load Order
 
-让大模型在最少上下文下完成:
-
-1. 快速定位接口
-2. 生成正确请求体
-3. 解析关键响应字段
-4. 处理常见错误分支
-
-## 推荐读取顺序
-
-1. `99-llm/endpoint-catalog.md` 获取路由全量映射
-2. 再跳转到对应分类文档查看字段级说明和 cURL
-3. 优先读取每个接口的 `入参`、`出参`、`错误码`
-
-## 字段对齐策略
-
-- 优先使用 `schemas/*.py` 中的字段名作为唯一真值
-- `path` 参数与 `body` 同名字段同时存在时，优先使用 `path` 参数
-- `optional` 字段仅在有值时传递，减少噪声
-
-## 输出约束（给大模型）
-
-- 生成请求时保持最小必要字段:
-  - 只传 `required + 当前任务确实需要的 optional`
-- 解析响应时优先提取:
-  - 标识字段（`id`、`session_id`、`plan_id`）
-  - 状态字段（`status`、`success`）
-  - 错误字段（`error`、`detail`）
-
-## SSE 解析规范
-
-`/api/v1/proxy/execute/stream` 返回 `text/event-stream`，每条消息格式:
-
-```text
-data: {"type":"...","...":"..."}
+```
+$LLM_CONFIG_PATH  →  main/llm_config.json  →  {cwd}/llm_config.json  →  main/default_llm_config.json
 ```
 
-建议按 `type` 分流处理:
+## Engine Settings
 
-- `stream`: 增量内容
-- `tool_start`: 工具开始
-- `tool_result`: 工具结果
-- `complete`: 最终文本
-- `error`: 错误消息
+```python
+from pyagentforge import get_engine_settings
+s = get_engine_settings()
+# s.default_model  s.anthropic_api_key  s.openai_api_key  s.google_api_key
+```
 
-## 低歧义提示模板
+## Provider
 
-```text
-请按以下顺序输出：
-1) 目标接口 method + path
-2) 最小请求 JSON
-3) 关键响应字段提取规则
-4) 非 2xx 时处理策略
+```python
+from pyagentforge import create_provider, AnthropicProvider, OpenAIProvider, GoogleProvider
+
+provider = create_provider("claude-3-5-sonnet-20241022", temperature=1.0, max_tokens=4096)
+provider = AnthropicProvider(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022")
+provider = OpenAIProvider(api_key="sk-...",          model="gpt-4o")
+provider = GoogleProvider(api_key="AIza...",         model="gemini-2.0-flash")
+```
+
+## Model Registry
+
+```python
+from pyagentforge import get_registry, register_model, get_model, ModelConfig, ProviderType
+
+registry = get_registry()
+registry.get_all_models() -> list[ModelConfig]
+registry.get_model(model_id) -> ModelConfig | None
+
+register_model(ModelConfig(
+    id="custom-model",
+    name="Custom",
+    provider=ProviderType.ANTHROPIC,   # ANTHROPIC | OPENAI | GOOGLE | ZHIPU | ...
+    api_type="anthropic",
+    context_window=200000,
+    supports_tools=True,
+    supports_streaming=True,
+))
+get_model("custom-model") -> ModelConfig | None
+```
+
+## Chinese LLM Registry
+
+```python
+from pyagentforge import ChineseLLMRegistry
+
+ChineseLLMRegistry.get_all_providers() -> dict[str, ProviderInfo]
+ChineseLLMRegistry.get_provider("zhipu") -> ProviderInfo | None
+# ProviderInfo: vendor  vendor_name  models  default_model  api_key_env  base_url  description
+```
+
+## Service Config
+
+```python
+from Service.config import get_settings
+s = get_settings()
+# s.legacy_sessions_dir  s.default_model  s.api_key
+```
+
+## Env Vars
+
+```
+ANTHROPIC_API_KEY    OpenAI_API_KEY    GOOGLE_API_KEY    GLM_API_KEY    LLM_CONFIG_PATH
+SERVICE_API_KEY      SERVICE_LEGACY_SESSIONS_DIR          SERVICE_DEFAULT_MODEL
+```
+
+## llm_config.json Format
+
+```json
+{
+  "default_model": "claude-3-5-sonnet-20241022",
+  "providers": {
+    "anthropic": { "api_key": "${ANTHROPIC_API_KEY}" },
+    "openai":    { "api_key": "${OPENAI_API_KEY}" },
+    "google":    { "api_key": "${GOOGLE_API_KEY}", "default_model": "gemini-2.0-flash" }
+  }
+}
 ```

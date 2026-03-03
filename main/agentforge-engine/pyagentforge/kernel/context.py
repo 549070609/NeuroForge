@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any
 
-from pyagentforge.kernel.message import Message, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import Message, TextBlock, ThinkingBlock, ToolUseBlock
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,10 @@ class ContextManager:
 
     def add_assistant_message(
         self,
-        content: list[TextBlock | ToolUseBlock],
+        content: list[TextBlock | ToolUseBlock | ThinkingBlock],
     ) -> None:
         """添加助手消息"""
-        # Convert content blocks to dict format for proper Pydantic validation
-        # This ensures the Message model can properly validate the union type
-        content_dicts = []
+        content_dicts: list[dict] = []
         for block in content:
             if isinstance(block, TextBlock):
                 content_dicts.append({"type": "text", "text": block.text})
@@ -56,9 +54,15 @@ class ContextManager:
                     "name": block.name,
                     "input": block.input,
                 })
+            elif isinstance(block, ThinkingBlock):
+                d: dict = {"type": "thinking", "thinking": block.thinking}
+                if block.signature:
+                    d["signature"] = block.signature
+                content_dicts.append(d)
             else:
-                # Fallback: try to convert to dict
-                content_dicts.append(block.model_dump() if hasattr(block, 'model_dump') else block)
+                content_dicts.append(
+                    block.model_dump() if hasattr(block, "model_dump") else block
+                )
 
         self.messages.append(Message(role="assistant", content=content_dicts))
         logger.debug(f"Added assistant message, blocks={len(content)}")

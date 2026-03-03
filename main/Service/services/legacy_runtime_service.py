@@ -11,6 +11,15 @@ import uuid
 from pathlib import Path
 from typing import Any, AsyncGenerator
 
+from pyagentforge import (
+    AgentEngine,
+    ToolRegistry,
+    ContextManager,
+    register_core_tools,
+    AnthropicProvider,
+    get_engine_settings,
+)
+
 from ..config import get_settings
 from ..core.registry import ServiceRegistry
 from .base import BaseService
@@ -45,7 +54,7 @@ class LegacyRuntimeService(BaseService):
     def _create_session_manager(self) -> Any | None:
         try:
             from pyagentforge.core.persistence import SessionManager
-        except Exception as exc:  # pragma: no cover - environment dependent
+        except ImportError as exc:
             self._logger.warning("pyagentforge session persistence unavailable: %s", exc)
             return None
 
@@ -55,10 +64,8 @@ class LegacyRuntimeService(BaseService):
 
     def _get_default_model(self) -> str:
         try:
-            from pyagentforge.config.settings import get_settings as get_pa_settings
-
-            return get_pa_settings().default_model
-        except Exception:  # pragma: no cover - environment dependent
+            return get_engine_settings().default_model
+        except Exception:
             return get_settings().default_model
 
     def _create_runtime_engine(
@@ -71,21 +78,17 @@ class LegacyRuntimeService(BaseService):
         messages = seeded_messages or []
 
         try:
-            from pyagentforge.config.settings import get_settings as get_pa_settings
-            from pyagentforge.core.context import ContextManager
-            from pyagentforge.core.engine import AgentEngine
-            from pyagentforge.providers.anthropic_provider import AnthropicProvider
-            from pyagentforge.tools.registry import ToolRegistry
-
-            pa_settings = get_pa_settings()
+            pa_settings = get_engine_settings()
             provider = AnthropicProvider(
                 api_key=pa_settings.anthropic_api_key,
                 model=selected_model,
             )
             tools = ToolRegistry()
-            tools.register_builtin_tools()
+            register_core_tools(tools)
 
-            context = ContextManager(system_prompt=system_prompt or "You are a helpful AI assistant.")
+            context = ContextManager(
+                system_prompt=system_prompt or "You are a helpful AI assistant."
+            )
             for message in messages:
                 if isinstance(message, dict):
                     context.messages.append(message)
@@ -95,7 +98,7 @@ class LegacyRuntimeService(BaseService):
                 tool_registry=tools,
                 context=context,
             )
-        except Exception as exc:  # pragma: no cover - environment dependent
+        except Exception as exc:
             raise RuntimeError(f"Failed to create pyagentforge runtime engine: {exc}") from exc
 
     def _resolve_agent_profile(

@@ -10,8 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-# 延迟导入，避免循环依赖
-# from pyagentforge.kernel.executor import PermissionChecker, PermissionResult
+from pyagentforge import PermissionChecker
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +233,7 @@ def create_permission_checker_from_workspace(
 
 def create_pyagentforge_permission_checker(
     workspace_permission_checker: WorkspacePermissionChecker,
-) -> Any:
+) -> PermissionChecker:
     """
     创建 pyagentforge 兼容的 PermissionChecker
 
@@ -246,26 +245,17 @@ def create_pyagentforge_permission_checker(
     Returns:
         PermissionChecker 实例 (pyagentforge 兼容)
     """
-    try:
-        from pyagentforge.kernel.executor import PermissionChecker
 
-        class AdaptedPermissionChecker(PermissionChecker):
-            """适配的权限检查器"""
+    class AdaptedPermissionChecker(PermissionChecker):
+        def __init__(self, workspace_checker: WorkspacePermissionChecker) -> None:
+            super().__init__(
+                allowed_tools=workspace_checker._allowed_tools,
+                denied_tools=workspace_checker._denied_tools,
+                ask_tools=workspace_checker._ask_tools,
+            )
+            self._workspace_checker = workspace_checker
 
-            def __init__(self, workspace_checker: WorkspacePermissionChecker) -> None:
-                super().__init__(
-                    allowed_tools=workspace_checker._allowed_tools,
-                    denied_tools=workspace_checker._denied_tools,
-                    ask_tools=workspace_checker._ask_tools,
-                )
-                self._workspace_checker = workspace_checker
+        def check(self, tool_name: str, tool_input: dict) -> str:
+            return self._workspace_checker.check(tool_name, tool_input)
 
-            def check(self, tool_name: str, tool_input: dict) -> str:
-                """检查工具权限"""
-                return self._workspace_checker.check(tool_name, tool_input)
-
-        return AdaptedPermissionChecker(workspace_permission_checker)
-
-    except ImportError:
-        logger.warning("pyagentforge not available, returning workspace checker directly")
-        return workspace_permission_checker
+    return AdaptedPermissionChecker(workspace_permission_checker)

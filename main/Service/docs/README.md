@@ -1,56 +1,52 @@
-# Service API 文档（按类型分类）
+# Service & pyagentforge — Package Docs
 
-本文档基于 `main/Service/gateway/routes`、`main/Service/schemas`、`main/Service/services` 当前实现整理。
+```
+pyagentforge/  (v3.0.0, Python >=3.11)
+  kernel/       AgentEngine  ContextManager  ToolRegistry
+  providers/    AnthropicProvider  OpenAIProvider  GoogleProvider
+  tools/        register_core_tools  BashTool  ReadTool  WriteTool  EditTool  ...
+  plugin/       Plugin  PluginManager  PluginConfig
+  config/       get_engine_settings
 
-## 目录结构
-
-```text
-docs/
-├─ 00-common/
-│  ├─ api-conventions.md
-│  └─ llm-adapter.md
-├─ 01-health/
-│  └─ health-root.md
-├─ 02-tools/
-│  └─ tools.md
-├─ 03-agents/
-│  └─ agents.md
-├─ 04-plans/
-│  └─ plans.md
-├─ 05-proxy/
-│  ├─ workspaces.md
-│  ├─ sessions.md
-│  └─ execution.md
-└─ 99-llm/
-   └─ endpoint-catalog.md
+Service/        (v0.1.0, Python >=3.11)
+  gateway/      create_app  routes
+  services/     AgentService  ModelConfigService  LegacyRuntimeService
+    proxy/      WorkspaceManager  SessionManager  AgentExecutor  AgentProxyService
+  schemas/      Pydantic request/response models
+  config/       get_settings
+  core/         ServiceRegistry
 ```
 
-## API 类型分类
+`service` depends on `pyagentforge>=3.0.0`.
 
-1. 基础与健康类: `/`、`/health`
-2. 工具管理类: `/api/v1/tools*`
-3. Agent 管理与执行类: `/api/v1/agents*`
-4. Plan 管理类: `/api/v1/plans*`
-5. Proxy 工作空间类: `/api/v1/proxy/workspaces*`
-6. Proxy 会话类: `/api/v1/proxy/sessions*`
-7. Proxy 执行与流式类: `/api/v1/proxy/execute*`
-8. 统计类: `/api/v1/agents/stats`、`/api/v1/plans/stats`、`/api/v1/proxy/stats`
-
-## 快速开始
-
-```bash
-export BASE_URL="http://localhost:8000"
-curl "$BASE_URL/health"
+```shell
+pip install -e "main/agentforge-engine[dev]"
+pip install -e "main/Service[dev]"
 ```
 
-Windows PowerShell:
+```python
+from pyagentforge import create_minimal_engine, AnthropicProvider
+from Service.gateway.app import create_app
 
-```powershell
-$env:BASE_URL = "http://localhost:8000"
-curl "$env:BASE_URL/health"
+engine = create_minimal_engine(
+    provider=AnthropicProvider(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022"),
+    working_dir="/workspace",
+)
+app = create_app()
 ```
 
-## LLM 适配入口
+## Docs Index
 
-- 通用规范: `00-common/llm-adapter.md`
-- 机读端点目录: `99-llm/endpoint-catalog.md`
+```
+00-common/package-conventions.md   import rules, naming, ruff config
+00-common/configuration.md         LLM config, providers, model registry
+01-install/installation.md         install steps, env vars, common errors
+02-tools/tools.md                  ToolRegistry, built-in tools, BaseTool
+03-agents/agents.md                AgentEngine, AgentConfig, AgentService, ModelConfigService
+04-plans/plans.md                  PlanCreate, StepCreate, plan operations
+05-proxy/workspaces.md             WorkspaceManager, WorkspaceContext, PermissionBridge
+05-proxy/sessions.md               SessionManager, SessionResponse, LegacyRuntimeService
+05-proxy/execution.md              AgentExecutor, AgentProxyService, stream events
+99-reference/package-reference.md  full symbol speed reference
+API_FULL.md                        everything in one file
+```

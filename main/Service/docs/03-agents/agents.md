@@ -1,236 +1,98 @@
-# Agent 管理与执行类 API
+# Agent Services
 
-## 数据模型
+## AgentEngine
 
-### AgentInfoResponse
+```python
+from pyagentforge import create_minimal_engine, create_engine, AnthropicProvider
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | string | Agent ID |
-| `name` | string | Agent 名称 |
-| `namespace` | string | 命名空间 |
-| `origin` | string | 来源类型 |
-| `description` | string | 描述 |
-| `tags` | string[] | 标签 |
-| `category` | string | 分类 |
-| `is_readonly` | bool | 是否只读 |
-| `max_concurrent` | int | 最大并发 |
-| `tools` | string[] | 允许工具 |
-| `denied_tools` | string[] | 禁止工具 |
+# no plugins
+engine = create_minimal_engine(
+    provider=AnthropicProvider(api_key="sk-ant-...", model="claude-3-5-sonnet-20241022"),
+    working_dir="/workspace",
+)
+# with plugins
+engine = await create_engine(provider, config={...}, plugin_config=PluginConfig(...))
 
-### AgentExecuteRequest
+result: str = await engine.run("task")
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `task` | string | 是 | 任务描述 |
-| `context` | object/null | 否 | 额外上下文 |
-| `namespace` | string/null | 否 | 命名空间（当前实现未直接使用） |
-| `options` | object/null | 否 | 执行选项 |
+async for event in engine.run_stream("task"):
+    # event["type"]: "stream" | "tool_start" | "tool_result" | "complete" | "error"
+    match event.get("type"):
+        case "stream":    print(event["event"]["delta"], end="")
+        case "complete":  final = event["text"]
+        case "error":     raise RuntimeError(event["message"])
 
-### AgentExecuteResponse
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `agent_id` | string | 执行的 Agent ID |
-| `status` | string | 执行状态 |
-| `result` | string/null | 执行结果 |
-| `plan_id` | string/null | 生成的计划 ID（若有） |
-| `error` | string/null | 错误信息 |
-| `started_at` | datetime | 开始时间 |
-| `completed_at` | datetime/null | 完成时间 |
-
-## GET `/api/v1/agents`
-
-用途: 列出 Agent。
-
-### Query 参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `namespace` | string | 否 | 按命名空间过滤 |
-| `tags` | string | 否 | 标签过滤，逗号分隔，例如 `plan,code` |
-
-### 出参
-
-`AgentListResponse`
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `agents` | AgentInfoResponse[] | Agent 列表 |
-| `total` | int | 总数 |
-| `namespaces` | string[] | 命名空间列表 |
-
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/agents?namespace=default&tags=plan,code"
+engine.reset()
+engine.get_context_summary() -> dict
+engine.session_id -> str
 ```
 
-## GET `/api/v1/agents/stats`
+## AgentConfig
 
-用途: Agent 统计信息。
-
-### 出参
-
-`AgentStatsResponse`
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `total_agents` | int | Agent 总数 |
-| `total_namespaces` | int | 命名空间总数 |
-| `by_origin` | object | 按来源统计 |
-| `namespaces` | string[] | 命名空间列表 |
-
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/agents/stats"
+```python
+class AgentConfig:
+    system_prompt: str = ""
+    max_tokens: int = 4096
+    temperature: float = 1.0
+    max_iterations: int = 100
+    permission_checker: PermissionChecker | None = None
 ```
 
-## GET `/api/v1/agents/namespaces`
+## AgentService
 
-用途: 命名空间列表及每个命名空间内 Agent。
+Auto-initialized by `create_app()`. Agent definitions loaded from `main/Agent/`.
 
-### 出参
+```python
+from Service.services.agent_service import AgentService
 
-`NamespaceListResponse`
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `namespaces` | NamespaceInfo[] | 命名空间详情 |
-| `total` | int | 总数 |
-
-`NamespaceInfo`:
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `name` | string | 命名空间名称 |
-| `agent_count` | int | Agent 数量 |
-| `agents` | string[] | Agent ID 列表 |
-
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/agents/namespaces"
+service.list_agents(namespace=None, tags=None) -> AgentListResponse
+service.get_agent(agent_id) -> AgentInfoResponse    # raises KeyError if not found
+service.refresh_directory()
+service.execute_agent(agent_id, task, context={}) -> AgentExecuteResponse
 ```
 
-## GET `/api/v1/agents/refresh`
-
-用途: 刷新 Agent 目录缓存。
-
-### 出参
-
-```json
-{
-  "status": "ok",
-  "message": "Agent directory refreshed"
-}
+```
+AgentInfoResponse fields:
+  id  name  namespace  origin  description  tags  category
+  is_readonly  max_concurrent  tools  denied_tools
 ```
 
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/agents/refresh"
-```
-
-## GET `/api/v1/agents/{agent_id}`
-
-用途: 查询单个 Agent 详情。
-
-### Path 参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `agent_id` | string | 是 | Agent ID |
-
-### 出参
-
-- `200`: `AgentInfoResponse`
-- `404`: `{"detail":"Agent not found: <agent_id>"}`
-
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/agents/plan"
-```
-
-## POST `/api/v1/agents/{agent_id}/execute`
-
-用途: 执行 Agent（当前为模拟执行逻辑，后续可接入真实执行引擎）。
-
-### Path 参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `agent_id` | string | 是 | 要执行的 Agent ID |
-
-### Body 参数
-
-`AgentExecuteRequest`，示例:
-
-```json
-{
-  "task": "为支付系统设计重试机制",
-  "context": {
-    "repo": "main/payment",
-    "env": "staging"
-  },
-  "options": {
-    "max_steps": 5
-  }
-}
-```
-
-### 出参
-
-`AgentExecuteResponse`，示例:
-
-```json
-{
-  "agent_id": "plan",
-  "status": "completed",
-  "result": "Plan created successfully with 3 steps",
-  "plan_id": "plan-20260221-abc123",
-  "error": null,
-  "started_at": "2026-02-21T15:10:00.000000",
-  "completed_at": "2026-02-21T15:10:01.000000"
-}
-```
-
-### 状态码
-
-- `200` 执行完成
-- `404` Agent 不存在
-- `422` 请求体验证失败
-
-### cURL
-
-```bash
-curl -X POST "$BASE_URL/api/v1/agents/plan/execute" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task": "生成一份 API 重构计划",
-    "context": {"module":"gateway"},
-    "options": {"format":"markdown"}
-  }'
-```
-
-## LLM 速读块
+Agent definition YAML (`main/Agent/<name>/agent.yaml`):
 
 ```yaml
-- id: list_agents
-  method: GET
-  path: /api/v1/agents
-  query: [namespace?, tags?]
-  response: AgentListResponse
-- id: get_agent
-  method: GET
-  path: /api/v1/agents/{agent_id}
-  response: AgentInfoResponse
-  errors: [404]
-- id: execute_agent
-  method: POST
-  path: /api/v1/agents/{agent_id}/execute
-  request: AgentExecuteRequest
-  response: AgentExecuteResponse
+id: plan
+name: Plan Agent
+namespace: default
+tags: [plan, code]
+model:
+  id: claude-3-5-sonnet-20241022
+  temperature: 1.0
+  max_tokens: 4096
+limits:
+  max_iterations: 50
+capabilities:
+  tools: ["read", "write", "bash", "glob", "grep"]
+  denied_tools: []
+```
+
+## ModelConfigService
+
+```python
+from Service.services.model_config_service import ModelConfigService
+
+service.list_models(provider=None, supports_vision=None, supports_tools=None) -> list[ModelConfigResponse]
+service.get_model(model_id) -> ModelConfigResponse | None
+service.create_model(ModelConfigCreate(...)) -> ModelConfigResponse
+service.update_model(model_id, ModelConfigUpdate(...)) -> ModelConfigResponse
+service.delete_model(model_id) -> bool    # raises ValueError for builtin IDs
+service.get_stats() -> ModelConfigStatsResponse
+service.list_chinese_providers() -> ChineseProviderListResponse
+service.get_chinese_provider(vendor) -> ChineseProviderInfo | None
+```
+
+Builtin model IDs (delete-protected):
+```
+claude-sonnet-4-20250514  claude-3-5-sonnet-20241022  claude-3-5-haiku-20241022
+claude-opus-4-20250514    gpt-4o  gpt-4o-mini  o1-preview  o3-mini
+gemini-2.0-flash          glm-4-flash  glm-4-plus  glm-4-air  glm-4-airx  glm-4-long  glm-4.7  glm-5
 ```

@@ -1,78 +1,63 @@
-# 基础与健康类 API
+# Installation & Dev Setup
 
-## GET `/`
+## Install
 
-用途: 服务入口信息。
+```shell
+# Python >=3.11 required
+pip install -e "main/agentforge-engine[dev]"
+pip install -e "main/Service[dev]"
+```
 
-### 入参
+Verify:
 
-- 无
+```python
+import pyagentforge; print(pyagentforge.__version__)   # 3.0.0
+from pyagentforge import AgentEngine, create_provider, BashTool
+from Service.gateway.app import create_app
+```
 
-### 出参
+## Configure
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `message` | string | 固定为服务名 |
-| `docs` | string | 文档地址，通常为 `/docs` |
-
-示例响应:
+`main/llm_config.json` (gitignored):
 
 ```json
 {
-  "message": "Service Layer",
-  "docs": "/docs"
+  "default_model": "claude-3-5-sonnet-20241022",
+  "providers": { "anthropic": { "api_key": "sk-ant-..." } }
 }
 ```
 
-### cURL
+Or env vars:
 
-```bash
-curl "$BASE_URL/"
+```shell
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+$env:OPENAI_API_KEY    = "sk-..."
+$env:GOOGLE_API_KEY    = "AIza..."
 ```
 
-## GET `/health`
+## Start Service
 
-用途: 健康检查。
-
-### 入参
-
-- 无
-
-### 出参
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `status` | string | 健康状态，默认 `healthy` |
-| `version` | string | 服务版本，默认 `0.1.0` |
-| `timestamp` | string(datetime) | 服务生成时间 |
-
-示例响应:
-
-```json
-{
-  "status": "healthy",
-  "version": "0.1.0",
-  "timestamp": "2026-02-21T15:00:00.000000"
-}
+```shell
+cd main/Service
+uvicorn Service.gateway.app:create_app --factory --reload --port 8000
 ```
 
-### cURL
+## Test
 
-```bash
-curl "$BASE_URL/health"
+```shell
+cd main/agentforge-engine && pytest -v --tb=short
+cd main/Service         && pytest tests/ -v --tb=short --cov=Service
 ```
 
-## LLM 速读块
+## Common Errors
 
-```yaml
-- id: root_info
-  method: GET
-  path: /
-  request: none
-  response_keys: [message, docs]
-- id: health_check
-  method: GET
-  path: /health
-  request: none
-  response_keys: [status, version, timestamp]
+```
+ImportError: No module named 'pyagentforge'
+→  pip install -e "main/agentforge-engine[dev]"
+
+AttributeError: 'Settings' object has no attribute 'anthropic_api_key'
+→  configure main/llm_config.json or set ANTHROPIC_API_KEY
+
+python version mismatch
+→  python --version must be 3.11+
 ```

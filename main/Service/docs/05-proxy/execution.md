@@ -1,178 +1,110 @@
-# Proxy 执行与流式类 API
+# AgentExecutor & AgentProxyService
 
-前缀: `/api/v1/proxy`
+## AgentExecutor
 
-## 数据模型
+```python
+from Service.services.proxy.agent_executor import AgentExecutor, ExecutionResult
 
-### ProxyExecuteRequest
+executor = AgentExecutor(workspace_context=ws_ctx)
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `session_id` | string | 是 | 会话 ID |
-| `prompt` | string | 是 | 用户输入 |
-| `context` | object/null | 否 | 执行上下文 |
+await executor.initialize(
+    agent_definition={
+        "model":    {"id": "claude-3-5-sonnet-20241022", "temperature": 1.0, "max_tokens": 4096},
+        "limits":   {"max_iterations": 50},
+        "identity": {"description": "<system prompt>"},
+        "capabilities": {"tools": ["*"], "denied_tools": []},
+    },
+    system_prompt=None,        # overrides identity.description when set
+    config_overrides={         # all optional
+        "model": "claude-3-5-haiku-20241022",
+        "temperature": 0.5,
+        "max_tokens": 2048,
+        "max_iterations": 20,
+        "timeout": 120,
+        "system_prompt": "<override>",
+    },
+)
 
-### ProxyExecuteResponse
+result: ExecutionResult = await executor.execute(prompt, context={})
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `session_id` | string | 会话 ID |
-| `success` | bool | 是否成功 |
-| `output` | string | 输出文本 |
-| `error` | string/null | 错误信息 |
-| `iterations` | int | 迭代次数 |
-| `metadata` | object | 扩展信息 |
+async for event in executor.execute_stream(prompt, context={}):
+    # event["type"]: "stream" | "tool_start" | "tool_result" | "complete" | "error"
+    pass
 
-### ProxyStreamEvent
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `type` | enum | `stream`/`tool_start`/`tool_result`/`complete`/`error` |
-| `event` | any/null | 流事件数据 |
-| `tool_name` | string/null | 工具名（tool_start） |
-| `tool_id` | string/null | 工具调用 ID（tool_start） |
-| `result` | string/null | 工具结果（tool_result） |
-| `text` | string/null | 最终文本（complete） |
-| `message` | string/null | 错误信息（error） |
-
-## POST `/api/v1/proxy/execute`
-
-用途: 同步执行 Agent。
-
-### Body 示例
-
-```json
-{
-  "session_id": "sess-1234567890ab",
-  "prompt": "请总结最近一次发布变更",
-  "context": {
-    "repo": "main/service"
-  }
-}
+executor.reset()
+executor.get_context_summary() -> dict
 ```
 
-### 出参
+## ExecutionResult
 
-`ProxyExecuteResponse` 示例:
-
-```json
-{
-  "session_id": "sess-1234567890ab",
-  "success": true,
-  "output": "已完成总结...",
-  "error": null,
-  "iterations": 3,
-  "metadata": {
-    "model": "claude-sonnet-4-20250514"
-  }
-}
+```python
+class ExecutionResult:
+    success: bool
+    output: str
+    error: str | None
+    iterations: int
+    tool_calls: list[dict]
+    metadata: dict         # {"session_id": ..., "model": ...}
 ```
 
-### 状态码
+## Stream Events
 
-- `200` 成功返回
-- `400` 会话不存在或参数错误
-- `422` 请求体验证失败
+```python
+# type == "stream"
+event["event"]["delta"] -> str          # incremental text chunk
 
-### cURL
+# type == "tool_start"
+event["tool_name"] -> str
+event["tool_id"] -> str
 
-```bash
-curl -X POST "$BASE_URL/api/v1/proxy/execute" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "session_id":"sess-1234567890ab",
-    "prompt":"分析当前接口错误率升高原因"
-  }'
+# type == "tool_result"
+event["result"] -> str
+
+# type == "complete"
+event["text"] -> str                    # full final output
+
+# type == "error"
+event["message"] -> str
 ```
 
-## POST `/api/v1/proxy/execute/stream`
+## AgentProxyService
 
-用途: 流式执行 Agent，返回 SSE。
+```python
+from Service.services.proxy.agent_proxy_service import AgentProxyService
+from Service.schemas.proxy import (
+    WorkspaceCreate, SessionCreate,
+    ProxyExecuteRequest, ProxyExecuteResponse,
+)
 
-### 请求体
-
-同 `ProxyExecuteRequest`。
-
-### 响应格式
-
-- `Content-Type`: `text/event-stream`
-- 每个事件一行 `data: <json>`
-
-示例事件:
-
-```text
-data: {"type":"stream","event":{"delta":"正在分析..."}}
-
-data: {"type":"tool_start","tool_name":"read","tool_id":"tool-1"}
-
-data: {"type":"tool_result","result":"读取成功"}
-
-data: {"type":"complete","text":"最终结果"}
+ws_ctx  = proxy.create_workspace(WorkspaceCreate(...))
+session = await proxy.create_session(SessionCreate(workspace_id="ws-01", agent_id="plan"))
+result  = await proxy.execute(
+    session_id=session.session_id,
+    prompt="analyze payment module",
+    context={"focus": "retry_logic"},
+    config_overrides={"max_iterations": 20},
+)
+async for event in proxy.execute_stream(
+    session_id=session.session_id,
+    prompt="step-by-step optimization",
+): ...
+proxy.get_stats() -> dict
 ```
 
-### cURL
+## ProxyExecuteRequest / ProxyExecuteResponse
 
-```bash
-curl -N -X POST "$BASE_URL/api/v1/proxy/execute/stream" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "session_id":"sess-1234567890ab",
-    "prompt":"实时输出分析过程"
-  }'
-```
+```python
+class ProxyExecuteRequest:
+    session_id: str
+    prompt: str
+    context: dict | None = None
+    config_overrides: dict | None = None   # same keys as AgentExecutor.initialize config_overrides
 
-## GET `/api/v1/proxy/stats`
-
-用途: 查询 Proxy 服务统计。
-
-### 出参
-
-`ProxyStatsResponse`
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `workspaces` | object | 工作空间统计 |
-| `sessions` | object | 会话统计 |
-| `executor_cache_size` | int | 执行器缓存数量 |
-
-示例:
-
-```json
-{
-  "workspaces": {
-    "total_workspaces": 1
-  },
-  "sessions": {
-    "total_sessions": 2,
-    "by_status": {
-      "active": 2
-    }
-  },
-  "executor_cache_size": 2
-}
-```
-
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/proxy/stats"
-```
-
-## LLM 速读块
-
-```yaml
-- id: proxy_execute
-  method: POST
-  path: /api/v1/proxy/execute
-  request: ProxyExecuteRequest
-  response: ProxyExecuteResponse
-- id: proxy_execute_stream
-  method: POST
-  path: /api/v1/proxy/execute/stream
-  request: ProxyExecuteRequest
-  response: text/event-stream(ProxyStreamEvent)
-- id: proxy_stats
-  method: GET
-  path: /api/v1/proxy/stats
-  response: ProxyStatsResponse
+class ProxyExecuteResponse:
+    session_id: str
+    success: bool
+    output: str
+    error: str | None
+    iterations: int
+    metadata: dict
 ```

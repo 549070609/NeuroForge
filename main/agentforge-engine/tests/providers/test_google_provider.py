@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 from pyagentforge.providers.google_provider import GoogleProvider
-from pyagentforge.core.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 
 
 class TestGoogleProvider:
@@ -414,8 +414,12 @@ class TestGoogleProvider:
         provider = GoogleProvider(api_key="test-key", model="gemini-2.0-flash")
 
         mock_response = MagicMock()
+        text_part = MagicMock(spec=["text"])
+        text_part.text = "Response"
+
+        mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
-        mock_response.candidates[0].content.parts = [MagicMock(text="Response")]
+        mock_response.candidates[0].content.parts = [text_part]
         mock_response.usage_metadata.prompt_token_count = 100
         mock_response.usage_metadata.candidates_token_count = 50
         mock_response.usage_metadata.total_token_count = 150
@@ -449,9 +453,12 @@ class TestGoogleProvider:
             custom_param="value",
         )
 
+        text_part = MagicMock(spec=["text"])
+        text_part.text = "Response"
+
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
-        mock_response.candidates[0].content.parts = [MagicMock(text="Response")]
+        mock_response.candidates[0].content.parts = [text_part]
         mock_response.usage_metadata.prompt_token_count = 10
         mock_response.usage_metadata.candidates_token_count = 20
         mock_response.usage_metadata.total_token_count = 30
@@ -466,7 +473,6 @@ class TestGoogleProvider:
                 tools=[],
             )
 
-        # Extra params should be in provider instance
         assert provider.extra_params == {"custom_param": "value"}
 
     @pytest.mark.asyncio

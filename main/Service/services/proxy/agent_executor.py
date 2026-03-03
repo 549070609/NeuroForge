@@ -10,11 +10,18 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
-# 寤惰繜瀵煎叆
-# from pyagentforge.kernel.engine import AgentEngine, AgentConfig
-# from pyagentforge.kernel.base_provider import BaseProvider
-# from pyagentforge.tools.registry import ToolRegistry
-# from pyagentforge.providers.factory import create_provider
+from pyagentforge import (
+    AgentEngine,
+    AgentConfig,
+    ToolRegistry,
+    BaseProvider,
+    register_core_tools,
+    get_registry,
+)
+from pyagentforge.providers.factory import (
+    create_provider_from_config,
+    create_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +53,10 @@ class AgentExecutor:
             workspace_context: WorkspaceContext 瀹炰緥
         """
         self._workspace_context = workspace_context
-        self._provider: Any = None
-        self._tool_registry: Any = None
-        self._engine: Any = None
-        self._config: Any = None
+        self._provider: BaseProvider | None = None
+        self._tool_registry: ToolRegistry | None = None
+        self._engine: AgentEngine | None = None
+        self._config: AgentConfig | None = None
         self._initialized = False
         self._logger = logging.getLogger(f"{__name__}.AgentExecutor")
 
@@ -235,28 +242,36 @@ class AgentExecutor:
         raise RuntimeError(message) from exc
 
     def _create_provider(self, agent_definition: dict[str, Any]) -> Any:
-        """
-        鍒涘缓 Provider
+        """Create a Provider instance from agent definition.
 
-        Args:
-            agent_definition: Agent 瀹氫箟
-
-        Returns:
-            Provider 瀹炰緥
+        Prefers the explicit-config path (``create_provider_from_config``) so
+        that the Service layer controls which ``ModelConfig`` is used.  Falls
+        back to the legacy ``create_provider(model_id)`` when the model is not
+        found in the registry (e.g. ad-hoc / test scenarios).
         """
         try:
-            from pyagentforge.providers.factory import create_provider
+            model_section = agent_definition.get("model", {})
+            model_id = model_section.get("id", "claude-sonnet-4-20250514")
+            extra_kwargs: dict[str, Any] = {
+                "temperature": model_section.get("temperature", 1.0),
+                "max_tokens": model_section.get("max_tokens", 4096),
+            }
 
-            # 浠庡畾涔変腑鑾峰彇妯″瀷閰嶇疆
-            model_config = agent_definition.get("model", {})
-            model_id = model_config.get("id", "claude-sonnet-4-20250514")
+            registry_config = get_registry().get_model(model_id)
 
-            # 鍒涘缓 Provider
-            provider = create_provider(
-                model_id,
-                temperature=model_config.get("temperature", 1.0),
-                max_tokens=model_config.get("max_tokens", 4096),
-            )
+            if registry_config:
+                provider = create_provider_from_config(
+                    registry_config, **extra_kwargs
+                )
+            else:
+                import warnings
+                warnings.warn(
+                    f"Model '{model_id}' not found in registry; "
+                    "falling back to legacy create_provider().",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                provider = create_provider(model_id, **extra_kwargs)
 
             self._logger.info(f"Created provider for model: {model_id}")
             return provider
@@ -275,13 +290,8 @@ class AgentExecutor:
             ToolRegistry 瀹炰緥
         """
         try:
-            from pyagentforge.tools.registry import ToolRegistry
-
-            # 鍒涘缓宸ュ叿娉ㄥ唽琛?
             registry = ToolRegistry()
-
-            # 娉ㄥ唽鍐呯疆宸ュ叿
-            registry.register_builtin_tools()
+            register_core_tools(registry)
 
             # 浠庡伐浣滃尯鍩熼厤缃繃婊ゅ伐鍏?
             capabilities = agent_definition.get("capabilities", {})
@@ -293,8 +303,7 @@ class AgentExecutor:
                 registry = registry.filter_by_permission(allowed_tools)
                 # 绉婚櫎鎷掔粷鐨勫伐鍏?
                 for tool_name in denied_tools:
-                    if tool_name in registry._tools:
-                        registry.unregister(tool_name)
+                    registry.unregister(tool_name)
 
             # 鍒涘缓鏉冮檺妫€鏌ュ櫒
             from .permission_bridge import (
@@ -335,9 +344,6 @@ class AgentExecutor:
             AgentConfig 瀹炰緥
         """
         try:
-            from pyagentforge.kernel.engine import AgentConfig
-
-            # 浠庡畾涔変腑鑾峰彇閰嶇疆
             limits = agent_definition.get("limits", {})
             model_config = agent_definition.get("model", {})
 
@@ -364,8 +370,6 @@ class AgentExecutor:
             AgentEngine 瀹炰緥
         """
         try:
-            from pyagentforge.kernel.engine import AgentEngine
-
             engine = AgentEngine(
                 provider=self._provider,
                 tool_registry=self._tool_registry,

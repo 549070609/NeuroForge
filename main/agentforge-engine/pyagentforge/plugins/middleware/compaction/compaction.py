@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic import BaseModel, Field
 
-from pyagentforge.kernel.message import Message, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import Message, TextBlock, ThinkingBlock, ToolUseBlock
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -192,9 +192,10 @@ class Compactor:
                     if isinstance(block, TextBlock):
                         total += len(block.text) // 4
                     elif isinstance(block, ToolUseBlock):
-                        # 工具调用估算
                         total += len(block.name) // 4
                         total += len(str(block.input)) // 4
+                    elif isinstance(block, ThinkingBlock):
+                        total += len(block.thinking) // 4
         return total
 
     def should_compact(
@@ -265,6 +266,8 @@ class Compactor:
                 elif isinstance(block, ToolUseBlock):
                     total += len(block.name) // 4
                     total += len(str(block.input)) // 4
+                elif isinstance(block, ThinkingBlock):
+                    total += len(block.thinking) // 4
             return total
         return 0
 
@@ -352,6 +355,8 @@ class Compactor:
                     parts.append(block.text)
                 elif isinstance(block, ToolUseBlock):
                     parts.append(f"[调用工具: {block.name}]")
+                elif isinstance(block, ThinkingBlock):
+                    parts.append("[thinking]")
             return " ".join(parts)
         return ""
 

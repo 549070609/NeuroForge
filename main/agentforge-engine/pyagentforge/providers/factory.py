@@ -5,6 +5,7 @@
 """
 
 import os
+import warnings
 from typing import Any
 
 from pyagentforge.kernel.model_registry import (
@@ -90,6 +91,35 @@ class ModelAdapterFactory:
             extra_data={
                 "model_id": model_id,
                 "provider_type": model_config.provider.value,
+            },
+        )
+
+        return provider
+
+    def create_provider_from_config(
+        self,
+        config: ModelConfig,
+        **kwargs: Any,
+    ) -> BaseProvider:
+        """
+        根据显式传入的 ModelConfig 创建 Provider，跳过注册表查找。
+
+        供 Service 层在已持有完整配置时调用，避免隐式全局注册表依赖。
+
+        Args:
+            config: 完整的模型配置对象
+            **kwargs: 传递给 Provider 的额外参数（temperature, max_tokens 等）
+
+        Returns:
+            Provider 实例
+        """
+        provider = self._create_provider_for_model(config, **kwargs)
+
+        logger.info(
+            "Created provider from explicit config",
+            extra_data={
+                "model_id": config.id,
+                "provider_type": config.provider.value,
             },
         )
 
@@ -312,6 +342,10 @@ def create_provider(model_id: str, **kwargs: Any) -> BaseProvider:
     """
     便捷函数：根据模型 ID 创建 Provider
 
+    .. deprecated::
+        推荐使用 ``create_provider_from_config()`` 显式传入 ModelConfig。
+        此函数将在未来版本中移除。
+
     Args:
         model_id: 模型 ID
         **kwargs: 传递给 Provider 的额外参数
@@ -319,7 +353,27 @@ def create_provider(model_id: str, **kwargs: Any) -> BaseProvider:
     Returns:
         Provider 实例
     """
+    warnings.warn(
+        "create_provider(model_id) is deprecated; "
+        "use create_provider_from_config(config) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return get_factory().create_provider(model_id, **kwargs)
+
+
+def create_provider_from_config(config: ModelConfig, **kwargs: Any) -> BaseProvider:
+    """
+    便捷函数：根据显式 ModelConfig 创建 Provider（推荐接口）。
+
+    Args:
+        config: 完整的模型配置对象
+        **kwargs: 传递给 Provider 的额外参数
+
+    Returns:
+        Provider 实例
+    """
+    return get_factory().create_provider_from_config(config, **kwargs)
 
 
 def get_supported_models() -> list[str]:

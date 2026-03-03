@@ -1,15 +1,16 @@
 [project]
 name = "service"
 version = "0.1.0"
-description = "Service Layer"
+description = "NeuroForge Service Layer — AI Agent Gateway"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Service Layer Team" }
 ]
 
 dependencies = [
+    "pyagentforge>=3.0.0",
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.0.0",
@@ -26,6 +27,8 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "httpx>=0.26.0",
     "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
 ]
 
 [project.scripts]
@@ -44,6 +47,15 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
+ignore = ["E501", "B008", "B905", "ARG001"]
+
+[tool.ruff.isort]
+known-first-party = ["Service", "Agent"]
 
 [tool.coverage.run]
 source = ["Service"]

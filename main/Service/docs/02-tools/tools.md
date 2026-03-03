@@ -1,127 +1,99 @@
-# 工具管理类 API
+# Tool System
 
-## GET `/api/v1/tools`
+## Import
 
-用途: 获取当前可用工具列表。
-
-### 入参
-
-- 无
-
-### 出参
-
-响应为数组 `ToolInfo[]`。
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `name` | string | 工具名 |
-| `description` | string | 工具描述 |
-| `parameters` | object | 工具参数定义 |
-
-示例响应:
-
-```json
-[
-  {
-    "name": "bash",
-    "description": "Execute bash commands",
-    "parameters": {
-      "command": {
-        "type": "string",
-        "description": "Command to execute"
-      }
-    }
-  }
-]
+```python
+from pyagentforge import (
+    ToolRegistry, register_core_tools, BaseTool,
+    BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool,
+    LsTool, WebFetchTool, WebSearchTool, TodoWriteTool, TodoReadTool,
+    QuestionTool, ConfirmTool, PlanTool, PlanEnterTool, PlanExitTool,
+    MultiEditTool, BatchTool, TaskTool, CodeSearchTool, ApplyPatchTool,
+    DiffTool, LSPTool, WorkspaceTool, ExternalDirectoryTool,
+    TruncationTool, ContextCompactTool, InvalidTool, ToolSuggestionTool,
+)
 ```
 
-### 状态码
+## ToolRegistry
 
-- `200` 成功
+```python
+registry = ToolRegistry()
+register_core_tools(registry)                         # bash read write edit glob grep
+register_core_tools(registry, working_dir="/path")    # scoped filesystem access
 
-### cURL
-
-```bash
-curl "$BASE_URL/api/v1/tools"
+registry.register(WebFetchTool())
+registry.get("bash") -> BaseTool | None
+registry.get_all() -> dict[str, BaseTool]
+len(registry) -> int
+registry.filter_by_permission(["read", "write"]) -> ToolRegistry
+registry.unregister("bash")
 ```
 
-## POST `/api/v1/tools/{tool_name}/execute`
+## Built-in Tools
 
-用途: 直接执行工具（当前为占位接口，未实现）。
-
-### Path 参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `tool_name` | string | 是 | 工具名，例如 `bash` |
-
-### Body 参数
-
-请求体模型: `ExecuteToolRequest`
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `tool_name` | string | 是 | 工具名（与 path 字段语义重复） |
-| `parameters` | object | 是 | 工具参数 |
-
-示例请求:
-
-```json
-{
-  "tool_name": "bash",
-  "parameters": {
-    "command": "echo hello"
-  }
-}
+```
+bash            BashTool               execute shell command
+read            ReadTool               read file contents
+write           WriteTool              write file
+edit            EditTool               string-replace edit file
+glob            GlobTool               find files by pattern
+grep            GrepTool               regex search in files
+ls              LsTool                 list directory
+web_fetch       WebFetchTool           fetch URL content
+web_search      WebSearchTool          web search
+todo_write      TodoWriteTool          write structured TODO list
+todo_read       TodoReadTool           read TODO list
+question        QuestionTool           multi-choice prompt to user
+confirm         ConfirmTool            boolean confirmation from user
+plan            PlanTool               plan management
+plan_enter      PlanEnterTool          enter plan mode
+plan_exit       PlanExitTool           exit plan mode
+multi_edit      MultiEditTool          batch file edits
+batch           BatchTool              parallel tool calls
+task            TaskTool               launch sub-agent task
+code_search     CodeSearchTool         semantic code search
+apply_patch     ApplyPatchTool         apply unified diff
+diff            DiffTool               generate file diff
+lsp             LSPTool                language server protocol
+workspace       WorkspaceTool          workspace operations
+external_dir    ExternalDirectoryTool  access external directory
+truncation      TruncationTool         context truncation
+context_compact ContextCompactTool     context compression
 ```
 
-### 出参
+## Custom BaseTool
 
-理论模型为 `ExecuteToolResponse`:
+```python
+class MyTool(BaseTool):
+    name = "my_tool"
+    description = "one-line description"
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `tool_name` | string | 工具名 |
-| `result` | any | 工具执行结果 |
-| `error` | string/null | 错误信息 |
+    async def execute(self, param: str, count: int = 1) -> str:
+        return "result"
 
-当前实现固定抛出:
+    def to_anthropic_schema(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "param": {"type": "string"},
+                    "count": {"type": "integer", "default": 1},
+                },
+                "required": ["param"],
+            },
+        }
 
-```json
-{
-  "detail": "Direct tool execution not yet implemented"
-}
+registry.register(MyTool())
 ```
 
-### 状态码
+## Direct Execution
 
-- `501` 未实现
-- `422` 请求体不合法
+```python
+registry = ToolRegistry()
+register_core_tools(registry)
 
-### cURL
-
-```bash
-curl -X POST "$BASE_URL/api/v1/tools/bash/execute" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tool_name": "bash",
-    "parameters": {
-      "command": "echo hello"
-    }
-  }'
-```
-
-## LLM 速读块
-
-```yaml
-- id: list_tools
-  method: GET
-  path: /api/v1/tools
-  request: none
-  response: ToolInfo[]
-- id: execute_tool
-  method: POST
-  path: /api/v1/tools/{tool_name}/execute
-  request: ExecuteToolRequest
-  current_behavior: always_501
+tool = registry.get("bash")
+result = await tool.execute(command="echo hello")
 ```

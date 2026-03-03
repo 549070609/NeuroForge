@@ -12,6 +12,7 @@ from pyagentforge.providers.google_provider import GoogleProvider
 from pyagentforge.providers.factory import (
     ModelAdapterFactory,
     create_provider,
+    create_provider_from_config,
     get_factory,
     get_supported_models,
 )
@@ -57,6 +58,7 @@ __all__ = [
     # Factory
     "ModelAdapterFactory",
     "create_provider",
+    "create_provider_from_config",
     "get_factory",
     "get_supported_models",
 ]

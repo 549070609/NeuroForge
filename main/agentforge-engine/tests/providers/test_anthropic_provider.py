@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pyagentforge.providers.anthropic_provider import AnthropicProvider
-from pyagentforge.core.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 
 
 class TestAnthropicProvider:
@@ -77,10 +77,17 @@ class TestAnthropicProvider:
 
         # Mock response with tool use
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(type="text", text="Let me help you with that."),
-            MagicMock(type="tool_use", id="toolu_123", name="read_file", input={"file_path": "/tmp/test.txt"}),
-        ]
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = "Let me help you with that."
+
+        tool_block = MagicMock()
+        tool_block.type = "tool_use"
+        tool_block.id = "toolu_123"
+        tool_block.name = "read_file"
+        tool_block.input = {"file_path": "/tmp/test.txt"}
+
+        mock_response.content = [text_block, tool_block]
         mock_response.stop_reason = "tool_use"
         mock_response.usage = MagicMock()
         mock_response.usage.input_tokens = 15
@@ -122,10 +129,19 @@ class TestAnthropicProvider:
         provider = AnthropicProvider(api_key="test-key", model="claude-sonnet-4-20250514")
 
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(type="tool_use", id="toolu_1", name="search", input={"query": "test"}),
-            MagicMock(type="tool_use", id="toolu_2", name="read", input={"file": "result.txt"}),
-        ]
+        tool1 = MagicMock()
+        tool1.type = "tool_use"
+        tool1.id = "toolu_1"
+        tool1.name = "search"
+        tool1.input = {"query": "test"}
+
+        tool2 = MagicMock()
+        tool2.type = "tool_use"
+        tool2.id = "toolu_2"
+        tool2.name = "read"
+        tool2.input = {"file": "result.txt"}
+
+        mock_response.content = [tool1, tool2]
         mock_response.stop_reason = "tool_use"
         mock_response.usage = MagicMock()
         mock_response.usage.input_tokens = 20
@@ -327,34 +343,46 @@ class TestAnthropicProvider:
         """Test that stream_message yields streaming events."""
         provider = AnthropicProvider(api_key="test-key", model="claude-sonnet-4-20250514")
 
-        # Mock streaming context manager
-        async def mock_stream():
-            # Yield some mock events
-            events = [
-                MagicMock(type="content_block_start"),
-                MagicMock(type="content_block_delta"),
-                MagicMock(type="content_block_stop"),
-            ]
-            for event in events:
-                yield event
-
-        # Mock final message
         mock_final = MagicMock()
-        mock_final.content = [MagicMock(type="text", text="Complete response")]
+        final_text_block = MagicMock()
+        final_text_block.type = "text"
+        final_text_block.text = "Complete response"
+        mock_final.content = [final_text_block]
         mock_final.stop_reason = "end_turn"
         mock_final.usage = MagicMock()
         mock_final.usage.input_tokens = 10
         mock_final.usage.output_tokens = 20
 
-        mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_stream())
-        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
-        mock_stream_context.get_final_message = AsyncMock(return_value=mock_final)
+        class MockStream:
+            """Mock that supports both async iteration and get_final_message."""
+
+            def __init__(self):
+                self._events = [
+                    MagicMock(type="content_block_start"),
+                    MagicMock(type="content_block_delta"),
+                    MagicMock(type="content_block_stop"),
+                ]
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+            def __aiter__(self):
+                return self._iter_events()
+
+            async def _iter_events(self):
+                for event in self._events:
+                    yield event
+
+            async def get_final_message(self):
+                return mock_final
 
         with patch.object(
             provider.client.messages,
             "stream",
-            return_value=mock_stream_context,
+            return_value=MockStream(),
         ):
             chunks = []
             async for chunk in provider.stream_message(
@@ -364,7 +392,6 @@ class TestAnthropicProvider:
             ):
                 chunks.append(chunk)
 
-        # Should have received events plus final response
         assert len(chunks) > 0
 
     @pytest.mark.asyncio
@@ -540,10 +567,19 @@ class TestAnthropicProvider:
         provider = AnthropicProvider(api_key="test-key", model="claude-sonnet-4-20250514")
 
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(type="tool_use", id="tool_1", name="read", input={"file": "test.txt"}),
-            MagicMock(type="tool_use", id="tool_2", name="write", input={"file": "out.txt"}),
-        ]
+        read_block = MagicMock()
+        read_block.type = "tool_use"
+        read_block.id = "tool_1"
+        read_block.name = "read"
+        read_block.input = {"file": "test.txt"}
+
+        write_block = MagicMock()
+        write_block.type = "tool_use"
+        write_block.id = "tool_2"
+        write_block.name = "write"
+        write_block.input = {"file": "out.txt"}
+
+        mock_response.content = [read_block, write_block]
         mock_response.stop_reason = "tool_use"
         mock_response.usage = MagicMock()
         mock_response.usage.input_tokens = 15

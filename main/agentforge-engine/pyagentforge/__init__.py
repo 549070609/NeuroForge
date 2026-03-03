@@ -13,20 +13,65 @@ __author__ = "PyAgentForge Team"
 # Kernel exports (v2.0 - 新架构)
 # ============================================================================
 from pyagentforge.kernel import (
-    # Core components
     AgentEngine,
     ContextManager,
     ToolExecutor,
     ToolRegistry,
-    # Message types
     Message,
     TextBlock,
     ToolUseBlock,
     ToolResultBlock,
+    ThinkingBlock,
     ProviderResponse,
-    # Base classes
     BaseTool,
     BaseProvider,
+)
+
+# ============================================================================
+# AgentConfig — 直接从 kernel.engine 导出（Service 层高频使用）
+# ============================================================================
+from pyagentforge.kernel.engine import AgentConfig
+
+# ============================================================================
+# 工具注册工具函数
+# ============================================================================
+from pyagentforge.kernel.core_tools import (
+    register_core_tools,
+    BashTool,
+    ReadTool,
+    WriteTool,
+    EditTool,
+    GlobTool,
+    GrepTool,
+)
+
+# ============================================================================
+# 内置工具类（全量导出，Service 层按需使用）
+# ============================================================================
+from pyagentforge.tools.builtin import (
+    LsTool,
+    LSPTool,
+    QuestionTool,
+    ConfirmTool,
+    CodeSearchTool,
+    ApplyPatchTool,
+    DiffTool,
+    PlanTool,
+    PlanEnterTool,
+    PlanExitTool,
+    TruncationTool,
+    ContextCompactTool,
+    InvalidTool,
+    ToolSuggestionTool,
+    ExternalDirectoryTool,
+    WorkspaceTool,
+    WebFetchTool,
+    WebSearchTool,
+    TodoWriteTool,
+    TodoReadTool,
+    MultiEditTool,
+    BatchTool,
+    TaskTool,
 )
 
 # ============================================================================
@@ -45,6 +90,42 @@ from pyagentforge.plugin import (
 # Configuration (v2.0 - 新架构)
 # ============================================================================
 from pyagentforge.config.plugin_config import PluginConfig
+
+# ============================================================================
+# Provider 工厂 & Provider 实现类
+# ============================================================================
+from pyagentforge.providers.factory import create_provider, create_provider_from_config
+from pyagentforge.providers.anthropic_provider import AnthropicProvider
+from pyagentforge.providers.openai_provider import OpenAIProvider
+from pyagentforge.providers.google_provider import GoogleProvider
+
+# ============================================================================
+# 模型注册（ModelRegistry, ModelConfig, ProviderType）
+# ============================================================================
+from pyagentforge.kernel.model_registry import (
+    ModelRegistry,
+    ModelConfig,
+    ProviderType,
+    get_registry,
+    register_model,
+    register_provider,
+    get_model,
+)
+
+# ============================================================================
+# 权限检查（PermissionChecker — Service 层 permission_bridge 使用）
+# ============================================================================
+from pyagentforge.kernel.executor import PermissionChecker
+
+# ============================================================================
+# 国产 LLM 注册中心
+# ============================================================================
+from pyagentforge.providers.llm.registry import ChineseLLMRegistry
+
+# ============================================================================
+# 配置管理
+# ============================================================================
+from pyagentforge.config.settings import get_settings as get_engine_settings
 
 # ============================================================================
 # Factory functions (v2.0 - 新架构)
@@ -73,17 +154,11 @@ async def create_engine(
     Returns:
         配置好的 AgentEngine
     """
-    from pyagentforge.kernel.engine import AgentConfig
-    from pyagentforge.kernel.core_tools import register_core_tools
-
-    # 创建工具注册表并注册核心工具
     tool_registry = ToolRegistry()
     register_core_tools(tool_registry, working_dir=working_dir)
 
-    # 创建 Agent 配置
     agent_config = AgentConfig(**config) if config else AgentConfig()
 
-    # 创建引擎
     engine = AgentEngine(
         provider=provider,
         tool_registry=tool_registry,
@@ -91,7 +166,6 @@ async def create_engine(
         **kwargs,
     )
 
-    # 如果有插件配置，初始化插件系统
     if plugin_config:
         plugin_manager = PluginManager(engine=engine)
         await plugin_manager.initialize(
@@ -100,7 +174,6 @@ async def create_engine(
         )
         engine.plugin_manager = plugin_manager
 
-        # 注册插件提供的工具
         for tool in plugin_manager.get_tools_from_plugins():
             tool_registry.register(tool)
 
@@ -123,8 +196,6 @@ def create_minimal_engine(
     Returns:
         最小化 AgentEngine
     """
-    from pyagentforge.kernel.core_tools import register_core_tools
-
     tool_registry = ToolRegistry()
     register_core_tools(tool_registry, working_dir=working_dir)
 
@@ -134,11 +205,13 @@ def create_minimal_engine(
         **kwargs,
     )
 
+
 __all__ = [
     # Version
     "__version__",
     # Kernel (v2.0)
     "AgentEngine",
+    "AgentConfig",
     "ContextManager",
     "ToolExecutor",
     "ToolRegistry",
@@ -146,9 +219,42 @@ __all__ = [
     "TextBlock",
     "ToolUseBlock",
     "ToolResultBlock",
+    "ThinkingBlock",
     "ProviderResponse",
     "BaseTool",
     "BaseProvider",
+    # 核心工具类
+    "BashTool",
+    "ReadTool",
+    "WriteTool",
+    "EditTool",
+    "GlobTool",
+    "GrepTool",
+    "register_core_tools",
+    # 内置工具类
+    "LsTool",
+    "LSPTool",
+    "QuestionTool",
+    "ConfirmTool",
+    "CodeSearchTool",
+    "ApplyPatchTool",
+    "DiffTool",
+    "PlanTool",
+    "PlanEnterTool",
+    "PlanExitTool",
+    "TruncationTool",
+    "ContextCompactTool",
+    "InvalidTool",
+    "ToolSuggestionTool",
+    "ExternalDirectoryTool",
+    "WorkspaceTool",
+    "WebFetchTool",
+    "WebSearchTool",
+    "TodoWriteTool",
+    "TodoReadTool",
+    "MultiEditTool",
+    "BatchTool",
+    "TaskTool",
     # Plugin (v2.0)
     "Plugin",
     "PluginMetadata",
@@ -158,6 +264,26 @@ __all__ = [
     "HookType",
     # Config (v2.0)
     "PluginConfig",
+    # Provider 工厂与实现
+    "create_provider",
+    "create_provider_from_config",
+    "AnthropicProvider",
+    "OpenAIProvider",
+    "GoogleProvider",
+    # 模型注册
+    "ModelRegistry",
+    "ModelConfig",
+    "ProviderType",
+    "get_registry",
+    "register_model",
+    "register_provider",
+    "get_model",
+    # 权限检查
+    "PermissionChecker",
+    # 国产 LLM
+    "ChineseLLMRegistry",
+    # 配置
+    "get_engine_settings",
     # Factory (v2.0)
     "create_engine",
     "create_minimal_engine",

@@ -10,6 +10,15 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from pyagentforge import (
+    ModelConfig,
+    ModelRegistry,
+    ProviderType,
+    get_registry,
+    register_model,
+    ChineseLLMRegistry,
+)
+
 from ..schemas.models import (
     ModelConfigCreate,
     ModelConfigResponse,
@@ -100,19 +109,10 @@ class ModelConfigService:
         return self._initialized
 
     def _get_registry(self):
-        """延迟导入避免循环依赖"""
-        from pyagentforge.kernel.model_registry import get_registry
-
         return get_registry()
 
     def _get_chinese_llm_registry(self):
-        """延迟导入国产 LLM 注册中心"""
-        try:
-            from pyagentforge.providers.llm.registry import ChineseLLMRegistry
-
-            return ChineseLLMRegistry
-        except ImportError:
-            return None
+        return ChineseLLMRegistry
 
     # ==================== CRUD Operations ====================
 
@@ -232,8 +232,6 @@ class ModelConfigService:
         Raises:
             ValueError: 如果模型 ID 已存在
         """
-        from pyagentforge.kernel.model_registry import ModelConfig, ProviderType, register_model
-
         # 检查是否已存在
         registry = self._get_registry()
         if registry.get_model(request.id):
@@ -289,8 +287,6 @@ class ModelConfigService:
         Raises:
             ValueError: 如果模型不存在或尝试修改内置模型的关键字段
         """
-        from pyagentforge.kernel.model_registry import ModelConfig, ProviderType, get_registry
-
         registry = get_registry()
         existing = registry.get_model(model_id)
 
@@ -361,8 +357,6 @@ class ModelConfigService:
         Raises:
             ValueError: 如果尝试删除内置模型
         """
-        from pyagentforge.kernel.model_registry import get_registry
-
         # 检查是否为内置模型
         if model_id in BUILTIN_MODEL_IDS:
             raise ValueError(f"无法删除内置模型 '{model_id}'")

@@ -12,6 +12,7 @@ from anthropic.types import Message as AnthropicMessage
 from pyagentforge.kernel.message import (
     ProviderResponse,
     TextBlock,
+    ThinkingBlock,
     ToolUseBlock,
 )
 from pyagentforge.providers.base import BaseProvider
@@ -71,7 +72,7 @@ class AnthropicProvider(BaseProvider):
             response: AnthropicMessage = await self.client.messages.create(**params)
 
             # 解析响应内容
-            content: list[TextBlock | ToolUseBlock] = []
+            content: list[TextBlock | ToolUseBlock | ThinkingBlock] = []
             for block in response.content:
                 if block.type == "text":
                     content.append(TextBlock(text=block.text))
@@ -81,6 +82,13 @@ class AnthropicProvider(BaseProvider):
                             id=block.id,
                             name=block.name,
                             input=block.input,
+                        )
+                    )
+                elif block.type == "thinking":
+                    content.append(
+                        ThinkingBlock(
+                            thinking=block.thinking,
+                            signature=getattr(block, "signature", None),
                         )
                     )
 
@@ -161,7 +169,7 @@ class AnthropicProvider(BaseProvider):
             final_response = await stream.get_final_message()
 
             # 解析最终响应
-            content: list[TextBlock | ToolUseBlock] = []
+            content: list[TextBlock | ToolUseBlock | ThinkingBlock] = []
             for block in final_response.content:
                 if block.type == "text":
                     content.append(TextBlock(text=block.text))
@@ -171,6 +179,13 @@ class AnthropicProvider(BaseProvider):
                             id=block.id,
                             name=block.name,
                             input=block.input,
+                        )
+                    )
+                elif block.type == "thinking":
+                    content.append(
+                        ThinkingBlock(
+                            thinking=block.thinking,
+                            signature=getattr(block, "signature", None),
                         )
                     )
 

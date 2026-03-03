@@ -9,6 +9,7 @@ from pyagentforge.kernel.message import (
     TextBlock,
     ToolUseBlock,
     ToolResultBlock,
+    ThinkingBlock,
     ProviderResponse,
 )
 from pyagentforge.kernel.base_tool import BaseTool
@@ -33,6 +34,7 @@ __all__ = [
     "TextBlock",
     "ToolUseBlock",
     "ToolResultBlock",
+    "ThinkingBlock",
     "ProviderResponse",
     # Base classes
     "BaseTool",

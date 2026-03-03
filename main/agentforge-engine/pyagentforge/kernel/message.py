@@ -16,6 +16,14 @@ class TextBlock(BaseModel):
     text: str
 
 
+class ThinkingBlock(BaseModel):
+    """思考内容块（Anthropic Extended Thinking）"""
+
+    type: Literal["thinking"] = "thinking"
+    thinking: str
+    signature: str | None = None
+
+
 class ToolUseBlock(BaseModel):
     """工具调用块"""
 
@@ -35,7 +43,9 @@ class ToolResultBlock(BaseModel):
 
 
 # 消息内容可以是文本或内容块列表
-MessageContent = Union[str, list[Union[TextBlock, ToolUseBlock, ToolResultBlock]]]
+MessageContent = Union[
+    str, list[Union[TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock]]
+]
 
 
 class Message(BaseModel):
@@ -68,6 +78,14 @@ class Message(BaseModel):
                     "content": block.content,
                     "is_error": block.is_error,
                 })
+            elif isinstance(block, ThinkingBlock):
+                d: dict[str, Any] = {
+                    "type": "thinking",
+                    "thinking": block.thinking,
+                }
+                if block.signature:
+                    d["signature"] = block.signature
+                blocks.append(d)
 
         return {"role": self.role, "content": blocks}
 
@@ -112,7 +130,7 @@ class Message(BaseModel):
 class ProviderResponse(BaseModel):
     """LLM 提供商响应"""
 
-    content: list[Union[TextBlock, ToolUseBlock]]
+    content: list[Union[TextBlock, ToolUseBlock, ThinkingBlock]]
     stop_reason: str  # end_turn, tool_use, max_tokens
     usage: dict[str, int] = Field(default_factory=dict)
 

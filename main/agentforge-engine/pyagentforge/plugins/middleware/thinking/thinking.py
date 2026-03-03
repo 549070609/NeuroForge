@@ -5,7 +5,7 @@
 """
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -279,10 +279,5 @@ def create_thinking_config(
     return config
 
 
-# Thinking 内容块定义
-class ThinkingBlock(BaseModel):
-    """思考内容块（用于解析模型响应）"""
-
-    type: Literal["thinking"] = "thinking"
-    thinking: str
-    signature: str | None = None  # 用于验证思考过程
+# ThinkingBlock 已迁移至 kernel/message.py（避免循环导入），此处重导出保持兼容
+from pyagentforge.kernel.message import ThinkingBlock  # noqa: E402, F401
