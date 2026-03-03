@@ -24,6 +24,7 @@ class PerceptionResult:
     reason: str
     data: dict[str, Any]
     metadata: dict[str, Any] | None = None
+    triggered_events: list[dict[str, Any]] | None = None  # 聚合模式下携带所有触发事件
 
 
 # 错误严重度级别 → 使用 error_triggers
@@ -54,21 +55,26 @@ def _expand_levels(levels: list) -> frozenset[str]:
 def perceive(
     data: dict | list,
     rules: dict[str, Any] | None = None,
+    aggregate: bool = False,
 ) -> PerceptionResult:
     """
     基于解析后的数据执行感知与决策
 
     Args:
-        data: 解析后的 Python 结构（来自 parse_log）
-        rules: 可配置规则，例如：
-            {
-                "levels": ["error", "warn", "critical"],  # 监听的级别白名单
-                "error_triggers": "find_user",            # error/critical/fatal 时的决策
-                "warn_triggers": "find_user",             # warn/warning 时的决策
-            }
+        data:      解析后的 Python 结构（来自 parse_log）
+        rules:     可配置规则，例如：
+                     levels          - 监听级别白名单，默认 ["error", "warn"]
+                     error_triggers  - error/critical/fatal 时的决策，默认 "find_user"
+                     warn_triggers   - warn/warning 时的决策，默认 "find_user"
+                     max_events      - 聚合模式下最多处理事件数，默认 50
+        aggregate: False（默认）= 首匹配即返回（向后兼容）
+                   True          = 聚合批次内所有触发事件后统一决策
 
     Returns:
-        PerceptionResult 包含决策类型、原因、数据
+        PerceptionResult：
+            - 非聚合模式：triggered_events=None，与原行为完全一致
+            - 聚合模式：triggered_events 含所有触发事件列表，
+                        data 含 {triggered_count, highest_severity, error_count, warn_count}
 
     Notes:
         levels 白名单中不存在的级别将被跳过，不触发任何决策。
@@ -76,28 +82,40 @@ def perceive(
         若出现在 levels 白名单内，将保守地使用 error_triggers。
     """
     rules = rules or {}
-    # 展开别名后的级别集合，例如 ["warn"] 自动覆盖 "warning"
-    levels_set = _expand_levels(rules.get("levels", ["error", "warn"]))
+    levels_set     = _expand_levels(rules.get("levels", ["error", "warn"]))
     error_triggers = rules.get("error_triggers", "find_user")
-    warn_triggers = rules.get("warn_triggers", "find_user")
+    warn_triggers  = rules.get("warn_triggers",  "find_user")
+    max_events     = int(rules.get("max_events", 50))
 
-    # 扁平化提取事件列表
     events = _extract_events(data)
 
-    # 规则匹配
-    for event in events:
-        evt = event if isinstance(event, dict) else {}
-        level = _get_level(evt)
-        if not level:
-            continue
-
-        level_lower = str(level).lower()
-
-        # 跳过不在 levels 白名单中的级别
-        if level_lower not in levels_set:
-            continue
-
-        if level_lower in _ERROR_SEVERITY:
+    # ── 非聚合路径（原逻辑，完全不变）────────────────────────────────────────
+    if not aggregate:
+        for event in events:
+            evt = event if isinstance(event, dict) else {}
+            level = _get_level(evt)
+            if not level:
+                continue
+            level_lower = str(level).lower()
+            if level_lower not in levels_set:
+                continue
+            if level_lower in _ERROR_SEVERITY:
+                decision = _to_decision_type(error_triggers)
+                return PerceptionResult(
+                    decision=decision,
+                    reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
+                    data=evt,
+                    metadata={"level": level_lower, "rule": "error_triggers"},
+                )
+            if level_lower in _WARN_SEVERITY:
+                decision = _to_decision_type(warn_triggers)
+                return PerceptionResult(
+                    decision=decision,
+                    reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
+                    data=evt,
+                    metadata={"level": level_lower, "rule": "warn_triggers"},
+                )
+            # 自定义级别在 levels 白名单内但不属于已知分组 → 保守触发 error_triggers
             decision = _to_decision_type(error_triggers)
             return PerceptionResult(
                 decision=decision,
@@ -105,29 +123,84 @@ def perceive(
                 data=evt,
                 metadata={"level": level_lower, "rule": "error_triggers"},
             )
-        if level_lower in _WARN_SEVERITY:
-            decision = _to_decision_type(warn_triggers)
-            return PerceptionResult(
-                decision=decision,
-                reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
-                data=evt,
-                metadata={"level": level_lower, "rule": "warn_triggers"},
-            )
-        # 自定义级别在 levels 白名单内但不属于已知分组 → 保守触发 error_triggers
-        decision = _to_decision_type(error_triggers)
         return PerceptionResult(
-            decision=decision,
-            reason=f"Detected {level_lower} level event: {evt.get('message', evt)}",
-            data=evt,
-            metadata={"level": level_lower, "rule": "error_triggers"},
+            decision=DecisionType.NONE,
+            reason="No actionable events detected",
+            data={"events_count": len(events)},
+            metadata={"action": "none"},
         )
 
-    # 默认：无异常，不触发
+    # ── 聚合路径（新增）────────────────────────────────────────────────────────
+    # 严重度权重：error > warn > custom（数字越大越高）
+    _SEVERITY_WEIGHT = {"error": 2, "warn": 1, "custom": 0}
+
+    triggered: list[dict[str, Any]] = []
+    highest_weight   = -1
+    highest_severity = "custom"
+
+    for event in events[:max_events]:
+        evt = event if isinstance(event, dict) else {}
+        level = _get_level(evt)
+        if not level:
+            continue
+        level_lower = str(level).lower()
+        if level_lower not in levels_set:
+            continue
+
+        triggered.append({"_level_normalized": level_lower, **evt})
+
+        if level_lower in _ERROR_SEVERITY:
+            w = _SEVERITY_WEIGHT["error"]
+        elif level_lower in _WARN_SEVERITY:
+            w = _SEVERITY_WEIGHT["warn"]
+        else:
+            w = _SEVERITY_WEIGHT["custom"]
+
+        if w > highest_weight:
+            highest_weight   = w
+            highest_severity = (
+                "error" if level_lower in _ERROR_SEVERITY
+                else "warn" if level_lower in _WARN_SEVERITY
+                else level_lower
+            )
+
+    if not triggered:
+        return PerceptionResult(
+            decision=DecisionType.NONE,
+            reason="No actionable events detected",
+            data={"events_count": len(events)},
+            metadata={"action": "none", "aggregate": True},
+            triggered_events=[],
+        )
+
+    if highest_weight == _SEVERITY_WEIGHT["error"]:
+        decision = _to_decision_type(error_triggers)
+        rule     = "error_triggers"
+    elif highest_weight == _SEVERITY_WEIGHT["warn"]:
+        decision = _to_decision_type(warn_triggers)
+        rule     = "warn_triggers"
+    else:
+        decision = _to_decision_type(error_triggers)
+        rule     = "error_triggers"
+
+    error_count = sum(1 for e in triggered if e.get("_level_normalized") in _ERROR_SEVERITY)
+    warn_count  = sum(1 for e in triggered if e.get("_level_normalized") in _WARN_SEVERITY)
+
     return PerceptionResult(
-        decision=DecisionType.NONE,
-        reason="No actionable events detected",
-        data={"events_count": len(events)},
-        metadata={"action": "none"},
+        decision=decision,
+        reason=(
+            f"Aggregated {len(triggered)} event(s): "
+            f"{error_count} error, {warn_count} warn — highest: {highest_severity}"
+        ),
+        data={
+            "triggered_count":   len(triggered),
+            "highest_severity":  highest_severity,
+            "error_count":       error_count,
+            "warn_count":        warn_count,
+            "total_events_seen": len(events),
+        },
+        metadata={"rule": rule, "aggregate": True},
+        triggered_events=triggered,
     )
 
 

@@ -68,6 +68,7 @@ class PerceiveTool(BaseTool):
 
 Decision types: find_user (notify user), execute (self-execute), call_agent (delegate)
 Uses configurable rules (error_triggers, warn_triggers, levels)
+Set aggregate=true to collect all triggered events in a batch instead of stopping at the first match.
 """
     parameters_schema: dict[str, Any] = {
         "type": "object",
@@ -78,7 +79,15 @@ Uses configurable rules (error_triggers, warn_triggers, levels)
             },
             "rules": {
                 "type": "object",
-                "description": "Optional rules: levels, error_triggers, warn_triggers",
+                "description": "Optional rules: levels, error_triggers, warn_triggers, max_events",
+            },
+            "aggregate": {
+                "type": "boolean",
+                "description": (
+                    "If true, collect all triggered events and decide based on highest severity. "
+                    "Default false (first-match, backward-compatible)."
+                ),
+                "default": False,
             },
         },
         "required": ["data"],
@@ -94,12 +103,13 @@ Uses configurable rules (error_triggers, warn_triggers, levels)
         self,
         data: dict | list | str,
         rules: dict[str, Any] | None = None,
+        aggregate: bool = False,
     ) -> str:
         try:
             if isinstance(data, str):
                 data = json.loads(data)
             merged_rules = {**self.default_rules, **(rules or {})}
-            result = perceive(data, merged_rules)
+            result = perceive(data, merged_rules, aggregate=aggregate)
             return _format_perception_result(result)
         except Exception as e:
             return f"Perceive failed: {e}"
@@ -116,6 +126,7 @@ Runs: perceive(data) -> then executes based on decision:
 - execute: run configured shell/HTTP actions
 - call_agent: delegate to target agent via engine
 Requires executor to be wired with engine/event_bus/config.
+Set aggregate=true to process all events in a batch (recommended for multi-event payloads).
 """
     parameters_schema: dict[str, Any] = {
         "type": "object",
@@ -126,7 +137,15 @@ Requires executor to be wired with engine/event_bus/config.
             },
             "rules": {
                 "type": "object",
-                "description": "Optional perceive rules: levels, error_triggers, warn_triggers",
+                "description": "Optional perceive rules: levels, error_triggers, warn_triggers, max_events",
+            },
+            "aggregate": {
+                "type": "boolean",
+                "description": (
+                    "If true, collect all triggered events and decide based on highest severity. "
+                    "Default false (first-match, backward-compatible)."
+                ),
+                "default": False,
             },
         },
         "required": ["data"],
@@ -151,12 +170,13 @@ Requires executor to be wired with engine/event_bus/config.
         self,
         data: dict | list | str,
         rules: dict[str, Any] | None = None,
+        aggregate: bool = False,
     ) -> str:
         try:
             if isinstance(data, str):
                 data = json.loads(data)
             merged_rules = {**self.default_rules, **(rules or {})}
-            result = perceive(data, merged_rules)
+            result = perceive(data, merged_rules, aggregate=aggregate)
             if result.decision == DecisionType.NONE:
                 return _format_perception_result(result) + "\n[No execution: decision=none]"
             if not self._executor:
@@ -267,9 +287,12 @@ def _read_file(
 
 
 def _format_perception_result(r: PerceptionResult) -> str:
-    return (
-        f"Decision: {r.decision.value}\n"
-        f"Reason: {r.reason}\n"
-        f"Data: {r.data}\n"
-        f"Metadata: {r.metadata or {}}"
-    )
+    lines = [
+        f"Decision: {r.decision.value}",
+        f"Reason: {r.reason}",
+        f"Data: {r.data}",
+        f"Metadata: {r.metadata or {}}",
+    ]
+    if r.triggered_events is not None:
+        lines.append(f"Triggered events: {len(r.triggered_events)}")
+    return "\n".join(lines)

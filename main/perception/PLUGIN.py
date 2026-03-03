@@ -4,13 +4,124 @@
 基于 ATON/TOON 日志的主动感知与决策
 """
 
+import hashlib
 import importlib.util
 import sys
+import time
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import List
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.kernel.base_tool import BaseTool
+
+
+# ---------------------------------------------------------------------------
+# 告警去重器
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _AlertRecord:
+    """单条告警指纹的冷却记录"""
+    first_seen: float = dataclass_field(default_factory=time.time)
+    last_seen:  float = dataclass_field(default_factory=time.time)
+    count:      int   = 1
+
+
+class AlertDeduplicator:
+    """
+    基于事件指纹的告警去重器（内存缓存，进程级生命周期）。
+
+    去重逻辑：
+      - 首次出现  → 放行，记录 first_seen
+      - 冷却期内  → 抑制（suppressed），更新 last_seen 与 count
+      - 冷却期过后 → 重置并放行（持续故障仍能被捕获）
+
+    Args:
+        cooldown_seconds: 冷却窗口时长（秒），默认 300
+        max_cache_size:   指纹缓存上限，超出时 LRU 淘汰，默认 1000
+    """
+
+    def __init__(self, cooldown_seconds: int = 300, max_cache_size: int = 1000) -> None:
+        self._cooldown = cooldown_seconds
+        self._max_size = max_cache_size
+        self._cache: dict[str, _AlertRecord] = {}
+
+    def should_alert(self, level: str, message: str) -> bool:
+        """
+        判断指定事件是否应触发告警。
+
+        Returns:
+            True  = 放行（首次出现 or 冷却期已过）
+            False = 抑制（冷却期内重复出现）
+        """
+        fp  = self._fingerprint(level, message)
+        now = time.time()
+        rec = self._cache.get(fp)
+
+        if rec is None:
+            if len(self._cache) >= self._max_size:
+                self._evict_oldest()
+            self._cache[fp] = _AlertRecord(first_seen=now, last_seen=now, count=1)
+            return True
+
+        rec.count    += 1
+        rec.last_seen = now
+
+        if now - rec.first_seen >= self._cooldown:
+            self._cache[fp] = _AlertRecord(first_seen=now, last_seen=now, count=1)
+            return True
+
+        return False
+
+    def filter_events(self, events: list[dict]) -> tuple[list[dict], list[dict]]:
+        """
+        过滤事件列表，区分"应告警"与"冷却中被抑制"。
+
+        Args:
+            events: perceive() 返回的 triggered_events 列表
+
+        Returns:
+            (to_alert, suppressed)
+              to_alert   — 需要执行告警的事件子集
+              suppressed — 冷却期内被抑制的事件子集
+        """
+        to_alert:   list[dict] = []
+        suppressed: list[dict] = []
+        for evt in events:
+            level   = str(
+                evt.get("level") or evt.get("severity")
+                or evt.get("_level_normalized") or "unknown"
+            )
+            message = str(evt.get("message") or "")
+            if self.should_alert(level, message):
+                to_alert.append(evt)
+            else:
+                suppressed.append(evt)
+        return to_alert, suppressed
+
+    def stats(self) -> dict:
+        """返回当前缓存统计（用于调试 / 监控）"""
+        now    = time.time()
+        active = sum(1 for r in self._cache.values() if now - r.first_seen < self._cooldown)
+        return {
+            "cache_size":    len(self._cache),
+            "active_alerts": active,
+            "cooldown_s":    self._cooldown,
+        }
+
+    @staticmethod
+    def _fingerprint(level: str, message: str) -> str:
+        key = f"{level.lower().strip()}:{message[:100]}"
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+    def _evict_oldest(self) -> None:
+        """移除 last_seen 最早的条目（LRU 淘汰）"""
+        if not self._cache:
+            return
+        oldest = min(self._cache, key=lambda k: self._cache[k].last_seen)
+        del self._cache[oldest]
 
 
 def _load_tools_module():
@@ -61,6 +172,8 @@ class PerceptionPlugin(Plugin):
             "error_triggers": filter_rules.get("error_triggers", "find_user"),
             "warn_triggers": filter_rules.get("warn_triggers", "find_user"),
         }
+        cooldown = int(config.get("cooldown_seconds", 300))
+        self._deduplicator = AlertDeduplicator(cooldown_seconds=cooldown)
 
     async def on_plugin_activate(self) -> None:
         await super().on_plugin_activate()
@@ -128,15 +241,62 @@ class PerceptionPlugin(Plugin):
             return None
 
     def _register_cron(self, config, automation, log):
-        """Story 6.1: Cron 定时触发"""
+        """Story 6.1: Cron 定时触发（含聚合感知 + 去重）"""
         cron_expr = config.get("cron_expr")
         if not cron_expr:
             return
+
+        async def _cron_callback() -> None:
+            """Cron 定时感知回调：聚合多文件事件后去重执行"""
+            import glob as glob_mod
+            import os
+
+            try:
+                from parser import parse_log
+                from perception import perceive, PerceptionResult, DecisionType
+                from executor import execute_decision
+            except ImportError:
+                from .parser import parse_log
+                from .perception import perceive, PerceptionResult, DecisionType
+                from .executor import execute_decision
+
+            files = sorted(glob_mod.glob(os.path.join(self._log_path, "*")))[:10]
+            if not files:
+                return
+
+            all_events: list[dict] = []
+            for fp in files:
+                try:
+                    with open(fp, encoding="utf-8", errors="ignore") as f:
+                        raw = f.read()
+                    parsed = parse_log(raw)
+                    r = perceive(parsed, self._default_rules, aggregate=True)
+                    all_events.extend(r.triggered_events or [])
+                except Exception as exc:
+                    log.debug(f"Cron perception skip {fp}: {exc}")
+
+            if not all_events:
+                return
+
+            to_alert, suppressed = self._deduplicator.filter_events(all_events)
+            if suppressed:
+                log.debug(f"Cron dedup: {len(suppressed)} event(s) suppressed")
+            if not to_alert or self._executor is None:
+                return
+
+            mock_result = PerceptionResult(
+                decision=DecisionType.FIND_USER,
+                reason=f"Cron poll: {len(to_alert)} new event(s) detected",
+                data={"triggered_count": len(to_alert)},
+                triggered_events=to_alert,
+            )
+            await execute_decision(mock_result, executor=self._executor)
+
         try:
             automation.add_cron_task(
                 "perception_poll",
                 cron_expr,
-                f"Read logs from {self._log_path}, parse and perceive, execute decision if needed.",
+                _cron_callback,
                 name="Perception Poll",
             )
             log.info(f"Perception cron registered: {cron_expr}")
@@ -187,7 +347,7 @@ class PerceptionPlugin(Plugin):
         secret = webhook_cfg.get("secret")
 
         async def _webhook_handler(payload: dict, headers: dict) -> dict:
-            """Webhook 接收处理：payload → parse → perceive → execute"""
+            """Webhook 接收处理：payload → parse → perceive(聚合) → 去重 → execute"""
             try:
                 from parser import parse_log
                 from perception import perceive
@@ -205,25 +365,43 @@ class PerceptionPlugin(Plugin):
             else:
                 return {"status": "skipped", "reason": "no log data in payload"}
 
-            result = perceive(parsed, self._default_rules)
+            result = perceive(parsed, self._default_rules, aggregate=True)
+
+            if result.decision.value == "none":
+                return {"status": "skipped", "reason": "no actionable events"}
+
+            triggered = result.triggered_events or []
+            to_alert, suppressed = self._deduplicator.filter_events(triggered)
+
+            if not to_alert:
+                return {
+                    "status":      "suppressed",
+                    "reason":      f"All {len(triggered)} event(s) are within cooldown window",
+                    "suppressed":  len(suppressed),
+                    "decision":    result.decision.value,
+                    "dedup_stats": self._deduplicator.stats(),
+                }
 
             if self._executor is None:
                 return {
-                    "status": "warning",
-                    "decision": result.decision.value,
-                    "reason": result.reason,
+                    "status":    "warning",
+                    "decision":  result.decision.value,
+                    "reason":    result.reason,
+                    "alerted":   len(to_alert),
+                    "suppressed": len(suppressed),
                     "execution": {
                         "success": False,
                         "message": "Executor not configured: on_engine_start was not called or failed",
                     },
-                    "executor": "not_configured",
                 }
 
             exec_result = await execute_decision(result, executor=self._executor)
             return {
-                "status": "ok",
-                "decision": result.decision.value,
-                "reason": result.reason,
+                "status":    "ok",
+                "decision":  result.decision.value,
+                "reason":    result.reason,
+                "alerted":   len(to_alert),
+                "suppressed": len(suppressed),
                 "execution": {"success": exec_result.success, "message": exec_result.message},
             }
 

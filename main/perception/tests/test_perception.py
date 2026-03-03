@@ -160,3 +160,95 @@ class TestPerceiveDataExtraction:
         result = perceive(data)
         assert result.decision == DecisionType.FIND_USER
         assert "crash" in result.reason
+
+
+# ---------------------------------------------------------------------------
+# 聚合模式（aggregate=True）
+# ---------------------------------------------------------------------------
+
+class TestPerceiveAggregate:
+
+    def test_aggregate_collects_all_triggered(self):
+        data = {"events": [
+            {"level": "error", "message": "DB down"},
+            {"level": "warn",  "message": "High CPU"},
+            {"level": "error", "message": "OOM"},
+        ]}
+        result = perceive(data, aggregate=True)
+        assert result.decision == DecisionType.FIND_USER
+        assert result.triggered_events is not None
+        assert len(result.triggered_events) == 3
+
+    def test_aggregate_highest_severity_wins(self):
+        data = {"events": [
+            {"level": "warn",  "message": "Disk space low"},
+            {"level": "error", "message": "Service crash"},
+        ]}
+        result = perceive(data, aggregate=True)
+        assert result.data["highest_severity"] == "error"
+
+    def test_aggregate_data_contains_counts(self):
+        data = {"events": [
+            {"level": "error", "message": "e1"},
+            {"level": "error", "message": "e2"},
+            {"level": "warn",  "message": "w1"},
+        ]}
+        result = perceive(data, aggregate=True)
+        assert result.data["error_count"] == 2
+        assert result.data["warn_count"] == 1
+        assert result.data["triggered_count"] == 3
+
+    def test_aggregate_empty_returns_none_with_empty_list(self):
+        result = perceive({"events": []}, aggregate=True)
+        assert result.decision == DecisionType.NONE
+        assert result.triggered_events == []
+
+    def test_aggregate_false_preserves_original_behavior(self):
+        """aggregate=False 完全等同于原行为：triggered_events=None，只返回首条"""
+        data = {"events": [
+            {"level": "error", "message": "first"},
+            {"level": "error", "message": "second"},
+        ]}
+        result = perceive(data, aggregate=False)
+        assert result.triggered_events is None
+        assert "first" in result.reason
+
+    def test_aggregate_max_events_respected(self):
+        data = {"events": [{"level": "error", "message": f"e{i}"} for i in range(100)]}
+        result = perceive(data, {"max_events": 10}, aggregate=True)
+        assert result.triggered_events is not None
+        assert len(result.triggered_events) <= 10
+
+    def test_aggregate_reason_format(self):
+        data = {"events": [
+            {"level": "error", "message": "DB down"},
+            {"level": "warn",  "message": "High CPU"},
+        ]}
+        result = perceive(data, aggregate=True)
+        assert "Aggregated" in result.reason
+        assert "error" in result.reason
+
+    def test_aggregate_warn_only_uses_warn_triggers(self):
+        data = {"events": [
+            {"level": "warn", "message": "w1"},
+            {"level": "warn", "message": "w2"},
+        ]}
+        result = perceive(data, {"warn_triggers": "execute"}, aggregate=True)
+        assert result.decision == DecisionType.EXECUTE
+        assert result.data["highest_severity"] == "warn"
+
+    def test_aggregate_metadata_contains_aggregate_flag(self):
+        data = {"events": [{"level": "error", "message": "boom"}]}
+        result = perceive(data, aggregate=True)
+        assert result.metadata is not None
+        assert result.metadata.get("aggregate") is True
+
+    def test_aggregate_info_level_not_triggered(self):
+        """info 不在默认 levels 白名单内，聚合模式下同样不触发"""
+        data = {"events": [
+            {"level": "info", "message": "normal"},
+            {"level": "debug", "message": "verbose"},
+        ]}
+        result = perceive(data, aggregate=True)
+        assert result.decision == DecisionType.NONE
+        assert result.triggered_events == []
