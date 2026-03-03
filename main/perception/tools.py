@@ -15,10 +15,24 @@ try:
     from .parser import parse_log
     from .perception import perceive, PerceptionResult, DecisionType
     from .executor import DecisionExecutor, execute_decision, ExecutionResult
+    from .strategy import (
+        StrategyController,
+        StrategyResult,
+        build_controller_from_config,
+        MergeMode,
+        StrategyType,
+    )
 except ImportError:
-    from parser import parse_log
-    from perception import perceive, PerceptionResult, DecisionType
-    from executor import DecisionExecutor, execute_decision, ExecutionResult
+    from parser import parse_log  # type: ignore[no-redef]
+    from perception import perceive, PerceptionResult, DecisionType  # type: ignore[no-redef]
+    from executor import DecisionExecutor, execute_decision, ExecutionResult  # type: ignore[no-redef]
+    from strategy import (  # type: ignore[no-redef]
+        StrategyController,
+        StrategyResult,
+        build_controller_from_config,
+        MergeMode,
+        StrategyType,
+    )
 
 
 class ParseLogTool(BaseTool):
@@ -193,6 +207,98 @@ Set aggregate=true to process all events in a batch (recommended for multi-event
             return f"Execute decision failed: {e}"
 
 
+class StrategyPerceiveTool(BaseTool):
+    """多策略感知：同时应用 rule / agent / script 策略，合并后返回决策"""
+
+    name = "strategy_perceive"
+    description = """Apply multiple perception strategies simultaneously and merge results.
+
+Strategy types: rule (rule-based), agent (AI agent), script (Python script/callable)
+Merge modes:
+  - highest_priority: winner is the highest-priority strategy that triggered (default)
+  - highest_severity: winner is the result with the highest decision weight
+  - all: aggregate all triggered strategy results
+Set parallel=true to run all strategies concurrently (default).
+"""
+    parameters_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "data": {
+                "type": "object",
+                "description": "Parsed log data (dict or list from parse_log)",
+            },
+            "strategies": {
+                "type": "array",
+                "description": (
+                    "List of strategy configs. Each item: "
+                    "{name, type (rule/agent/script), enabled, priority, ...type-specific fields}. "
+                    "Rule extra: rules (dict). Script extra: script_path (str). "
+                    "Agent extra: prompt (str)."
+                ),
+                "items": {"type": "object"},
+            },
+            "merge_mode": {
+                "type": "string",
+                "enum": ["highest_priority", "highest_severity", "all"],
+                "description": "How to merge results from multiple strategies. Default: highest_priority.",
+                "default": "highest_priority",
+            },
+            "parallel": {
+                "type": "boolean",
+                "description": "Run strategies concurrently. Default true.",
+                "default": True,
+            },
+        },
+        "required": ["data"],
+    }
+    timeout = 60
+    risk_level = "low"
+
+    def __init__(
+        self,
+        default_strategies: list[dict[str, Any]] | None = None,
+        default_merge_mode: str = "highest_priority",
+        controller: StrategyController | None = None,
+    ) -> None:
+        super().__init__()
+        self._default_strategies = default_strategies or []
+        self._default_merge_mode = default_merge_mode
+        self._controller         = controller
+
+    def set_controller(self, controller: StrategyController) -> None:
+        """注入预构建控制器（由插件在 on_engine_start 时调用）"""
+        self._controller = controller
+
+    async def execute(
+        self,
+        data:       dict | list | str,
+        strategies: list[dict[str, Any]] | None = None,
+        merge_mode: str  = "highest_priority",
+        parallel:   bool = True,
+    ) -> str:
+        try:
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            # 优先使用注入的控制器；否则按请求参数即时构建
+            if self._controller and not strategies:
+                controller = self._controller
+            else:
+                merged_strategies = strategies or self._default_strategies
+                if not merged_strategies:
+                    return "StrategyPerceiveTool: no strategies configured"
+                controller = build_controller_from_config(
+                    merged_strategies,
+                    merge_mode=merge_mode or self._default_merge_mode,
+                    parallel=parallel,
+                )
+
+            merged, details = await controller.apply_all(data)
+            return _format_strategy_result(merged, details)
+        except Exception as exc:
+            return f"StrategyPerceive failed: {exc}"
+
+
 class ReadLogsTool(BaseTool):
     """从路径读取日志（筛选工具）"""
 
@@ -295,4 +401,29 @@ def _format_perception_result(r: PerceptionResult) -> str:
     ]
     if r.triggered_events is not None:
         lines.append(f"Triggered events: {len(r.triggered_events)}")
+    return "\n".join(lines)
+
+
+def _format_strategy_result(
+    merged:  PerceptionResult,
+    details: list[StrategyResult],
+) -> str:
+    lines = [
+        "=== Strategy Perception Result ===",
+        f"Decision:  {merged.decision.value}",
+        f"Reason:    {merged.reason}",
+        f"Data:      {merged.data}",
+        f"Metadata:  {merged.metadata or {}}",
+    ]
+    if merged.triggered_events is not None:
+        lines.append(f"Events:    {len(merged.triggered_events)}")
+
+    if details:
+        lines.append("\n--- Per-Strategy Details ---")
+        for sr in details:
+            status = f"ERROR({sr.error})" if sr.error else sr.result.decision.value
+            lines.append(
+                f"  [{sr.strategy_type.value}] {sr.strategy_name}: {status}"
+                f" — {sr.result.reason[:80]}"
+            )
     return "\n".join(lines)

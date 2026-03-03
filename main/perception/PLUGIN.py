@@ -130,8 +130,11 @@ def _load_tools_module():
     if str(plugin_dir) not in sys.path:
         sys.path.insert(0, str(plugin_dir))
     try:
-        from tools import ParseLogTool, PerceiveTool, ReadLogsTool, ExecuteDecisionTool
-        return ParseLogTool, PerceiveTool, ReadLogsTool, ExecuteDecisionTool
+        from tools import (  # type: ignore[import]
+            ParseLogTool, PerceiveTool, ReadLogsTool,
+            ExecuteDecisionTool, StrategyPerceiveTool,
+        )
+        return ParseLogTool, PerceiveTool, ReadLogsTool, ExecuteDecisionTool, StrategyPerceiveTool
     except ImportError:
         spec = importlib.util.spec_from_file_location(
             "perception_tools",
@@ -140,8 +143,31 @@ def _load_tools_module():
         if spec and spec.loader:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            return mod.ParseLogTool, mod.PerceiveTool, mod.ReadLogsTool, mod.ExecuteDecisionTool
+            return (
+                mod.ParseLogTool, mod.PerceiveTool, mod.ReadLogsTool,
+                mod.ExecuteDecisionTool, mod.StrategyPerceiveTool,
+            )
     raise RuntimeError("Failed to load perception tools")
+
+
+def _load_strategy_module():
+    """加载同目录下的 strategy 模块"""
+    plugin_dir = Path(__file__).resolve().parent
+    if str(plugin_dir) not in sys.path:
+        sys.path.insert(0, str(plugin_dir))
+    try:
+        from strategy import build_controller_from_config  # type: ignore[import]
+        return build_controller_from_config
+    except ImportError:
+        spec = importlib.util.spec_from_file_location(
+            "perception_strategy",
+            plugin_dir / "strategy.py",
+        )
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.build_controller_from_config
+    raise RuntimeError("Failed to load perception strategy")
 
 
 class PerceptionPlugin(Plugin):
@@ -150,17 +176,22 @@ class PerceptionPlugin(Plugin):
     metadata = PluginMetadata(
         id="integration.perception",
         name="主动感知器",
-        version="1.0.0",
+        version="2.0.0",
         type=PluginType.INTEGRATION,
-        description="基于 ATON/TOON 日志的主动感知与决策，支持 parse_log、perceive、read_logs、execute_decision",
+        description=(
+            "基于 ATON/TOON 日志的主动感知与决策，"
+            "支持 parse_log、perceive、read_logs、execute_decision、strategy_perceive"
+        ),
         author="OntoMind",
-        provides=["perception", "log_parser"],
+        provides=["perception", "log_parser", "strategy_perception"],
         dependencies=[],
     )
 
     def __init__(self):
         super().__init__()
         self._tools: List[BaseTool] | None = None
+        self._strategy_controller = None
+        self._strategy_tool = None
 
     async def on_plugin_load(self, context) -> None:
         await super().on_plugin_load(context)
@@ -168,29 +199,59 @@ class PerceptionPlugin(Plugin):
         self._log_path = config.get("log_path", "./logs")
         filter_rules = config.get("filter_rules", {})
         self._default_rules = {
-            "levels": filter_rules.get("level", ["error", "warn"]),
+            "levels":         filter_rules.get("level", ["error", "warn"]),
             "error_triggers": filter_rules.get("error_triggers", "find_user"),
-            "warn_triggers": filter_rules.get("warn_triggers", "find_user"),
+            "warn_triggers":  filter_rules.get("warn_triggers", "find_user"),
         }
         cooldown = int(config.get("cooldown_seconds", 300))
         self._deduplicator = AlertDeduplicator(cooldown_seconds=cooldown)
 
+        # 策略控制器配置
+        self._strategies_cfg   = config.get("strategies", [])
+        self._merge_mode       = config.get("merge_mode", "highest_priority")
+        self._parallel         = bool(config.get("parallel", True))
+
     async def on_plugin_activate(self) -> None:
         await super().on_plugin_activate()
-        ParseLogTool, PerceiveTool, ReadLogsTool, ExecuteDecisionTool = _load_tools_module()
+        (
+            ParseLogTool, PerceiveTool, ReadLogsTool,
+            ExecuteDecisionTool, StrategyPerceiveTool,
+        ) = _load_tools_module()
+
         self._execute_tool = ExecuteDecisionTool(default_rules=self._default_rules)
+
+        # 如果配置了 strategies，则构建策略控制器并注入到 StrategyPerceiveTool
+        self._strategy_tool = StrategyPerceiveTool(
+            default_strategies=self._strategies_cfg,
+            default_merge_mode=self._merge_mode,
+        )
+        if self._strategies_cfg:
+            try:
+                build_controller_from_config = _load_strategy_module()
+                self._strategy_controller = build_controller_from_config(
+                    self._strategies_cfg,
+                    merge_mode=self._merge_mode,
+                    parallel=self._parallel,
+                )
+                self._strategy_tool.set_controller(self._strategy_controller)
+            except Exception as exc:
+                self.context.logger.warning(
+                    f"Perception: strategy controller init failed: {exc}"
+                )
+
         self._tools = [
             ParseLogTool(),
             PerceiveTool(default_rules=self._default_rules),
             ReadLogsTool(default_path=self._log_path),
             self._execute_tool,
+            self._strategy_tool,
         ]
         self.context.logger.info(
             f"Perception plugin activated with tools: {[t.name for t in self._tools]}"
         )
 
     async def on_engine_start(self, engine) -> None:
-        """引擎启动时：注入执行器、注册 Cron/Event/Webhook 触发器"""
+        """引擎启动时：注入执行器、注入 Agent 策略引擎、注册 Cron/Event/Webhook 触发器"""
         config = self.context.config or {}
         log = self.context.logger
 
@@ -217,6 +278,20 @@ class PerceptionPlugin(Plugin):
             )
             self._executor = None
 
+        # --- 策略控制器：给 agent 类型策略注入引擎 ---
+        if self._strategy_controller is not None:
+            try:
+                try:
+                    from strategy import AgentStrategy
+                except ImportError:
+                    from .strategy import AgentStrategy  # type: ignore[no-redef]
+                for s in self._strategy_controller.strategies:
+                    if isinstance(s, AgentStrategy):
+                        s.set_engine(engine)
+                log.info("Perception: agent strategies wired with engine")
+            except Exception as exc:
+                log.warning(f"Perception: failed to wire agent strategies: {exc}")
+
         # --- Epic 6: 触发与调度 ---
         automation = self._ensure_automation(engine, event_bus)
         if automation:
@@ -241,7 +316,7 @@ class PerceptionPlugin(Plugin):
             return None
 
     def _register_cron(self, config, automation, log):
-        """Story 6.1: Cron 定时触发（含聚合感知 + 去重）"""
+        """Story 6.1: Cron 定时触发（含聚合感知 + 去重，支持策略控制器）"""
         cron_expr = config.get("cron_expr")
         if not cron_expr:
             return
@@ -265,13 +340,23 @@ class PerceptionPlugin(Plugin):
                 return
 
             all_events: list[dict] = []
+            merged_result = None
+
             for fp in files:
                 try:
                     with open(fp, encoding="utf-8", errors="ignore") as f:
                         raw = f.read()
                     parsed = parse_log(raw)
-                    r = perceive(parsed, self._default_rules, aggregate=True)
+
+                    # 优先使用策略控制器，降级为单规则感知
+                    if self._strategy_controller is not None:
+                        r, _ = await self._strategy_controller.apply_all(parsed)
+                    else:
+                        r = perceive(parsed, self._default_rules, aggregate=True)
+
                     all_events.extend(r.triggered_events or [])
+                    if r.decision.value != "none" and merged_result is None:
+                        merged_result = r
                 except Exception as exc:
                     log.debug(f"Cron perception skip {fp}: {exc}")
 
@@ -285,7 +370,7 @@ class PerceptionPlugin(Plugin):
                 return
 
             mock_result = PerceptionResult(
-                decision=DecisionType.FIND_USER,
+                decision=(merged_result.decision if merged_result else DecisionType.FIND_USER),
                 reason=f"Cron poll: {len(to_alert)} new event(s) detected",
                 data={"triggered_count": len(to_alert)},
                 triggered_events=to_alert,
@@ -347,7 +432,7 @@ class PerceptionPlugin(Plugin):
         secret = webhook_cfg.get("secret")
 
         async def _webhook_handler(payload: dict, headers: dict) -> dict:
-            """Webhook 接收处理：payload → parse → perceive(聚合) → 去重 → execute"""
+            """Webhook 接收处理：payload → parse → perceive/strategy(聚合) → 去重 → execute"""
             try:
                 from parser import parse_log
                 from perception import perceive
@@ -365,7 +450,11 @@ class PerceptionPlugin(Plugin):
             else:
                 return {"status": "skipped", "reason": "no log data in payload"}
 
-            result = perceive(parsed, self._default_rules, aggregate=True)
+            # 优先使用策略控制器，降级为单规则感知
+            if self._strategy_controller is not None:
+                result, _details = await self._strategy_controller.apply_all(parsed)
+            else:
+                result = perceive(parsed, self._default_rules, aggregate=True)
 
             if result.decision.value == "none":
                 return {"status": "skipped", "reason": "no actionable events"}
