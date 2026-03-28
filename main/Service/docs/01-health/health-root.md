@@ -12,7 +12,7 @@ Verify:
 
 ```python
 import pyagentforge; print(pyagentforge.__version__)   # 3.0.0
-from pyagentforge import AgentEngine, create_provider, BashTool
+from pyagentforge import LLMClient, BashTool
 from Service.gateway.app import create_app
 ```
 
@@ -22,17 +22,25 @@ from Service.gateway.app import create_app
 
 ```json
 {
-  "default_model": "claude-3-5-sonnet-20241022",
-  "providers": { "anthropic": { "api_key": "sk-ant-..." } }
+  "default_model": "default",
+  "models": {
+    "default": {
+      "id": "default",
+      "name": "Default Model",
+      "provider": "openai-compatible",
+      "api_type": "openai-completions",
+      "model_name": "gpt-4o-mini",
+      "base_url": "https://api.example.com/v1",
+      "api_key_env": "LLM_API_KEY"
+    }
+  }
 }
 ```
 
 Or env vars:
 
 ```shell
-$env:ANTHROPIC_API_KEY = "sk-ant-..."
-$env:OPENAI_API_KEY    = "sk-..."
-$env:GOOGLE_API_KEY    = "AIza..."
+$env:LLM_API_KEY = "sk-..."
 ```
 
 ## Start Service
@@ -55,8 +63,8 @@ cd main/Service         && pytest tests/ -v --tb=short --cov=Service
 ImportError: No module named 'pyagentforge'
 →  pip install -e "main/agentforge-engine[dev]"
 
-AttributeError: 'Settings' object has no attribute 'anthropic_api_key'
-→  configure main/llm_config.json or set ANTHROPIC_API_KEY
+401 Unauthorized from model endpoint
+→  check main/llm_config.json and ensure api_key/api_key_env is valid
 
 python version mismatch
 →  python --version must be 3.11+

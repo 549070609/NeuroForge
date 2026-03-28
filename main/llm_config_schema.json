@@ -1,106 +1,46 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "LLM Configuration",
-  "description": "Configuration for LLM providers and models",
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "./llm_config_schema.json",
+  "title": "NeuroForge LLM Config",
   "type": "object",
-
+  "required": ["models"],
   "properties": {
     "default_model": {
       "type": "string",
-      "description": "Default model ID to use",
-      "default": "claude-sonnet-4-20250514"
+      "description": "默认模型 ID"
     },
     "max_tokens": {
       "type": "integer",
-      "description": "Default maximum output tokens",
-      "default": 4096,
-      "minimum": 1
+      "minimum": 1,
+      "description": "默认最大输出 Token"
     },
     "temperature": {
       "type": "number",
-      "description": "Default temperature parameter",
-      "default": 1.0,
-      "minimum": 0.0,
-      "maximum": 2.0
-    },
-    "providers": {
-      "type": "object",
-      "description": "Provider configurations",
-      "additionalProperties": {
-        "$ref": "#/definitions/ProviderConfig"
-      }
+      "minimum": 0,
+      "maximum": 2,
+      "description": "默认温度"
     },
     "models": {
       "type": "object",
-      "description": "Model configurations",
+      "description": "模型配置映射",
       "additionalProperties": {
-        "$ref": "#/definitions/ModelConfig"
+        "$ref": "#/$defs/model"
       }
     }
   },
-
-  "definitions": {
-    "ProviderConfig": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Whether this provider is enabled",
-          "default": true
-        },
-        "api_key": {
-          "type": ["string", "null"],
-          "description": "API Key (optional, prefer environment variable)"
-        },
-        "api_key_env": {
-          "type": "string",
-          "description": "Environment variable name for API Key",
-          "default": ""
-        },
-        "base_url": {
-          "type": ["string", "null"],
-          "description": "API base URL"
-        },
-        "timeout": {
-          "type": "integer",
-          "description": "Request timeout in seconds",
-          "default": 120,
-          "minimum": 1
-        },
-        "max_retries": {
-          "type": "integer",
-          "description": "Maximum retry attempts",
-          "default": 3,
-          "minimum": 0
-        },
-        "extra": {
-          "type": "object",
-          "description": "Additional provider-specific configuration",
-          "additionalProperties": true
-        }
-      }
-    },
-
-    "ModelConfig": {
+  "$defs": {
+    "model": {
       "type": "object",
       "required": ["id", "name", "provider", "api_type"],
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Model ID"
-        },
-        "name": {
-          "type": "string",
-          "description": "Display name"
-        },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
         "provider": {
           "type": "string",
-          "description": "Provider type",
-          "enum": ["anthropic", "openai", "google", "azure", "bedrock", "zhipu", "deepseek", "alibaba", "moonshot", "minimax", "baichuan", "yi", "ollama", "custom"]
+          "description": "供应商标识，仅用于展示与分组"
         },
         "api_type": {
           "type": "string",
-          "description": "API type",
           "enum": [
             "anthropic-messages",
             "openai-completions",
@@ -110,69 +50,31 @@
             "custom"
           ]
         },
-        "supports_vision": {
-          "type": "boolean",
-          "description": "Whether the model supports images",
-          "default": false
-        },
-        "supports_tools": {
-          "type": "boolean",
-          "description": "Whether the model supports tool calling",
-          "default": true
-        },
-        "supports_streaming": {
-          "type": "boolean",
-          "description": "Whether the model supports streaming",
-          "default": true
-        },
-        "context_window": {
-          "type": "integer",
-          "description": "Context window size in tokens",
-          "default": 200000
-        },
-        "max_output_tokens": {
-          "type": "integer",
-          "description": "Maximum output tokens",
-          "default": 4096
-        },
-        "cost_input": {
-          "type": "number",
-          "description": "Input cost per million tokens (USD)",
-          "default": 0.0
-        },
-        "cost_output": {
-          "type": "number",
-          "description": "Output cost per million tokens (USD)",
-          "default": 0.0
-        },
-        "cost_cache_read": {
-          "type": "number",
-          "description": "Cache read cost per million tokens (USD)",
-          "default": 0.0
-        },
-        "cost_cache_write": {
-          "type": "number",
-          "description": "Cache write cost per million tokens (USD)",
-          "default": 0.0
-        },
-        "api_key": {
-          "type": ["string", "null"],
-          "description": "Model-level API Key (overrides provider config)"
-        },
-        "api_key_env": {
-          "type": ["string", "null"],
-          "description": "Model-level API Key environment variable name"
-        },
-        "base_url": {
-          "type": ["string", "null"],
-          "description": "Model-level API base URL (overrides provider config)"
+        "model_name": { "type": ["string", "null"] },
+        "supports_vision": { "type": "boolean" },
+        "supports_tools": { "type": "boolean" },
+        "supports_streaming": { "type": "boolean" },
+        "context_window": { "type": "integer", "minimum": 1 },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "cost_input": { "type": "number" },
+        "cost_output": { "type": "number" },
+        "cost_cache_read": { "type": "number" },
+        "cost_cache_write": { "type": "number" },
+        "api_key": { "type": ["string", "null"] },
+        "api_key_env": { "type": ["string", "null"] },
+        "base_url": { "type": ["string", "null"] },
+        "timeout": { "type": "integer", "minimum": 1 },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
         },
         "extra": {
           "type": "object",
-          "description": "Additional model-specific configuration",
           "additionalProperties": true
         }
-      }
+      },
+      "additionalProperties": true
     }
-  }
+  },
+  "additionalProperties": true
 }

@@ -42,17 +42,13 @@ class ConcurrencyConfig:
 
     # v4.0: Per-model limits (fine-grained control)
     model_concurrency: dict[str, int] = field(default_factory=lambda: {
-        "gpt-4o": 2,
-        "gpt-4o-mini": 5,
-        "claude-sonnet-4-20250514": 2,
-        "claude-opus-4-6": 1,
+        "default": 2,
     })
 
     # v4.0: Per-provider limits
     provider_concurrency: dict[str, int] = field(default_factory=lambda: {
-        "openai": 10,
-        "anthropic": 5,
-        "google": 5,
+        "default": 5,
+        "custom": 10,
     })
 
     # Legacy support (fallback when not in dict)

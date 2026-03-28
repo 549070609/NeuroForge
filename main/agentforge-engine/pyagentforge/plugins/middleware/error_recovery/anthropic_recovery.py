@@ -1,7 +1,7 @@
 """
-Anthropic-specific Error Recovery
+Token Limit Error Recovery
 
-Handles Anthropic-specific errors like token limits.
+Handles generic token-limit style errors and context overflow recovery.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class AnthropicRecovery:
+class TokenLimitRecovery:
     """
-    Anthropic-specific Error Recovery
+    Token Limit Error Recovery
 
     Handles:
     - Token limit errors (context_length_exceeded)
@@ -39,7 +39,7 @@ class AnthropicRecovery:
 
     def __init__(self, max_context_tokens: int = 200000):
         """
-        Initialize Anthropic recovery
+        Initialize token limit recovery
 
         Args:
             max_context_tokens: Maximum context tokens for the model
@@ -52,7 +52,7 @@ class AnthropicRecovery:
         """Check if error is a token limit error"""
         error_str = str(error).lower()
 
-        # Anthropic-specific error patterns
+        # Generic token-limit error patterns
         patterns = [
             "context_length_exceeded",
             "prompt is too long",
@@ -219,3 +219,6 @@ class AnthropicRecovery:
             "max_recovery_attempts": self._max_recovery_attempts,
             "max_context_tokens": self.max_context_tokens,
         }
+
+
+LegacyTokenLimitRecovery = TokenLimitRecovery

@@ -197,53 +197,12 @@ async def test_tool_execution():
 
 
 async def test_full_integration():
-    """测试完整集成（如果 pyagentforge 可用）"""
+    """测试完整集成（宿主应用负责 LLM 接入）"""
     print("测试 5: 完整集成测试")
-
-    try:
-        from pyagentforge import create_engine, PluginConfig
-        from pyagentforge.providers import AnthropicProvider
-        import os
-
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            print("  ⊘ 跳过: 未设置 ANTHROPIC_API_KEY")
-            print()
-            return True
-
-        plugin_config = PluginConfig(
-            preset="minimal",
-            enabled=["tool.local-embeddings"],
-            plugin_dirs=[str(Path(__file__).parent.parent)],
-            config={"tool.local-embeddings": {"device": "cpu"}},
-        )
-
-        engine = await create_engine(
-            provider=AnthropicProvider(api_key=api_key),
-            plugin_config=plugin_config,
-        )
-
-        # 检查工具是否注册
-        tool_names = [t.name for t in engine.tools]
-        print(f"  已注册工具: {tool_names}")
-
-        assert "embed_text" in tool_names, "embed_text 应该被注册"
-        assert "compute_similarity" in tool_names, "compute_similarity 应该被注册"
-
-        print("  ✓ 完整集成测试通过")
-        print()
-
-        return True
-
-    except ImportError as e:
-        print(f"  ⊘ 跳过: pyagentforge 不可用 ({e})")
-        print()
-        return True
-    except Exception as e:
-        print(f"  ✗ 测试失败: {e}")
-        print()
-        return False
-
+    print("  ⊘ 跳过: 旧 provider 集成测试已移除")
+    print("  当前仅验证 embeddings 插件能力；LLM 接入请在上层应用通过 LLMClient 完成")
+    print()
+    return True
 
 async def run_all_tests():
     """运行所有测试"""

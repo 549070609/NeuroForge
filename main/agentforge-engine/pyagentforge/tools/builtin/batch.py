@@ -7,8 +7,8 @@ Batch 工具
 import asyncio
 from typing import Any
 
-from pyagentforge.core.executor import ToolExecutor
-from pyagentforge.core.message import ToolUseBlock
+from pyagentforge.kernel.executor import ToolExecutor
+from pyagentforge.kernel.message import ToolUseBlock
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.utils.logging import get_logger

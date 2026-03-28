@@ -579,7 +579,7 @@ class AgentLoader:
         model_data = data.get("model", {})
         model = ModelConfiguration(
             provider=model_data.get("provider", "anthropic"),
-            model=model_data.get("model", "claude-sonnet-4-20250514"),
+            model=model_data.get("model", "default"),
             temperature=model_data.get("temperature", 1.0),
             max_tokens=model_data.get("max_tokens", 4096),
             reasoning_effort=model_data.get("reasoning_effort", "medium"),

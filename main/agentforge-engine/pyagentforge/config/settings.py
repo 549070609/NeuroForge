@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", description="Anthropic API Key")
     openai_api_key: str = Field(default="", description="OpenAI API Key")
     default_model: str = Field(
-        default="claude-sonnet-4-20250514",
+        default="default",
         description="默认使用的模型",
     )
     max_tokens: int = Field(default=4096, description="最大输出 Token")

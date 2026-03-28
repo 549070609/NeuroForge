@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 """
 Service Layer 测试 CLI
 
@@ -34,103 +34,62 @@ from datetime import datetime
 from typing import Optional, Any
 from dataclasses import dataclass, field
 
-# 计算路径 - 使用 resolve() 获取绝对路径
-SCRIPT_DIR = Path(__file__).resolve().parent          # tests 目录
-SERVICE_DIR = SCRIPT_DIR.parent                        # Service 目录
-MAIN_DIR = SERVICE_DIR.parent                          # main 目录
-GLM_PROVIDER_DIR = MAIN_DIR / "glm-provider"          # glm-provider 目录
+SCRIPT_DIR = Path(__file__).resolve().parent
+SERVICE_DIR = SCRIPT_DIR.parent
+MAIN_DIR = SERVICE_DIR.parent
 
-# 添加到 sys.path（确保 main 目录在最前面，这样 from Service.xxx 才能工作）
-paths_to_add = [str(MAIN_DIR), str(SERVICE_DIR), str(GLM_PROVIDER_DIR)]
+paths_to_add = [str(MAIN_DIR), str(SERVICE_DIR)]
 for p in paths_to_add:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-# 加载 GLM Provider 的 .env 文件
 from dotenv import load_dotenv
-glm_env_file = GLM_PROVIDER_DIR / ".env"
-if glm_env_file.exists():
-    load_dotenv(glm_env_file)
-    print(f"[DEBUG] 已加载 GLM Provider 配置: {glm_env_file}")
-else:
-    print(f"[DEBUG] 未找到 GLM Provider 配置: {glm_env_file}")
+load_dotenv(MAIN_DIR.parent / ".env")
 
-# 检查环境变量
-glm_api_key = os.environ.get("GLM_API_KEY", "")
-if glm_api_key:
-    print(f"[DEBUG] GLM_API_KEY 已设置: {glm_api_key[:10]}...")
+model_api_key = os.environ.get("TEST_LLM_API_KEY", os.environ.get("GLM_API_KEY", ""))
+model_base_url = os.environ.get("TEST_LLM_BASE_URL", "https://api.example.com/v1")
+if model_api_key:
+    print(f"[DEBUG] TEST_LLM_API_KEY 已设置: {model_api_key[:10]}...")
 else:
-    print("[DEBUG] GLM_API_KEY 未设置")
+    print("[DEBUG] TEST_LLM_API_KEY 未设置，将使用 api_key_env 占位")
 
-# ============================================================
-# 关键：在导入任何 Service/pyagentforge 模块之前注册 GLM Provider
-# 因为 ModelAdapterFactory 在初始化时会获取全局注册表
-# ============================================================
-print("[DEBUG] 开始注册 GLM Provider (在导入 Service 模块之前)...")
+print("[DEBUG] 开始注册调试模型 (在导入 Service 模块之前)...")
 try:
-    from pyagentforge import (
-        ProviderType,
-        ModelConfig,
-        get_registry,
-        register_provider,
-        register_model,
-    )
-    from glm_anthropic_provider import GLMAnthropicProvider
+    from pyagentforge import ModelConfig, get_registry, register_model
 
-    # 定义 GLM Provider 工厂
-    def create_glm_provider(model: str, **kwargs):
-        kwargs.pop('model', None)
-        print(f"[DEBUG] create_glm_provider called with model={model}")
-        return GLMAnthropicProvider(
-            api_key=os.environ.get("GLM_API_KEY"),
-            model=model,
-            **kwargs
-        )
-
-    # 注册 Provider
-    register_provider(
-        provider_type=ProviderType.CUSTOM,
-        name="glm",
-        factory=create_glm_provider,
-    )
-    print("[DEBUG] OK GLM Provider 已注册")
-
-    # 注册模型
-    glm_model_config = ModelConfig(
-        id="glm-4.7",
-        name="GLM-4.7",
-        provider=ProviderType.CUSTOM,
-        api_type="custom",
+    debug_model_config = ModelConfig(
+        id="custom-debug-model",
+        name="Custom Debug Model",
+        provider="custom-debug",
+        api_type="openai-completions",
+        model_name="custom-debug-model",
+        base_url=model_base_url,
+        api_key=model_api_key or None,
+        api_key_env="TEST_LLM_API_KEY",
         context_window=128000,
         max_output_tokens=4096,
         supports_tools=True,
         supports_streaming=True,
-        api_key_env="GLM_API_KEY",
     )
-    register_model(glm_model_config)
-    print("[DEBUG] OK GLM-4.7 模型已注册")
+    register_model(debug_model_config)
+    print("[DEBUG] OK Custom Debug Model 已注册")
 
-    # 验证注册
     registry = get_registry()
-    model = registry.get_model("glm-4.7")
+    model = registry.get_model("custom-debug-model")
     print(f"[DEBUG] 验证模型: {model}")
     if model:
         print(f"[DEBUG]   model.name: {model.name}")
         print(f"[DEBUG]   model.provider: {model.provider}")
-
-    provider_info = registry.get_provider(ProviderType.CUSTOM)
-    print(f"[DEBUG] 验证 provider: {provider_info}")
-
 except Exception as e:
-    print(f"[DEBUG] FAIL GLM Provider 注册失败: {e}")
+    print(f"[DEBUG] FAIL 调试模型注册失败: {e}")
     import traceback
     traceback.print_exc()
 
-# 调试：打印路径
 print(f"[DEBUG] 脚本目录: {SCRIPT_DIR}")
 print(f"[DEBUG] Service目录: {SERVICE_DIR}")
 print(f"[DEBUG] Main目录: {MAIN_DIR}")
 
+# === 日志配置 ===
 # === 日志配置 ===
 
 class ColoredFormatter(logging.Formatter):
@@ -237,7 +196,7 @@ class AGentTestClient:
         print_header("初始化 Service 层")
 
         try:
-            # 1. 导入（GLM Provider 已在模块顶部注册）
+            # 1. 导入（调试模型 已在模块顶部注册）
             self.logger.info("导入 Service 层模块...")
             print("[DEBUG] 导入 Service 层模块...")
             from Service.config import ServiceSettings
@@ -250,7 +209,7 @@ class AGentTestClient:
             settings = ServiceSettings(
                 debug=True,
                 log_level="DEBUG",
-                default_model="glm-4.7",  # 使用 GLM 模型
+                default_model="custom-debug-model",  # 使用调试模型
             )
             self.logger.info(f"设置: model={settings.default_model}, debug={settings.debug}")
 
@@ -739,7 +698,7 @@ class CommandHandler:
 
 # === 主函数 ===
 
-async def interactive_mode(client: AGentTestClient, logger: logging.Logger, default_model: str = "glm-4.7"):
+async def interactive_mode(client: AGentTestClient, logger: logging.Logger, default_model: str = "custom-debug-model"):
     """交互模式"""
     cmd_handler = CommandHandler(client, logger)
 
@@ -825,7 +784,7 @@ async def main():
     parser.add_argument("--debug", action="store_true", help="启用调试日志")
     parser.add_argument("--log-file", type=str, help="日志文件路径")
     parser.add_argument("--batch", type=str, help="批处理文件路径")
-    parser.add_argument("--model", type=str, default="glm-4.7", help="默认模型")
+    parser.add_argument("--model", type=str, default="custom-debug-model", help="默认模型")
     args = parser.parse_args()
 
     # 配置日志
@@ -862,3 +821,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n已取消")
  
+

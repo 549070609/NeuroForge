@@ -7,7 +7,7 @@ Agent Schema 定义
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pyagentforge.agents.config import AgentConfig
 from pyagentforge.agents.metadata import (
@@ -21,6 +21,8 @@ from pyagentforge.agents.metadata import (
 class AgentIdentity(BaseModel):
     """Agent 身份标识"""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(description="Agent 名称，唯一标识")
     version: str = Field(default="1.0.0", description="版本号")
     namespace: str = Field(default="default", description="命名空间，用于隔离")
@@ -29,15 +31,13 @@ class AgentIdentity(BaseModel):
     author: str = Field(default="", description="作者信息")
     license: str = Field(default="MIT", description="许可证")
 
-    class Config:
-        extra = "forbid"
-
-
 class ModelConfiguration(BaseModel):
     """模型配置"""
 
+    model_config = ConfigDict(extra="forbid")
+
     provider: str = Field(default="anthropic", description="模型提供商")
-    model: str = Field(default="claude-sonnet-4-20250514", description="模型名称")
+    model: str = Field(default="default", description="模型名称")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="温度参数")
     max_tokens: int = Field(default=4096, ge=1, description="最大输出 Token")
     reasoning_effort: Literal["low", "medium", "high", "xhigh"] = Field(
@@ -45,12 +45,10 @@ class ModelConfiguration(BaseModel):
     )
     timeout: int = Field(default=120, ge=1, description="请求超时(秒)")
 
-    class Config:
-        extra = "forbid"
-
-
 class CapabilityDefinition(BaseModel):
     """能力定义"""
+
+    model_config = ConfigDict(extra="forbid")
 
     # 工具配置
     tools: list[str] = Field(default_factory=lambda: ["*"], description="允许的工具列表")
@@ -69,12 +67,10 @@ class CapabilityDefinition(BaseModel):
     command_whitelist: list[str] = Field(default_factory=list, description="命令白名单")
     command_blacklist: list[str] = Field(default_factory=list, description="命令黑名单")
 
-    class Config:
-        extra = "forbid"
-
-
 class BehaviorDefinition(BaseModel):
     """行为定义"""
+
+    model_config = ConfigDict(extra="forbid")
 
     # 提示词
     system_prompt: str = Field(default="", description="系统提示词")
@@ -95,12 +91,10 @@ class BehaviorDefinition(BaseModel):
     on_activate: str = Field(default="", description="激活钩子函数名")
     on_deactivate: str = Field(default="", description="停用钩子函数名")
 
-    class Config:
-        extra = "forbid"
-
-
 class ExecutionLimits(BaseModel):
     """执行限制"""
+
+    model_config = ConfigDict(extra="forbid")
 
     is_readonly: bool = Field(default=False, description="是否只读")
     supports_background: bool = Field(default=True, description="是否支持后台运行")
@@ -109,12 +103,10 @@ class ExecutionLimits(BaseModel):
     max_iterations: int = Field(default=50, ge=1, description="最大迭代次数")
     max_subagent_depth: int = Field(default=3, ge=1, description="子代理最大深度")
 
-    class Config:
-        extra = "forbid"
-
-
 class DependencyDefinition(BaseModel):
     """依赖定义"""
+
+    model_config = ConfigDict(extra="forbid")
 
     requires: list[str] = Field(
         default_factory=list, description="必需的 Agent ID 列表"
@@ -126,21 +118,15 @@ class DependencyDefinition(BaseModel):
         default_factory=list, description="冲突的 Agent ID 列表"
     )
 
-    class Config:
-        extra = "forbid"
-
-
 class MemoryConfiguration(BaseModel):
     """记忆配置"""
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = Field(default=True, description="是否启用记忆")
     max_messages: int = Field(default=100, ge=1, description="最大消息数")
     persistent_session: bool = Field(default=False, description="是否持久化会话")
     compaction_threshold: int = Field(default=80, ge=1, description="压缩阈值")
-
-    class Config:
-        extra = "forbid"
-
 
 class AgentSchema(BaseModel):
     """
@@ -174,10 +160,6 @@ class AgentSchema(BaseModel):
 
     # 元数据
     metadata: dict[str, Any] = Field(default_factory=dict, description="扩展元数据")
-
-    class Config:
-        extra = "forbid"
-        use_enum_values = False
 
     def to_agent_metadata(self) -> AgentMetadata:
         """
@@ -275,7 +257,7 @@ class AgentSchema(BaseModel):
                 tools=metadata.tools,
             ),
             model=ModelConfiguration(
-                model=metadata.model_preference or "claude-sonnet-4-20250514",
+                model=metadata.model_preference or "default",
                 max_tokens=metadata.max_tokens,
                 temperature=metadata.temperature,
                 reasoning_effort=metadata.reasoning_effort,
@@ -334,3 +316,4 @@ class AgentSchema(BaseModel):
         if not isinstance(other, AgentSchema):
             return False
         return self.get_full_name() == other.get_full_name()
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)

@@ -31,7 +31,7 @@ class BaseTool(ABC):
         pass
 
     def to_anthropic_schema(self) -> dict[str, Any]:
-        """转换为 Anthropic 工具格式"""
+        """转换为 messages 风格工具格式"""
         return {
             "name": self.name,
             "description": self.description,
@@ -39,7 +39,7 @@ class BaseTool(ABC):
         }
 
     def to_openai_schema(self) -> dict[str, Any]:
-        """转换为 OpenAI 工具格式"""
+        """转换为 chat 风格工具格式"""
         return {
             "type": "function",
             "function": {

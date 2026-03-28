@@ -18,7 +18,7 @@ from pyagentforge.core.error_recovery import (
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.plugins.middleware.error_recovery.anthropic_recovery import (
-    AnthropicRecovery,
+    TokenLimitRecovery,
 )
 from pyagentforge.utils.logging import get_logger
 
@@ -36,7 +36,7 @@ class ErrorRecoveryPlugin(Plugin):
     - Automatic retry with exponential backoff
     - Rate limit handling
     - Timeout recovery
-    - Anthropic token limit recovery
+    - Token limit recovery
     - Configurable retry policies
     """
 
@@ -54,7 +54,7 @@ class ErrorRecoveryPlugin(Plugin):
     def __init__(self):
         super().__init__()
         self._retry_manager: RetryManager | None = None
-        self._anthropic_recovery: AnthropicRecovery | None = None
+        self._token_limit_recovery: TokenLimitRecovery | None = None
         self._classifier: ErrorClassifier | None = None
         self._enabled: bool = True
         self._provider: str = ""
@@ -81,8 +81,8 @@ class ErrorRecoveryPlugin(Plugin):
         # Create retry manager
         self._retry_manager = RetryManager(policy=policy)
 
-        # Create Anthropic recovery handler
-        self._anthropic_recovery = AnthropicRecovery(
+        # Create token-limit recovery handler
+        self._token_limit_recovery = TokenLimitRecovery(
             max_context_tokens=settings.max_context_tokens
         )
 
@@ -132,8 +132,8 @@ class ErrorRecoveryPlugin(Plugin):
             return None
 
         # Reset recovery attempts
-        if self._anthropic_recovery:
-            self._anthropic_recovery.reset_recovery_attempts()
+        if self._token_limit_recovery:
+            self._token_limit_recovery.reset_recovery_attempts()
 
         return None
 
@@ -169,10 +169,10 @@ class ErrorRecoveryPlugin(Plugin):
             },
         )
 
-        # Handle token limit errors for Anthropic
-        if error_type == ErrorType.TOKEN_LIMIT and self._anthropic_recovery:
+        # Handle token limit errors
+        if error_type == ErrorType.TOKEN_LIMIT and self._token_limit_recovery:
             recovered, message, strategy = (
-                self._anthropic_recovery.recover_from_token_limit(context, error)
+                self._token_limit_recovery.recover_from_token_limit(context, error)
             )
 
             if recovered:
@@ -266,9 +266,9 @@ class ErrorRecoveryPlugin(Plugin):
         }
 
         # Token limit recovery
-        if error_type == ErrorType.TOKEN_LIMIT and self._anthropic_recovery:
+        if error_type == ErrorType.TOKEN_LIMIT and self._token_limit_recovery:
             recovered, message, strategy = (
-                self._anthropic_recovery.recover_from_token_limit(context, error)
+                self._token_limit_recovery.recover_from_token_limit(context, error)
             )
             result["handled"] = recovered
             result["recovery_message"] = message

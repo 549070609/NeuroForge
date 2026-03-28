@@ -8,7 +8,7 @@ from Service.schemas.proxy import WorkspaceCreate, WorkspaceResponse
 from Service.services.proxy.permission_bridge import (
     WorkspacePathValidator,
     WorkspacePermissionChecker,
-    create_pyagentforge_permission_checker,
+    create_permission_checker_from_workspace,
 )
 ```
 
@@ -32,12 +32,15 @@ class WorkspaceCreate:
 ```python
 manager = WorkspaceManager()
 
-ws_ctx = manager.create_workspace(WorkspaceCreate(
-    workspace_id="ws-01",
-    root_path="/projects/myapp",
-    allowed_tools=["read", "write", "bash"],
-    denied_paths=[".env", ".git"],
-))
+ws_ctx = manager.create_workspace(
+    "ws-01",
+    WorkspaceCreate(
+        workspace_id="ws-01",
+        root_path="/projects/myapp",
+        allowed_tools=["read", "write", "bash"],
+        denied_paths=[".env", ".git"],
+    ).model_dump(exclude={"workspace_id"}),
+)
 
 manager.get_workspace("ws-01") -> WorkspaceContext
 manager.list_workspaces() -> list[str]
@@ -47,7 +50,7 @@ manager.remove_workspace("ws-01")          # removes from memory, not from disk
 ## WorkspaceContext
 
 ```python
-ws_ctx.config.workspace_id -> str
+ws_ctx.workspace_id -> str
 ws_ctx.config.namespace -> str
 ws_ctx.config.is_readonly -> bool
 ws_ctx.config.allowed_tools -> list[str]
@@ -64,11 +67,9 @@ ws_ctx.is_tool_allowed(tool_name) -> bool
 Adapts workspace rules to `pyagentforge.PermissionChecker`:
 
 ```python
-checker = create_pyagentforge_permission_checker(
-    WorkspacePermissionChecker(
-        workspace_config=ws_ctx.config,
-        path_validator=WorkspacePathValidator(ws_ctx),
-    )
+checker = create_permission_checker_from_workspace(
+    ws_ctx.config,
+    path_validator=WorkspacePathValidator(ws_ctx),
 )
 # Inject into AgentConfig — engine checks before every tool call
 config = AgentConfig(permission_checker=checker)

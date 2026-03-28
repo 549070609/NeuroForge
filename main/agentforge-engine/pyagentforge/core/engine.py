@@ -8,18 +8,22 @@ import uuid
 from typing import Any, Callable
 
 from pyagentforge.agents.config import AgentConfig
+from pyagentforge.client import LLMClient
 from pyagentforge.config.settings import get_settings
 from pyagentforge.core.compaction import Compactor, CompactionSettings
-from pyagentforge.core.context import ContextManager
-from pyagentforge.core.executor import ToolExecutor
-from pyagentforge.core.message import (
+from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.executor import ToolExecutor
+from pyagentforge.kernel.message import (
     Message,
     ProviderResponse,
     TextBlock,
     ToolUseBlock,
 )
-from pyagentforge.core.thinking import ThinkingLevel, create_thinking_config
-from pyagentforge.providers.base import BaseProvider
+from pyagentforge.plugins.middleware.thinking.thinking import (
+    ThinkingLevel,
+    create_thinking_config,
+)
+from pyagentforge.kernel.model_registry import ModelConfig
 from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.utils.logging import get_logger
 
@@ -34,26 +38,29 @@ class AgentEngine:
 
     def __init__(
         self,
-        provider: BaseProvider,
+        model_id: str,
         tool_registry: ToolRegistry,
         config: AgentConfig | None = None,
         context: ContextManager | None = None,
         ask_callback: AskCallback | None = None,
         thinking_level: ThinkingLevel | str | None = None,
+        llm_client: LLMClient | None = None,
     ) -> None:
         """
         初始化 Agent 引擎
 
         Args:
-            provider: LLM 提供商
+            model_id: 模型 ID（如 "default"）
             tool_registry: 工具注册表
             config: Agent 配置
             context: 上下文管理器
             ask_callback: 用户确认回调
             thinking_level: 思考级别
+            llm_client: LLM 客户端（可选，用于测试）
         """
         settings = get_settings()
-        self.provider = provider
+        self.model_id = model_id
+        self.llm_client = llm_client or LLMClient()
         self.tools = tool_registry
         self.config = config or AgentConfig()
         self.context = context or ContextManager(
@@ -75,13 +82,14 @@ class AgentEngine:
         self.thinking_level = thinking_level
         self.thinking_config = create_thinking_config(
             level=thinking_level,
-            model_id=provider.model,
+            model_id=model_id,
             budget_tokens=settings.thinking_budget_tokens,
         )
 
         # 上下文压缩设置
         self.compactor = Compactor(
-            provider=provider,
+            llm_client=self.llm_client,
+            model_id=model_id,
             settings=CompactionSettings(
                 enabled=settings.compaction_enabled,
                 reserve_tokens=settings.compaction_reserve_tokens,
@@ -95,7 +103,7 @@ class AgentEngine:
             "Initialized AgentEngine",
             extra_data={
                 "session_id": self._session_id,
-                "model": provider.model,
+                "model": model_id,
                 "thinking_level": thinking_level.value,
                 "compaction_enabled": settings.compaction_enabled,
             },
@@ -241,10 +249,11 @@ class AgentEngine:
 
             # 流式调用 LLM
             final_response = None
-            async for event in self.provider.stream_message(
-                self.config.system_prompt,
-                self.context.get_messages_for_api(),
-                self.tools.get_schemas(),
+            async for event in self.llm_client.stream_message(
+                model_id=self.model_id,
+                messages=self.context.get_messages_for_api(),
+                system=self.config.system_prompt,
+                tools=self.tools.get_schemas(),
             ):
                 if isinstance(event, ProviderResponse):
                     final_response = event
@@ -302,9 +311,10 @@ class AgentEngine:
 
     async def _call_llm(self) -> ProviderResponse:
         """调用 LLM"""
-        return await self.provider.create_message(
-            system=self.config.system_prompt,
+        return await self.llm_client.create_message(
+            model_id=self.model_id,
             messages=self.context.get_messages_for_api(),
+            system=self.config.system_prompt,
             tools=self.tools.get_schemas(),
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
@@ -325,7 +335,7 @@ class AgentEngine:
             "message_count": len(self.context),
             "loaded_skills": list(self.context.get_loaded_skills()),
             "config": {
-                "model": self.provider.model,
+                "model": self.model_id,
                 "max_tokens": self.config.max_tokens,
                 "thinking_level": self.thinking_level.value,
             },
@@ -347,7 +357,7 @@ class AgentEngine:
         self.thinking_level = level
         self.thinking_config = create_thinking_config(
             level=level,
-            model_id=self.provider.model,
+            model_id=self.model_id,
         )
         logger.info(
             "Thinking level changed",

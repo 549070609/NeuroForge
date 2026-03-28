@@ -362,7 +362,7 @@ class MultiLevelConfig:
 
 # LLM Configuration
 llm:
-  default_model: "claude-sonnet-4-20250514"
+  default_model: "default"
   max_tokens: 4096
   temperature: 1.0
 
@@ -405,7 +405,7 @@ session_recovery:
 
 # Project-specific model
 llm:
-  default_model: "claude-sonnet-4-20250514"
+  default_model: "default"
 
 # Project-specific agent settings
 agent:

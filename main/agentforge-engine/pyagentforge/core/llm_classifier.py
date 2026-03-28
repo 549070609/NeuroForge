@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class LLMClassifierConfig:
     """Configuration for LLM classifier"""
 
-    model: str = "gpt-4o-mini"  # Model to use for classification
+    model: str = "default"  # Model to use for classification
     max_tokens: int = 500  # Max tokens for response
     temperature: float = 0.3  # Low temperature for consistent results
     timeout: int = 30  # Timeout in seconds

@@ -69,7 +69,7 @@ class CategorySystemPlugin(Plugin):
                 category = Category(
                     name=cat_data["name"],
                     description=cat_data.get("description", ""),
-                    model=cat_data.get("model", "gpt-4o-mini"),
+                    model=cat_data.get("model", "default"),
                     agents=cat_data.get("agents", []),
                     skills=cat_data.get("skills", []),
                     priority=cat_data.get("priority", 0),
@@ -175,7 +175,7 @@ class CategorySystemPlugin(Plugin):
     def get_model_for_task(self, task_description: str) -> str:
         """Get recommended model for a task"""
         if self._registry is None:
-            return "gpt-4o-mini"
+            return "default"
         return self._registry.get_model_for_task(task_description)
 
     def get_agents_for_task(self, task_description: str) -> list[str]:

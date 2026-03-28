@@ -1,79 +1,44 @@
-{
-  "_comment": "LLM 配置模板 - 复制此文件为 llm_config.json 并填入您的配置",
-  "_usage": "设置环境变量 LLM_CONFIG_PATH 指向您的配置文件路径",
-
-  "default_model": "claude-sonnet-4-20250514",
+﻿{
+  "$schema": "./llm_config_schema.json",
+  "_comment": "模型级 LLM 配置示例：不再定义内置厂商，仅保留协议格式、URL、模型名、密钥等必要参数",
+  "default_model": "custom-openai-like",
   "max_tokens": 4096,
   "temperature": 1.0,
-
-  "providers": {
-    "anthropic": {
-      "enabled": true,
-      "api_key_env": "ANTHROPIC_API_KEY"
-    },
-    "openai": {
-      "enabled": true,
-      "api_key_env": "OPENAI_API_KEY"
-    },
-    "google": {
-      "enabled": true,
-      "api_key_env": "GOOGLE_API_KEY"
-    },
-    "zhipu": {
-      "enabled": true,
-      "api_key_env": "GLM_API_KEY",
-      "base_url": "https://open.bigmodel.cn/api/paas/v4"
-    },
-    "deepseek": {
-      "enabled": true,
-      "api_key_env": "DEEPSEEK_API_KEY",
-      "base_url": "https://api.deepseek.com/v1"
-    },
-    "ollama": {
-      "enabled": true,
-      "base_url": "http://localhost:11434/v1"
-    }
-  },
-
   "models": {
-    "claude-sonnet-4-20250514": {
-      "id": "claude-sonnet-4-20250514",
-      "name": "Claude Sonnet 4",
-      "provider": "anthropic",
+    "custom-openai-like": {
+      "id": "custom-openai-like",
+      "name": "Custom OpenAI-Compatible Model",
+      "provider": "my-provider",
+      "api_type": "openai-completions",
+      "model_name": "model-name-on-server",
+      "base_url": "https://api.example.com/v1",
+      "api_key_env": "MY_LLM_API_KEY",
+      "headers": {
+        "X-Workspace": "demo"
+      },
+      "timeout": 120,
+      "supports_tools": true,
+      "supports_streaming": true,
+      "supports_vision": false,
+      "context_window": 128000,
+      "max_output_tokens": 4096,
+      "extra": {}
+    },
+    "custom-anthropic-like": {
+      "id": "custom-anthropic-like",
+      "name": "Custom Messages-Compatible Model",
+      "provider": "another-provider",
       "api_type": "anthropic-messages",
+      "model_name": "messages-model-name",
+      "base_url": "https://api.example.com",
+      "api_key_env": "ANOTHER_LLM_API_KEY",
+      "timeout": 120,
+      "supports_tools": true,
+      "supports_streaming": true,
       "supports_vision": true,
       "context_window": 200000,
-      "max_output_tokens": 16384
-    },
-    "gpt-4o": {
-      "id": "gpt-4o",
-      "name": "GPT-4o",
-      "provider": "openai",
-      "api_type": "openai-completions",
-      "supports_vision": true,
-      "context_window": 128000
-    },
-    "glm-4-flash": {
-      "id": "glm-4-flash",
-      "name": "GLM-4 Flash",
-      "provider": "zhipu",
-      "api_type": "openai-completions",
-      "context_window": 128000
-    },
-    "deepseek-chat": {
-      "id": "deepseek-chat",
-      "name": "DeepSeek Chat",
-      "provider": "deepseek",
-      "api_type": "openai-completions",
-      "context_window": 64000
-    },
-    "llama3.1": {
-      "id": "llama3.1",
-      "name": "Llama 3.1",
-      "provider": "ollama",
-      "api_type": "openai-completions",
-      "context_window": 128000,
-      "base_url": "http://localhost:11434/v1"
+      "max_output_tokens": 8192,
+      "extra": {}
     }
   }
 }

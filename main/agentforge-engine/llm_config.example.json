@@ -2,78 +2,40 @@
   "_comment": "LLM 配置模板 - 复制此文件为 llm_config.json 并填入您的配置",
   "_usage": "设置环境变量 LLM_CONFIG_PATH 指向您的配置文件路径",
 
-  "default_model": "claude-sonnet-4-20250514",
+  "default_model": "default",
   "max_tokens": 4096,
   "temperature": 1.0,
 
   "providers": {
-    "anthropic": {
+    "custom": {
       "enabled": true,
-      "api_key_env": "ANTHROPIC_API_KEY"
-    },
-    "openai": {
-      "enabled": true,
-      "api_key_env": "OPENAI_API_KEY"
-    },
-    "google": {
-      "enabled": true,
-      "api_key_env": "GOOGLE_API_KEY"
-    },
-    "zhipu": {
-      "enabled": true,
-      "api_key_env": "GLM_API_KEY",
-      "base_url": "https://open.bigmodel.cn/api/paas/v4"
-    },
-    "deepseek": {
-      "enabled": true,
-      "api_key_env": "DEEPSEEK_API_KEY",
-      "base_url": "https://api.deepseek.com/v1"
-    },
-    "ollama": {
-      "enabled": true,
-      "base_url": "http://localhost:11434/v1"
+      "api_key_env": "CUSTOM_API_KEY",
+      "base_url": "https://your-llm-gateway.example/v1",
+      "timeout": 120,
+      "extra": {
+        "headers": {
+          "X-Provider": "custom"
+        }
+      }
     }
   },
 
   "models": {
-    "claude-sonnet-4-20250514": {
-      "id": "claude-sonnet-4-20250514",
-      "name": "Claude Sonnet 4",
-      "provider": "anthropic",
-      "api_type": "anthropic-messages",
-      "supports_vision": true,
-      "context_window": 200000,
-      "max_output_tokens": 16384
-    },
-    "gpt-4o": {
-      "id": "gpt-4o",
-      "name": "GPT-4o",
-      "provider": "openai",
+    "default": {
+      "id": "default",
+      "name": "Default Model",
+      "provider": "custom",
       "api_type": "openai-completions",
       "supports_vision": true,
-      "context_window": 128000
-    },
-    "glm-4-flash": {
-      "id": "glm-4-flash",
-      "name": "GLM-4 Flash",
-      "provider": "zhipu",
-      "api_type": "openai-completions",
-      "context_window": 128000
-    },
-    "deepseek-chat": {
-      "id": "deepseek-chat",
-      "name": "DeepSeek Chat",
-      "provider": "deepseek",
-      "api_type": "openai-completions",
-      "context_window": 64000
-    },
-    "llama3.1": {
-      "id": "llama3.1",
-      "name": "Llama 3.1",
-      "provider": "ollama",
-      "api_type": "openai-completions",
       "context_window": 128000,
-      "base_url": "http://localhost:11434/v1"
+      "max_output_tokens": 8192,
+      "base_url": "https://your-llm-gateway.example/v1",
+      "api_key_env": "CUSTOM_API_KEY",
+      "extra": {
+        "headers": {
+          "X-Model-Router": "default"
+        }
+      }
     }
   }
 }

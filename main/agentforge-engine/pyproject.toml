@@ -19,8 +19,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "anthropic>=0.18.0",
-    "openai>=1.0.0",
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.0.0",
@@ -108,7 +106,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -p no:cacheprovider"
 
 [tool.coverage.run]
 source = ["pyagentforge"]

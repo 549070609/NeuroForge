@@ -1,4 +1,4 @@
-"""
+﻿"""
 模型注册模块 - 兼容层
 
 注意: 核心逻辑已迁移到 pyagentforge.kernel.model_registry
@@ -9,32 +9,22 @@
 - 新: from pyagentforge.kernel import ModelRegistry
 """
 
-# 重导出所有内容
 from pyagentforge.kernel.model_registry import (
-    ProviderType,
     ModelConfig,
-    ProviderInfo,
     ModelRegistry,
-    BUILTIN_MODELS,
     get_registry,
     register_model,
     get_model,
-    register_provider,
 )
 
 __all__ = [
-    "ProviderType",
     "ModelConfig",
-    "ProviderInfo",
     "ModelRegistry",
-    "BUILTIN_MODELS",
     "get_registry",
     "register_model",
     "get_model",
-    "register_provider",
 ]
 
-# 发出弃用警告
 import warnings
 
 warnings.warn(

@@ -1,7 +1,7 @@
 """
-Agent Executor - Agent 鎵ц鍣?
+Agent Executor - Agent 执行器
 
-闆嗘垚 pyagentforge 鏍稿績鍔熻兘锛屽湪宸ヤ綔鍖哄煙涓婁笅鏂囦腑鎵ц Agent銆?
+集成 pyagentforge 核心功能，在工作区上下文中执行 Agent。
 """
 
 from __future__ import annotations
@@ -14,21 +14,17 @@ from pyagentforge import (
     AgentEngine,
     AgentConfig,
     ToolRegistry,
-    BaseProvider,
     register_core_tools,
     get_registry,
 )
-from pyagentforge.providers.factory import (
-    create_provider_from_config,
-    create_provider,
-)
+from pyagentforge.client import LLMClient
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ExecutionResult:
-    """鎵ц缁撴灉"""
+    """执行结果"""
 
     success: bool
     output: str
@@ -40,20 +36,21 @@ class ExecutionResult:
 
 class AgentExecutor:
     """
-    Agent 鎵ц鍣?
+    Agent 执行器
 
-    鍦ㄥ伐浣滃尯鍩熶笂涓嬫枃涓墽琛?Agent锛岄泦鎴?pyagentforge 鏍稿績鍔熻兘銆?
+    在工作区上下文中执行 Agent，集成 pyagentforge 核心功能。
     """
 
     def __init__(self, workspace_context: Any) -> None:
         """
-        鍒濆鍖栨墽琛屽櫒
+        初始化执行器
 
         Args:
-            workspace_context: WorkspaceContext 瀹炰緥
+            workspace_context: WorkspaceContext 实例
         """
         self._workspace_context = workspace_context
-        self._provider: BaseProvider | None = None
+        self._model_id: str = "default"
+        self._llm_client: LLMClient | None = None
         self._tool_registry: ToolRegistry | None = None
         self._engine: AgentEngine | None = None
         self._config: AgentConfig | None = None
@@ -67,11 +64,11 @@ class AgentExecutor:
         config_overrides: dict[str, Any] | None = None,
     ) -> None:
         """
-        鍒濆鍖栨墽琛屽櫒
+        初始化执行器
 
         Args:
-            agent_definition: Agent 瀹氫箟 (鏉ヨ嚜 Agent 瀹氫箟鐨?metadata)
-            system_prompt: 绯荤粺鎻愮ず璇?(鍙€?
+            agent_definition: Agent 定义 (来自 Agent 定义的 metadata)
+            system_prompt: 系统提示词(可选)
         """
         if self._initialized:
             self._logger.warning("Executor already initialized")
@@ -85,8 +82,12 @@ class AgentExecutor:
                     system_prompt = config_overrides["system_prompt"]
                 self._logger.info("Applied config overrides: %s", list(config_overrides.keys()))
 
-            # 创建 Provider
-            self._provider = self._create_provider(agent_definition)
+            # 获取模型 ID
+            model_section = agent_definition.get("model", {})
+            self._model_id = model_section.get("id", self._model_id)
+
+            # 创建 LLM 客户端
+            self._llm_client = self._create_llm_client()
 
             # 创建工具注册表
             self._tool_registry = self._create_tool_registry(agent_definition)
@@ -110,11 +111,11 @@ class AgentExecutor:
         context: dict[str, Any] | None = None,
     ) -> ExecutionResult:
         """
-        鎵ц Agent
+        执行 Agent
 
         Args:
-            prompt: 鐢ㄦ埛杈撳叆
-            context: 鎵ц涓婁笅鏂?(鍙€?
+            prompt: 用户输入
+            context: 执行上下文(可选)
 
         Returns:
             ExecutionResult
@@ -125,10 +126,10 @@ class AgentExecutor:
         self._logger.info(f"Executing agent with prompt length: {len(prompt)}")
 
         try:
-            # 鍚堝苟涓婁笅鏂囧埌鎻愮ず璇?
+            # 合并上下文到提示词
             full_prompt = self._build_prompt(prompt, context)
 
-            # 杩愯 Agent
+            # 运行 Agent
             output = await self._engine.run(full_prompt)
 
             return ExecutionResult(
@@ -136,7 +137,7 @@ class AgentExecutor:
                 output=output,
                 metadata={
                     "session_id": self._engine.session_id,
-                    "model": self._provider.model if self._provider else "unknown",
+                    "model": self._model_id,
                 },
             )
 
@@ -154,14 +155,14 @@ class AgentExecutor:
         context: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
-        娴佸紡鎵ц Agent
+        流式执行 Agent
 
         Args:
-            prompt: 鐢ㄦ埛杈撳叆
-            context: 鎵ц涓婁笅鏂?(鍙€?
+            prompt: 用户输入
+            context: 执行上下文(可选)
 
         Yields:
-            娴佸紡浜嬩欢
+            流式事件
         """
         if not self._initialized:
             raise RuntimeError("Executor not initialized. Call initialize() first.")
@@ -169,10 +170,10 @@ class AgentExecutor:
         self._logger.info(f"Starting streaming execution with prompt length: {len(prompt)}")
 
         try:
-            # 鍚堝苟涓婁笅鏂囧埌鎻愮ず璇?
+            # 合并上下文到提示词
             full_prompt = self._build_prompt(prompt, context)
 
-            # 娴佸紡杩愯 Agent
+            # 流式运行 Agent
             async for event in self._engine.run_stream(full_prompt):
                 yield event
 
@@ -241,71 +242,42 @@ class AgentExecutor:
         self._logger.error(message)
         raise RuntimeError(message) from exc
 
-    def _create_provider(self, agent_definition: dict[str, Any]) -> Any:
-        """Create a Provider instance from agent definition.
-
-        Prefers the explicit-config path (``create_provider_from_config``) so
-        that the Service layer controls which ``ModelConfig`` is used.  Falls
-        back to the legacy ``create_provider(model_id)`` when the model is not
-        found in the registry (e.g. ad-hoc / test scenarios).
-        """
+    def _create_llm_client(self) -> LLMClient:
+        """创建 LLM 客户端"""
         try:
-            model_section = agent_definition.get("model", {})
-            model_id = model_section.get("id", "claude-sonnet-4-20250514")
-            extra_kwargs: dict[str, Any] = {
-                "temperature": model_section.get("temperature", 1.0),
-                "max_tokens": model_section.get("max_tokens", 4096),
-            }
-
-            registry_config = get_registry().get_model(model_id)
-
-            if registry_config:
-                provider = create_provider_from_config(
-                    registry_config, **extra_kwargs
-                )
-            else:
-                import warnings
-                warnings.warn(
-                    f"Model '{model_id}' not found in registry; "
-                    "falling back to legacy create_provider().",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                provider = create_provider(model_id, **extra_kwargs)
-
-            self._logger.info(f"Created provider for model: {model_id}")
-            return provider
-
+            client = LLMClient()
+            self._logger.info(f"Created LLM client for model: {self._model_id}")
+            return client
         except ImportError as exc:
-            self._raise_missing_dependency("provider", exc)
+            self._raise_missing_dependency("llm client", exc)
 
     def _create_tool_registry(self, agent_definition: dict[str, Any]) -> Any:
         """
-        鍒涘缓宸ュ叿娉ㄥ唽琛?
+        创建工具注册表
 
         Args:
-            agent_definition: Agent 瀹氫箟
+            agent_definition: Agent 定义
 
         Returns:
-            ToolRegistry 瀹炰緥
+            ToolRegistry 实例
         """
         try:
             registry = ToolRegistry()
             register_core_tools(registry)
 
-            # 浠庡伐浣滃尯鍩熼厤缃繃婊ゅ伐鍏?
+            # 从工作区配置过滤工具
             capabilities = agent_definition.get("capabilities", {})
             allowed_tools = capabilities.get("tools", ["*"])
             denied_tools = capabilities.get("denied_tools", [])
 
-            # 濡傛灉鏈夋嫆缁濆垪琛ㄦ垨闈為€氶厤绗﹀厑璁稿垪琛紝杩囨护宸ュ叿
+            # 如果有拒绝列表或非通配符允许列表，过滤工具
             if denied_tools or "*" not in allowed_tools:
                 registry = registry.filter_by_permission(allowed_tools)
-                # 绉婚櫎鎷掔粷鐨勫伐鍏?
+                # 移除拒绝的工具
                 for tool_name in denied_tools:
                     registry.unregister(tool_name)
 
-            # 鍒涘缓鏉冮檺妫€鏌ュ櫒
+            # 创建权限检查器
             from .permission_bridge import (
                 WorkspacePathValidator,
                 WorkspacePermissionChecker,
@@ -319,7 +291,7 @@ class AgentExecutor:
             )
             permission_checker = create_pyagentforge_permission_checker(ws_checker)
 
-            # 瀛樺偍鏉冮檺妫€鏌ュ櫒渚涘悗缁娇鐢?
+            # 存储权限检查器供后续使用
             self._permission_checker = permission_checker
 
             self._logger.info(f"Created tool registry with {len(registry)} tools")
@@ -334,14 +306,14 @@ class AgentExecutor:
         system_prompt: str | None,
     ) -> Any:
         """
-        鍒涘缓 Agent 閰嶇疆
+        创建 Agent 配置
 
         Args:
-            agent_definition: Agent 瀹氫箟
-            system_prompt: 绯荤粺鎻愮ず璇?
+            agent_definition: Agent 定义
+            system_prompt: 系统提示词
 
         Returns:
-            AgentConfig 瀹炰緥
+            AgentConfig 实例
         """
         try:
             limits = agent_definition.get("limits", {})
@@ -364,16 +336,17 @@ class AgentExecutor:
 
     def _create_engine(self) -> Any:
         """
-        鍒涘缓 Agent 寮曟搸
+        创建 Agent 引擎
 
         Returns:
-            AgentEngine 瀹炰緥
+            AgentEngine 实例
         """
         try:
             engine = AgentEngine(
-                provider=self._provider,
+                model_id=self._model_id,
                 tool_registry=self._tool_registry,
                 config=self._config,
+                llm_client=self._llm_client,
             )
 
             self._logger.info(f"Created AgentEngine: session_id={engine.session_id}")
@@ -384,19 +357,19 @@ class AgentExecutor:
 
     def _build_prompt(self, prompt: str, context: dict[str, Any] | None) -> str:
         """
-        鏋勫缓瀹屾暣鎻愮ず璇?
+        构建完整提示词
 
         Args:
-            prompt: 鐢ㄦ埛杈撳叆
-            context: 鎵ц涓婁笅鏂?
+            prompt: 用户输入
+            context: 执行上下文
 
         Returns:
-            瀹屾暣鎻愮ず璇?
+            完整提示词
         """
         if not context:
             return prompt
 
-        # 娣诲姞宸ヤ綔鍖哄煙涓婁笅鏂?
+        # 添加工作区上下文
         workspace_info = f"""Working directory: {self._workspace_context.resolved_root}
 Namespace: {self._workspace_context.config.namespace}
 Read-only: {self._workspace_context.config.is_readonly}
@@ -406,9 +379,3 @@ Read-only: {self._workspace_context.config.is_readonly}
         if context_str:
             return f"{workspace_info}\nContext:\n{context_str}\n\nTask: {prompt}"
         return f"{workspace_info}\n\nTask: {prompt}"
-
-
-
-
-
-

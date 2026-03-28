@@ -145,7 +145,7 @@ class AgentBuilder:
         设置模型名称
 
         Args:
-            model: 模型名称（如 "claude-sonnet-4-20250514"）
+            model: 模型名称（如 "default"）
 
         Returns:
             self

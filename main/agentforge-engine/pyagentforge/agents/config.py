@@ -6,7 +6,7 @@ Agent 配置
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pyagentforge.tools.permission import PermissionChecker
 
@@ -14,12 +14,14 @@ from pyagentforge.tools.permission import PermissionChecker
 class AgentConfig(BaseModel):
     """Agent 配置"""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     name: str = Field(default="default", description="Agent 名称")
     description: str = Field(default="", description="Agent 描述")
     version: str = Field(default="1.0.0", description="Agent 版本")
 
     # 运行配置
-    model: str = Field(default="claude-sonnet-4-20250514", description="使用的模型")
+    model: str = Field(default="default", description="使用的模型")
     max_tokens: int = Field(default=4096, description="最大输出 Token")
     temperature: float = Field(default=1.0, description="温度参数")
     timeout: int = Field(default=120, description="执行超时(秒)")
@@ -62,10 +64,6 @@ class AgentConfig(BaseModel):
                 ask=self.ask_tools,
             )
             self.permission_checker = PermissionChecker(perm_config)
-
-    class Config:
-        arbitrary_types_allowed = True
-
 
 class RuntimeConfig(BaseModel):
     """运行时配置"""

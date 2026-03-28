@@ -9,13 +9,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pyagentforge.kernel.message import Message, TextBlock, ThinkingBlock, ToolUseBlock
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.kernel.base_provider import BaseProvider
+    from pyagentforge.client import LLMClient
     from pyagentforge.kernel.engine import AgentEngine
 
 logger = get_logger(__name__)
@@ -30,6 +30,8 @@ class CompactionStrategy(str, Enum):
 class CompactionSettings(BaseModel):
     """压缩配置"""
 
+    model_config = ConfigDict(use_enum_values=True)
+
     enabled: bool = True
     strategy: CompactionStrategy = CompactionStrategy.SIMPLE
     reserve_tokens: int = 8000  # 预留给新消息的 tokens
@@ -40,10 +42,6 @@ class CompactionSettings(BaseModel):
     # Agent 压缩配置
     agent_summary_max_tokens: int = 2000  # Agent 摘要最大 tokens
     agent_analyze_recent: int = 5  # Agent 分析最近 N 条消息决定压缩策略
-
-    class Config:
-        use_enum_values = True
-
 
 class DynamicCompactionConfig:
     """
@@ -161,7 +159,8 @@ class Compactor:
 
     def __init__(
         self,
-        provider: "BaseProvider",
+        llm_client: "LLMClient",
+        model_id: str,
         settings: CompactionSettings | None = None,
         max_context_tokens: int = 200000,
     ):
@@ -169,11 +168,13 @@ class Compactor:
         初始化压缩器
 
         Args:
-            provider: LLM 提供商（用于生成摘要）
+            llm_client: LLM 客户端（用于生成摘要）
+            model_id: 模型 ID
             settings: 压缩配置
             max_context_tokens: 最大上下文 tokens
         """
-        self.provider = provider
+        self.llm_client = llm_client
+        self.model_id = model_id
         self.settings = settings or CompactionSettings()
         self.max_context_tokens = max_context_tokens
 
@@ -322,9 +323,10 @@ class Compactor:
         prompt = self.COMPACTION_PROMPT.format(conversation=conversation_text)
 
         # 调用 LLM 生成摘要
-        response = await self.provider.create_message(
-            system="你是一个专业的对话摘要助手，擅长提取和总结对话中的关键信息。",
+        response = await self.llm_client.create_message(
+            model_id=self.model_id,
             messages=[{"role": "user", "content": prompt}],
+            system="你是一个专业的对话摘要助手，擅长提取和总结对话中的关键信息。",
             tools=[],
             max_tokens=2000,
             temperature=0.3,

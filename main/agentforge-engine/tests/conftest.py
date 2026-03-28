@@ -12,14 +12,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pyagentforge import BackgroundManager, ConcurrencyConfig, ConcurrencyManager
 from pyagentforge.config.settings import Settings
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentEngine
 from pyagentforge.kernel.executor import ToolExecutor
 from pyagentforge.kernel.message import Message, ProviderResponse, TextBlock, ToolUseBlock
 from pyagentforge.tools.registry import ToolRegistry
-from pyagentforge.core.concurrency_manager import ConcurrencyManager, ConcurrencyConfig
-from pyagentforge.core.background_manager import BackgroundManager
 
 
 # ============================================================================

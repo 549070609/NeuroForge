@@ -6,6 +6,7 @@ v4.0: 子代理调用工具
 允许主代理调用其他类型的代理。
 """
 
+import asyncio
 from typing import Any
 
 from pyagentforge.tools.base import BaseTool
@@ -78,28 +79,29 @@ class CallAgentTool(BaseTool):
         Returns:
             代理执行结果
         """
-        # 获取必要的组件
-        engine_factory = kwargs.get("engine_factory")
         background_manager = kwargs.get("background_manager")
         session_id = kwargs.get("session_id", "default")
 
-        if not engine_factory:
-            return "Error: Engine factory not available"
-
-        # 后台模式
-        if background:
+        if background or not wait_for_completion:
             if not background_manager:
-                return "Error: Background manager not available for background execution"
+                return "Error: Background manager not available for detached execution"
 
-            # 启动后台任务
             task = await background_manager.launch(
                 agent_type=agent_type,
                 prompt=prompt,
                 session_id=session_id,
-                metadata={"parent_call": "call_agent_tool"},
+                metadata={
+                    "parent_call": "call_agent_tool",
+                    "mode": "background" if background else "detached",
+                },
             )
 
             return f"Started background task {task.id} with agent '{agent_type}'"
+
+        engine_factory = kwargs.get("engine_factory")
+
+        if not engine_factory:
+            return "Error: Engine factory not available"
 
         # 同步模式
         try:
@@ -114,22 +116,13 @@ class CallAgentTool(BaseTool):
                 extra_data={"session_id": session_id, "wait": wait_for_completion},
             )
 
-            # 执行任务
-            if wait_for_completion:
-                result = await engine.run(prompt)
+            result = await asyncio.wait_for(engine.run(prompt), timeout=timeout)
 
-                return f"""Agent '{agent_type}' completed successfully.
+            return f"""Agent '{agent_type}' completed successfully.
 
 Result:
 {result}
 """
-            else:
-                # 异步执行但不等待
-                import asyncio
-
-                asyncio.create_task(engine.run(prompt))
-
-                return f"Agent '{agent_type}' started (not waiting for completion)"
 
         except asyncio.TimeoutError:
             return f"Error: Agent '{agent_type}' timed out after {timeout} seconds"

@@ -1,7 +1,7 @@
 """
 思考级别控制模块
 
-支持不同深度的推理模式，适配各模型的 extended thinking 能力
+支持不同深度的推理模式，适配不同协议下的 reasoning / thinking 能力
 """
 
 from enum import Enum
@@ -50,12 +50,12 @@ class ThinkingConfig(BaseModel):
     """思考配置"""
 
     level: ThinkingLevel = ThinkingLevel.OFF
-    budget_tokens: int | None = None  # 思考 token 预算（用于 Claude）
+    budget_tokens: int | None = None  # 思考 token 预算
 
     # 模型特定的思考参数
-    anthropic_thinking: dict[str, Any] | None = None
+    messages_api_thinking: dict[str, Any] | None = None
     openai_reasoning_effort: str | None = None
-    google_thinking_budget: int | None = None
+    multimodal_api_thinking_budget: int | None = None
 
     def is_enabled(self) -> bool:
         """是否启用思考"""
@@ -63,9 +63,9 @@ class ThinkingConfig(BaseModel):
 
     def to_anthropic_params(self) -> dict[str, Any]:
         """
-        转换为 Anthropic API 参数
+        转换为 messages 风格 API 参数
 
-        Anthropic 使用 thinking 参数控制扩展思考
+        messages 风格接口使用 thinking 参数控制扩展思考
         """
         if not self.is_enabled():
             return {}
@@ -75,7 +75,7 @@ class ThinkingConfig(BaseModel):
 
         params: dict[str, Any] = {}
 
-        # Anthropic 的 thinking 配置
+        # messages 风格 thinking 配置
         if self.anthropic_thinking:
             params["thinking"] = self.anthropic_thinking
         else:
@@ -89,9 +89,9 @@ class ThinkingConfig(BaseModel):
 
     def to_openai_params(self) -> dict[str, Any]:
         """
-        转换为 OpenAI API 参数
+        转换为 responses/chat 风格 API 参数
 
-        OpenAI 使用 reasoning_effort 参数
+        responses/chat 风格接口使用 reasoning_effort 参数
         """
         if not self.is_enabled():
             return {}
@@ -101,7 +101,7 @@ class ThinkingConfig(BaseModel):
         if self.openai_reasoning_effort:
             params["reasoning_effort"] = self.openai_reasoning_effort
         else:
-            # 映射到 OpenAI 的 effort 级别
+            # 映射到 effort 级别
             effort_mapping = {
                 ThinkingLevel.MINIMAL: "low",
                 ThinkingLevel.LOW: "low",
@@ -149,7 +149,7 @@ class ThinkingConfig(BaseModel):
 
 # 支持思考的模型列表
 THINKING_CAPABLE_MODELS = {
-    # Anthropic Claude 模型
+    # messages 风格模型
     "claude-3-5-sonnet": {
         "provider": "anthropic",
         "max_thinking_tokens": 16000,
@@ -166,7 +166,7 @@ THINKING_CAPABLE_MODELS = {
         "provider": "anthropic",
         "max_thinking_tokens": 32000,
     },
-    # OpenAI o 系列模型
+    # reasoning 风格模型
     "o1-preview": {
         "provider": "openai",
         "max_thinking_tokens": 32000,
@@ -179,7 +179,7 @@ THINKING_CAPABLE_MODELS = {
         "provider": "openai",
         "max_thinking_tokens": 16000,
     },
-    # Google Gemini 模型
+    # multimodal 风格模型
     "gemini-2.0-flash-thinking": {
         "provider": "google",
         "max_thinking_tokens": 24000,

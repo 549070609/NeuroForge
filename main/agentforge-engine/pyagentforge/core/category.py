@@ -32,7 +32,7 @@ class Category:
 
     name: str
     description: str
-    model: str = "gpt-4o-mini"  # Preferred model for this category
+    model: str = "default"  # Preferred model for this category
     temperature: float = 1.0
     max_tokens: int = 4096
 
@@ -84,7 +84,7 @@ BUILTIN_CATEGORIES: dict[str, Category] = {
     "quick": Category(
         name="quick",
         description="Fast tasks that need quick responses",
-        model="gpt-4o-mini",
+        model="default",
         agents=["explore"],
         skills=[],
         priority=10,
@@ -103,7 +103,7 @@ BUILTIN_CATEGORIES: dict[str, Category] = {
     "coding": Category(
         name="coding",
         description="Code implementation and modification tasks",
-        model="claude-sonnet-4-20250514",
+        model="default",
         temperature=1.0,
         max_tokens=8192,
         agents=["explore", "plan", "code", "review"],
@@ -129,7 +129,7 @@ BUILTIN_CATEGORIES: dict[str, Category] = {
     "visual-engineering": Category(
         name="visual-engineering",
         description="UI/UX design and frontend development",
-        model="gpt-4o",  # Vision-capable
+        model="default",
         temperature=1.0,
         max_tokens=8192,
         agents=["explore", "plan", "code"],
@@ -178,7 +178,7 @@ BUILTIN_CATEGORIES: dict[str, Category] = {
     "research": Category(
         name="research",
         description="Documentation and research tasks",
-        model="gpt-4o-mini",
+        model="default",
         agents=["librarian", "explore"],
         skills=["research", "documentation"],
         priority=4,
@@ -198,7 +198,7 @@ BUILTIN_CATEGORIES: dict[str, Category] = {
     "exploration": Category(
         name="exploration",
         description="Code exploration and analysis",
-        model="gpt-4o-mini",
+        model="default",
         agents=["explore"],
         skills=[],
         priority=8,

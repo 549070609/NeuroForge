@@ -14,7 +14,6 @@ from Service.services.model_config_service import ModelConfigService
 from Service.schemas.models import (
     ModelConfigCreate,
     ModelConfigUpdate,
-    ProviderType,
     ApiType,
 )
 
@@ -60,7 +59,7 @@ async def main():
             ModelConfigCreate(
                 id="my-custom-model",
                 name="My Custom Model",
-                provider=ProviderType.CUSTOM,
+                provider="custom",
                 api_type=ApiType.OPENAI_COMPLETIONS,
                 supports_vision=False,
                 supports_tools=True,
@@ -103,38 +102,29 @@ async def main():
     except ValueError as e:
         print(f"   Error: {e}")
 
-    # 7. 列出国产 LLM 提供商
-    print("\n[7] List Chinese LLM providers")
-    providers = service.list_chinese_providers()
-    print(f"   Total: {providers.total}")
-    for p in providers.providers:
-        print(f"   - {p.vendor_name} ({p.vendor}): {len(p.models)} models")
-        print(f"     Default: {p.default_model}")
-        print(f"     Models: {p.models[:3]}...")
-
-    # 8. 尝试删除内置模型 (应该失败)
-    print("\n[8] Try to delete builtin model (should fail)")
+    # 7. 尝试删除内置模型 (应该失败)
+    print("\n[7] Try to delete builtin model (should fail)")
     try:
         service.delete_model("glm-4-flash")
         print("   ERROR: Should have failed!")
     except ValueError as e:
         print(f"   Expected error: {e}")
 
-    # 9. 删除自定义模型
-    print("\n[9] Delete custom model")
+    # 8. 删除自定义模型
+    print("\n[8] Delete custom model")
     try:
         success = service.delete_model("my-custom-model")
         print(f"   Deleted: {success}")
     except ValueError as e:
         print(f"   Error: {e}")
 
-    # 10. 验证删除
-    print("\n[10] Verify deletion")
+    # 9. 验证删除
+    print("\n[9] Verify deletion")
     model = service.get_model("my-custom-model")
     print(f"   Model exists: {model is not None}")
 
-    # 11. 最终统计
-    print("\n[11] Final statistics")
+    # 10. 最终统计
+    print("\n[10] Final statistics")
     stats = service.get_stats()
     print(f"   Total: {stats.total_models}")
     print(f"   Custom: {stats.custom_models}")

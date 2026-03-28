@@ -422,7 +422,7 @@ class AgentProxyService(BaseService):
         # 返回默认定义
         return {
             "identity": {"name": agent_id, "description": f"Agent: {agent_id}"},
-            "model": {"id": "claude-sonnet-4-20250514"},
+            "model": {"id": "default"},
             "capabilities": {"tools": ["*"]},
             "limits": {},
         }

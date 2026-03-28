@@ -1,4 +1,4 @@
-"""
+﻿"""
 Model Config Schemas - API 请求和响应模型
 
 定义模型配置相关的 API 数据结构。
@@ -8,23 +8,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 
 # ==================== Enums ====================
-
-
-class ProviderType(str, Enum):
-    """Provider 类型"""
-
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
-    GOOGLE = "google"
-    AZURE = "azure"
-    BEDROCK = "bedrock"
-    CUSTOM = "custom"
 
 
 class ApiType(str, Enum):
@@ -45,8 +34,9 @@ class ModelConfigBase(BaseModel):
     """模型配置基础字段"""
 
     name: str = Field(description="显示名称")
-    provider: ProviderType = Field(description="提供商类型")
+    provider: str = Field(description="提供商标识，仅作分组展示")
     api_type: ApiType = Field(description="API 类型")
+    model_name: str | None = Field(default=None, description="实际传给远端的模型名")
 
     # 模型能力
     supports_vision: bool = Field(default=False, description="是否支持图像")
@@ -65,7 +55,10 @@ class ModelConfigBase(BaseModel):
 
     # API 配置
     base_url: str | None = Field(default=None, description="API 基础 URL")
+    api_key: str | None = Field(default=None, description="直接传入的 API Key")
     api_key_env: str = Field(default="", description="API Key 环境变量名")
+    headers: dict[str, str] = Field(default_factory=dict, description="附加请求头")
+    timeout: int = Field(default=120, description="请求超时（秒）")
 
     # 额外配置
     extra: dict[str, Any] = Field(default_factory=dict, description="额外配置")
@@ -93,8 +86,9 @@ class ModelConfigUpdate(BaseModel):
     """模型配置更新请求"""
 
     name: str | None = Field(default=None, description="显示名称")
-    provider: ProviderType | None = Field(default=None, description="提供商类型")
+    provider: str | None = Field(default=None, description="提供商类型")
     api_type: ApiType | None = Field(default=None, description="API 类型")
+    model_name: str | None = Field(default=None, description="实际传给远端的模型名")
 
     supports_vision: bool | None = Field(default=None, description="是否支持图像")
     supports_tools: bool | None = Field(default=None, description="是否支持工具调用")
@@ -109,7 +103,10 @@ class ModelConfigUpdate(BaseModel):
     cost_cache_write: float | None = Field(default=None, description="缓存写入成本/百万 tokens")
 
     base_url: str | None = Field(default=None, description="API 基础 URL")
+    api_key: str | None = Field(default=None, description="直接传入的 API Key")
     api_key_env: str | None = Field(default=None, description="API Key 环境变量名")
+    headers: dict[str, str] | None = Field(default=None, description="附加请求头")
+    timeout: int | None = Field(default=None, description="请求超时（秒）")
 
     extra: dict[str, Any] | None = Field(default=None, description="额外配置")
 
@@ -121,6 +118,7 @@ class ModelConfigResponse(BaseModel):
     name: str = Field(description="显示名称")
     provider: str = Field(description="提供商类型")
     api_type: str = Field(description="API 类型")
+    model_name: str | None = Field(default=None, description="实际传给远端的模型名")
 
     supports_vision: bool = Field(description="是否支持图像")
     supports_tools: bool = Field(description="是否支持工具调用")
@@ -135,11 +133,14 @@ class ModelConfigResponse(BaseModel):
     cost_cache_write: float = Field(description="缓存写入成本/百万 tokens")
 
     base_url: str | None = Field(description="API 基础 URL")
+    api_key: str | None = Field(default=None, description="直接传入的 API Key")
     api_key_env: str = Field(description="API Key 环境变量名")
+    headers: dict[str, str] = Field(default_factory=dict, description="附加请求头")
+    timeout: int = Field(default=120, description="请求超时（秒）")
 
     extra: dict[str, Any] = Field(description="额外配置")
 
-    is_builtin: bool = Field(default=False, description="是否为内置模型")
+    is_builtin: bool = Field(default=False, description="兼容字段，当前固定为 false")
     created_at: datetime | None = Field(default=None, description="创建时间")
     updated_at: datetime | None = Field(default=None, description="更新时间")
 
@@ -159,25 +160,3 @@ class ModelConfigStatsResponse(BaseModel):
     builtin_models: int = Field(description="内置模型数")
     custom_models: int = Field(description="自定义模型数")
     by_provider: dict[str, int] = Field(description="按提供商统计")
-
-
-# ==================== Provider Info Schemas ====================
-
-
-class ChineseProviderInfo(BaseModel):
-    """国产 LLM 提供商信息"""
-
-    vendor: str = Field(description="厂商标识")
-    vendor_name: str = Field(description="厂商名称")
-    models: list[str] = Field(description="支持的模型列表")
-    default_model: str = Field(description="默认模型")
-    api_key_env: str = Field(description="API Key 环境变量名")
-    base_url: str = Field(description="API 基础 URL")
-    description: str = Field(default="", description="厂商描述")
-
-
-class ChineseProviderListResponse(BaseModel):
-    """国产 LLM 提供商列表响应"""
-
-    providers: list[ChineseProviderInfo] = Field(description="提供商列表")
-    total: int = Field(description="总数")

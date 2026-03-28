@@ -14,15 +14,7 @@
 - 上下文感知: from pyagentforge.plugins.integration.context_aware.prompt_manager import ...
 """
 
-# 发出弃用警告
-import warnings
-
-warnings.warn(
-    "Importing from pyagentforge.core is deprecated. "
-    "Use pyagentforge.kernel or pyagentforge.plugins.* instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+# 兼容层保留导出；不再在包导入时发出全局弃用警告，避免影响新稳定入口。
 
 # 从 kernel 重导出核心组件
 from pyagentforge.kernel import (
@@ -43,12 +35,9 @@ from pyagentforge.kernel import (
     # 模型注册
     ModelRegistry,
     ModelConfig,
-    ProviderType,
-    ProviderInfo,
     get_registry,
     register_model,
     get_model,
-    register_provider,
 )
 
 # 从 plugins 重导出扩展功能
@@ -143,12 +132,9 @@ __all__ = [
     # 模型注册
     "ModelRegistry",
     "ModelConfig",
-    "ProviderType",
-    "ProviderInfo",
     "get_registry",
     "register_model",
     "get_model",
-    "register_provider",
     # 思考级别控制
     "ThinkingLevel",
     "ThinkingConfig",

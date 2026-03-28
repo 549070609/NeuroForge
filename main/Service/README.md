@@ -124,7 +124,11 @@ Service/
 │   ├── __init__.py
 │   ├── base.py             # BaseService
 │   ├── agent_service.py    # Agent management
-│   └── agent_proxy.py      # Agent proxy service (New)
+│   ├── model_config_service.py
+│   └── proxy/
+│       ├── agent_proxy_service.py
+│       ├── agent_executor.py
+│       └── session_manager.py
 │
 ├── workspace/              # Workspace management (New)
 │   ├── __init__.py
@@ -167,9 +171,8 @@ Service/
 │       ├── health.py
 │       ├── tools.py
 │       ├── agents.py
-│       ├── workspaces.py   # New
-│       ├── sessions.py     # New
-│       └── execute.py      # New
+│       ├── models.py
+│       └── proxy.py
 │
 ├── config/                 # Configuration
 │   ├── __init__.py
@@ -178,9 +181,8 @@ Service/
 ├── schemas/                # Request/Response schemas
 │   ├── __init__.py
 │   ├── agents.py
-│   ├── workspace.py        # New
-│   ├── session.py          # New
-│   └── execution.py        # New
+│   ├── models.py
+│   └── proxy.py
 │
 ├── docs/                   # Design documents
 │   └── SERVICE_AGENT_PROXY_DESIGN.md

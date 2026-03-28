@@ -10,22 +10,13 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge import (
-    ModelConfig,
-    ModelRegistry,
-    ProviderType,
-    get_registry,
-    register_model,
-    ChineseLLMRegistry,
-)
+from pyagentforge import ModelConfig, ModelRegistry, get_registry, register_model
 
 from ..schemas.models import (
     ModelConfigCreate,
     ModelConfigResponse,
     ModelConfigStatsResponse,
     ModelConfigUpdate,
-    ChineseProviderInfo,
-    ChineseProviderListResponse,
 )
 
 if TYPE_CHECKING:
@@ -34,25 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# 内置模型 ID 列表（不允许删除或修改关键字段）
-BUILTIN_MODEL_IDS = {
-    "claude-sonnet-4-20250514",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
-    "claude-opus-4-20250514",
-    "gpt-4o",
-    "gpt-4o-mini",
-    "o1-preview",
-    "o3-mini",
-    "gemini-2.0-flash",
-    "glm-4-flash",
-    "glm-4-plus",
-    "glm-4-air",
-    "glm-4-airx",
-    "glm-4-long",
-    "glm-4.7",
-    "glm-5",
-}
+BUILTIN_MODEL_IDS: set[str] = set()
 
 
 class ModelConfigService:
@@ -62,7 +35,6 @@ class ModelConfigService:
     提供:
     - 模型配置的 CRUD 操作
     - 内置模型和自定义模型的统一管理
-    - 国产 LLM 提供商信息查询
     """
 
     def __init__(self, registry: ServiceRegistry):
@@ -111,9 +83,6 @@ class ModelConfigService:
     def _get_registry(self):
         return get_registry()
 
-    def _get_chinese_llm_registry(self):
-        return ChineseLLMRegistry
-
     # ==================== CRUD Operations ====================
 
     def list_models(
@@ -140,14 +109,16 @@ class ModelConfigService:
 
         for config in registry.get_all_models():
             # 应用过滤器
-            if provider and config.provider.value != provider:
+            if provider and config.provider != provider:
                 continue
             if supports_vision is not None and config.supports_vision != supports_vision:
                 continue
             if supports_tools is not None and config.supports_tools != supports_tools:
                 continue
 
-            is_builtin = config.id in BUILTIN_MODEL_IDS
+            model_is_builtin = False
+            if is_builtin is not None and model_is_builtin != is_builtin:
+                continue
 
             # 获取时间戳
             timestamps = self._config_timestamps.get(config.id, {})
@@ -156,8 +127,9 @@ class ModelConfigService:
                 ModelConfigResponse(
                     id=config.id,
                     name=config.name,
-                    provider=config.provider.value,
+                    provider=config.provider,
                     api_type=config.api_type,
+                    model_name=config.model_name,
                     supports_vision=config.supports_vision,
                     supports_tools=config.supports_tools,
                     supports_streaming=config.supports_streaming,
@@ -168,9 +140,12 @@ class ModelConfigService:
                     cost_cache_read=config.cost_cache_read,
                     cost_cache_write=config.cost_cache_write,
                     base_url=config.base_url,
+                    api_key=config.api_key,
                     api_key_env=config.api_key_env,
+                    headers=config.headers,
+                    timeout=config.timeout,
                     extra=config.extra,
-                    is_builtin=is_builtin,
+                    is_builtin=model_is_builtin,
                     created_at=timestamps.get("created_at"),
                     updated_at=timestamps.get("updated_at"),
                 )
@@ -194,14 +169,15 @@ class ModelConfigService:
         if not config:
             return None
 
-        is_builtin = config.id in BUILTIN_MODEL_IDS
+        is_builtin = False
         timestamps = self._config_timestamps.get(config.id, {})
 
         return ModelConfigResponse(
             id=config.id,
             name=config.name,
-            provider=config.provider.value,
+            provider=config.provider,
             api_type=config.api_type,
+            model_name=config.model_name,
             supports_vision=config.supports_vision,
             supports_tools=config.supports_tools,
             supports_streaming=config.supports_streaming,
@@ -212,7 +188,10 @@ class ModelConfigService:
             cost_cache_read=config.cost_cache_read,
             cost_cache_write=config.cost_cache_write,
             base_url=config.base_url,
+            api_key=config.api_key,
             api_key_env=config.api_key_env,
+            headers=config.headers,
+            timeout=config.timeout,
             extra=config.extra,
             is_builtin=is_builtin,
             created_at=timestamps.get("created_at"),
@@ -234,15 +213,16 @@ class ModelConfigService:
         """
         # 检查是否已存在
         registry = self._get_registry()
-        if registry.get_model(request.id):
+        if registry.has_runtime_model(request.id):
             raise ValueError(f"模型 ID '{request.id}' 已存在")
 
         # 创建配置
         config = ModelConfig(
             id=request.id,
             name=request.name,
-            provider=ProviderType(request.provider.value),
+            provider=request.provider,
             api_type=request.api_type.value,
+            model_name=request.model_name,
             supports_vision=request.supports_vision,
             supports_tools=request.supports_tools,
             supports_streaming=request.supports_streaming,
@@ -253,7 +233,10 @@ class ModelConfigService:
             cost_cache_read=request.cost_cache_read,
             cost_cache_write=request.cost_cache_write,
             base_url=request.base_url,
+            api_key=request.api_key,
             api_key_env=request.api_key_env,
+            headers=request.headers,
+            timeout=request.timeout,
             extra=request.extra,
         )
 
@@ -297,14 +280,7 @@ class ModelConfigService:
         update_data = request.model_dump(exclude_unset=True)
 
         # 处理 provider 字段
-        provider_value = update_data.get("provider")
-        if provider_value is not None:
-            if hasattr(provider_value, "value"):
-                provider = ProviderType(provider_value.value)
-            else:
-                provider = ProviderType(provider_value)
-        else:
-            provider = existing.provider
+        provider = update_data.get("provider", existing.provider)
 
         # 创建新配置（合并现有值和更新值）
         new_config = ModelConfig(
@@ -312,6 +288,7 @@ class ModelConfigService:
             name=update_data.get("name", existing.name),
             provider=provider,
             api_type=update_data.get("api_type", existing.api_type),
+            model_name=update_data.get("model_name", existing.model_name),
             supports_vision=update_data.get("supports_vision", existing.supports_vision),
             supports_tools=update_data.get("supports_tools", existing.supports_tools),
             supports_streaming=update_data.get(
@@ -328,7 +305,10 @@ class ModelConfigService:
                 "cost_cache_write", existing.cost_cache_write
             ),
             base_url=update_data.get("base_url", existing.base_url),
+            api_key=update_data.get("api_key", existing.api_key),
             api_key_env=update_data.get("api_key_env", existing.api_key_env),
+            headers=update_data.get("headers", existing.headers),
+            timeout=update_data.get("timeout", existing.timeout),
             extra=update_data.get("extra", existing.extra),
         )
 
@@ -358,9 +338,6 @@ class ModelConfigService:
             ValueError: 如果尝试删除内置模型
         """
         # 检查是否为内置模型
-        if model_id in BUILTIN_MODEL_IDS:
-            raise ValueError(f"无法删除内置模型 '{model_id}'")
-
         registry = get_registry()
 
         # 检查是否存在
@@ -401,63 +378,4 @@ class ModelConfigService:
             builtin_models=builtin,
             custom_models=custom,
             by_provider=by_provider,
-        )
-
-    # ==================== Chinese LLM Providers ====================
-
-    def list_chinese_providers(self) -> ChineseProviderListResponse:
-        """
-        获取国产 LLM 提供商列表
-
-        Returns:
-            提供商列表
-        """
-        ChineseLLMRegistry = self._get_chinese_llm_registry()
-
-        if not ChineseLLMRegistry:
-            return ChineseProviderListResponse(providers=[], total=0)
-
-        providers = []
-        for vendor, info in ChineseLLMRegistry.get_all_providers().items():
-            providers.append(
-                ChineseProviderInfo(
-                    vendor=info.vendor,
-                    vendor_name=info.vendor_name,
-                    models=info.models,
-                    default_model=info.default_model,
-                    api_key_env=info.api_key_env,
-                    base_url=info.base_url,
-                    description=info.description,
-                )
-            )
-
-        return ChineseProviderListResponse(providers=providers, total=len(providers))
-
-    def get_chinese_provider(self, vendor: str) -> ChineseProviderInfo | None:
-        """
-        获取单个国产 LLM 提供商信息
-
-        Args:
-            vendor: 厂商标识
-
-        Returns:
-            提供商信息，不存在返回 None
-        """
-        ChineseLLMRegistry = self._get_chinese_llm_registry()
-
-        if not ChineseLLMRegistry:
-            return None
-
-        info = ChineseLLMRegistry.get_provider(vendor)
-        if not info:
-            return None
-
-        return ChineseProviderInfo(
-            vendor=info.vendor,
-            vendor_name=info.vendor_name,
-            models=info.models,
-            default_model=info.default_model,
-            api_key_env=info.api_key_env,
-            base_url=info.base_url,
-            description=info.description,
         )

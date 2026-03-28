@@ -43,7 +43,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Register services here when adding new services
     from ..services.agent_service import AgentService
-    from ..services.legacy_runtime_service import LegacyRuntimeService
     from ..services.model_config_service import ModelConfigService
     from ..services.proxy.agent_proxy_service import AgentProxyService
 
@@ -52,9 +51,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     proxy_service = AgentProxyService(registry)
     registry.register("proxy", proxy_service)
-
-    legacy_runtime_service = LegacyRuntimeService(registry)
-    registry.register("legacy_runtime", legacy_runtime_service)
 
     model_config_service = ModelConfigService(registry)
     registry.register("model_config", model_config_service)
@@ -113,17 +109,14 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     )
 
     # Register routes
-    from .routes import agents, health, legacy_runtime, models, proxy, tools
+    from .routes import agents, health, models, proxy, tools
 
     app.include_router(health.router, tags=["Health"])
     app.include_router(tools.router, prefix="/api/v1", tags=["Tools"])
     app.include_router(agents.router, prefix="/api/v1", tags=["Agents"])
     app.include_router(agents.plan_router, prefix="/api/v1", tags=["Plans"])
     app.include_router(models.router, prefix="/api/v1", tags=["Models"])
-    app.include_router(models.provider_router, prefix="/api/v1", tags=["Chinese LLM Providers"])
     app.include_router(proxy.router, prefix="/api/v1", tags=["Proxy"])
-    app.include_router(legacy_runtime.router)
-    app.include_router(legacy_runtime.websocket_router)
 
     logger.info("FastAPI application created")
     return app

@@ -72,17 +72,24 @@ event["message"] -> str
 ```python
 from Service.services.proxy.agent_proxy_service import AgentProxyService
 from Service.schemas.proxy import (
-    WorkspaceCreate, SessionCreate,
+    AgentConfigOverride,
     ProxyExecuteRequest, ProxyExecuteResponse,
 )
 
-ws_ctx  = proxy.create_workspace(WorkspaceCreate(...))
-session = await proxy.create_session(SessionCreate(workspace_id="ws-01", agent_id="plan"))
+ws_ctx  = proxy.create_workspace(
+    workspace_id="ws-01",
+    root_path="/projects/myapp",
+)
+session = await proxy.create_session(
+    workspace_id="ws-01",
+    agent_id="plan",
+    metadata={},
+    agent_config=AgentConfigOverride(max_iterations=20).model_dump(exclude_none=True),
+)
 result  = await proxy.execute(
     session_id=session.session_id,
     prompt="analyze payment module",
     context={"focus": "retry_logic"},
-    config_overrides={"max_iterations": 20},
 )
 async for event in proxy.execute_stream(
     session_id=session.session_id,
@@ -98,7 +105,6 @@ class ProxyExecuteRequest:
     session_id: str
     prompt: str
     context: dict | None = None
-    config_overrides: dict | None = None   # same keys as AgentExecutor.initialize config_overrides
 
 class ProxyExecuteResponse:
     session_id: str

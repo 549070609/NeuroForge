@@ -1,27 +1,24 @@
 """
 Agent 执行引擎
 
-实现 Agent 的核心执行循环
+实现 Agent 的核心执行循环，支持 checkpoint/resume。
 """
+
+from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
+from pyagentforge.kernel.checkpoint import BaseCheckpointer, Checkpoint
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.executor import ToolExecutor, ToolRegistry
-from pyagentforge.kernel.message import (
-    Message,
-    ProviderResponse,
-    TextBlock,
-    ToolUseBlock,
-)
+from pyagentforge.kernel.message import ProviderResponse
 from pyagentforge.kernel.base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
-# 用户确认回调类型
 AskCallback = Callable[[str, dict[str, Any]], bool]
 
 
@@ -36,7 +33,7 @@ class AgentConfig:
 
 
 class AgentEngine:
-    """Agent 执行引擎 - 核心执行循环"""
+    """Agent 执行引擎 - 核心执行循环，支持 checkpoint/resume"""
 
     def __init__(
         self,
@@ -45,21 +42,10 @@ class AgentEngine:
         config: AgentConfig | None = None,
         context: ContextManager | None = None,
         ask_callback: AskCallback | None = None,
-        plugin_manager: Any = None,  # PluginManager 将在 Phase 2 实现
-        category_registry: Any = None,  # CategoryRegistry for task classification
+        plugin_manager: Any = None,
+        category_registry: Any = None,
+        checkpointer: BaseCheckpointer | None = None,
     ) -> None:
-        """
-        初始化 Agent 引擎
-
-        Args:
-            provider: LLM 提供商
-            tool_registry: 工具注册表
-            config: Agent 配置
-            context: 上下文管理器
-            ask_callback: 用户确认回调
-            plugin_manager: 插件管理器 (可选)
-            category_registry: 类别注册表 (可选，用于任务分类)
-        """
         self.provider = provider
         self.tools = tool_registry
         self.config = config or AgentConfig()
@@ -73,6 +59,7 @@ class AgentEngine:
         self.ask_callback = ask_callback
         self.plugin_manager = plugin_manager
         self.category_registry = category_registry
+        self.checkpointer = checkpointer
         self._subagent_depth = 0
         self._session_id = str(uuid.uuid4())
 
@@ -85,12 +72,13 @@ class AgentEngine:
         """获取会话 ID"""
         return self._session_id
 
-    async def run(self, prompt: str) -> str:
+    async def run(self, prompt: str, *, resume: bool = False) -> str:
         """
         运行 Agent
 
         Args:
             prompt: 用户输入
+            resume: 是否从 checkpoint 恢复执行
 
         Returns:
             Agent 响应
@@ -103,11 +91,22 @@ class AgentEngine:
         if self.plugin_manager:
             await self.plugin_manager.emit_hook("on_engine_start", self)
 
-        # 添加用户消息
-        self.context.add_user_message(prompt)
+        # 从 checkpoint 恢复
+        start_iteration = 0
+        if resume and self.checkpointer:
+            restored = await self._restore_from_checkpoint()
+            if restored is not None:
+                start_iteration = restored
+                logger.info(
+                    f"Resumed from checkpoint at iteration {start_iteration}",
+                )
+            else:
+                self.context.add_user_message(prompt)
+        else:
+            self.context.add_user_message(prompt)
 
         # 执行循环
-        iteration = 0
+        iteration = start_iteration
         max_iterations = self.config.max_iterations
 
         while iteration < max_iterations:
@@ -146,6 +145,9 @@ class AgentEngine:
             if not response.has_tool_calls:
                 self.context.add_assistant_text(response.text)
 
+                # 任务完成，清理 checkpoint
+                await self._delete_checkpoint()
+
                 # 插件钩子: on_task_complete
                 if self.plugin_manager:
                     await self.plugin_manager.emit_hook("on_task_complete", response.text)
@@ -171,6 +173,9 @@ class AgentEngine:
             # 添加工具结果
             for tool_use_id, result in tool_results:
                 self.context.add_tool_result(tool_use_id, result)
+
+            # Checkpoint: 每次迭代后保存
+            await self._save_checkpoint(iteration)
 
             # 检查是否需要截断上下文
             if len(self.context) > self.context.max_messages * 0.8:
@@ -462,3 +467,48 @@ class AgentEngine:
     def get_category_registry(self) -> Any:
         """获取类别注册表"""
         return self.category_registry
+
+    # ── Checkpoint helpers ──────────────────────────────────────
+
+    async def _save_checkpoint(self, iteration: int) -> None:
+        if not self.checkpointer:
+            return
+        try:
+            cp = Checkpoint(
+                session_id=self._session_id,
+                iteration=iteration,
+                context_data=self.context.to_dict(),
+                metadata={
+                    "model": self.provider.model,
+                    "max_iterations": self.config.max_iterations,
+                },
+            )
+            await self.checkpointer.save(self._session_id, cp)
+        except Exception as e:
+            logger.warning(f"Failed to save checkpoint: {e}")
+
+    async def _restore_from_checkpoint(self) -> int | None:
+        """从 checkpoint 恢复上下文，返回恢复的 iteration 编号。"""
+        if not self.checkpointer:
+            return None
+        try:
+            cp = await self.checkpointer.load(self._session_id)
+            if cp is None:
+                return None
+            self.context = ContextManager.from_dict(cp.context_data)
+            logger.info(
+                f"Restored checkpoint: iteration={cp.iteration}, "
+                f"messages={len(self.context)}"
+            )
+            return cp.iteration
+        except Exception as e:
+            logger.warning(f"Failed to restore checkpoint: {e}")
+            return None
+
+    async def _delete_checkpoint(self) -> None:
+        if not self.checkpointer:
+            return
+        try:
+            await self.checkpointer.delete(self._session_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete checkpoint: {e}")

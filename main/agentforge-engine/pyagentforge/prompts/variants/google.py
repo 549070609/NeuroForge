@@ -1,21 +1,14 @@
-"""
-Google 模型提示词变体
-"""
+﻿"""Multimodal protocol prompt variants."""
 
-from pyagentforge.kernel.model_registry import ModelConfig, ProviderType
-from pyagentforge.prompts.base import PromptVariant
-from pyagentforge.prompts.registry import PromptTemplateRegistry
+from pyagentforge.prompts.registry import register_prompt_variant, PromptVariant
 
 
-def register_google_variants(registry: PromptTemplateRegistry) -> None:
-    """注册 Google 模型变体"""
-
-    registry.register_variant(
+def register_google_variants() -> None:
+    """注册 multimodal 协议提示词变体。"""
+    register_prompt_variant(
         PromptVariant(
             name="google_concise",
-            applies_to=lambda mid, cfg: cfg.provider == ProviderType.GOOGLE,
+            description="简洁输出风格，适合轻量快速响应",
             template_path="google/concise.md",
-            priority=50,
-            description="简洁输出风格，适合 Gemini",
         )
     )

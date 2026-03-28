@@ -9,9 +9,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -137,6 +139,8 @@ class SpawnSubagentTool(MateAgentTool):
         inputs = kwargs.get("inputs", {})
         timeout = kwargs.get("timeout", 300)
         context = kwargs.get("context", {})
+        subagent_executor = kwargs.get("subagent_executor")
+        engine_factory = kwargs.get("engine_factory")
 
         if not subagent_id:
             return self._format_error("subagent_id 是必需参数", "MISSING_SUBAGENT_ID")
@@ -168,6 +172,8 @@ class SpawnSubagentTool(MateAgentTool):
                 inputs=inputs,
                 timeout=timeout,
                 context=context,
+                subagent_executor=subagent_executor,
+                engine_factory=engine_factory,
             )
 
             self._log_operation("spawn_subagent", {
@@ -237,6 +243,8 @@ class SpawnSubagentTool(MateAgentTool):
         inputs: dict[str, Any],
         timeout: int,
         context: dict[str, Any],
+        subagent_executor: Any = None,
+        engine_factory: Any = None,
     ) -> SubagentResult:
         """
         执行子Agent
@@ -251,7 +259,7 @@ class SpawnSubagentTool(MateAgentTool):
         Returns:
             执行结果
         """
-        started_at = datetime.utcnow().isoformat() + "Z"
+        started_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
         result = SubagentResult(
             agent_id=agent.agent_id,
@@ -260,17 +268,15 @@ class SpawnSubagentTool(MateAgentTool):
         )
 
         try:
-            # 这里是模拟执行，实际实现需要调用真正的 Agent 运行时
-            # 在真实实现中，这里会:
-            # 1. 创建 Agent 实例
-            # 2. 注入上下文和输入
-            # 3. 执行任务
-            # 4. 收集输出
-
-            output = await self._simulate_agent_execution(
-                agent=agent,
-                task=task,
-                inputs=inputs,
+            output = await asyncio.wait_for(
+                self._run_subagent(
+                    agent=agent,
+                    task=task,
+                    inputs=inputs,
+                    context=context,
+                    subagent_executor=subagent_executor,
+                    engine_factory=engine_factory,
+                ),
                 timeout=timeout,
             )
 
@@ -286,7 +292,7 @@ class SpawnSubagentTool(MateAgentTool):
             result.error = str(e)
 
         finally:
-            completed_at = datetime.utcnow().isoformat() + "Z"
+            completed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
             result.completed_at = completed_at
 
             # 计算执行时间
@@ -296,38 +302,87 @@ class SpawnSubagentTool(MateAgentTool):
 
         return result
 
-    async def _simulate_agent_execution(
+    async def _run_subagent(
         self,
         agent: Any,
         task: str,
         inputs: dict[str, Any],
-        timeout: int,
+        context: dict[str, Any],
+        subagent_executor: Any = None,
+        engine_factory: Any = None,
     ) -> str:
         """
-        模拟 Agent 执行
-
-        这是一个占位实现，实际实现需要集成 Agent 运行时。
+        执行真实子Agent运行时。
 
         Args:
             agent: AgentInfo 实例
             task: 任务描述
             inputs: 输入参数
-            timeout: 超时时间
+            context: 上下文
+            subagent_executor: 注入的子Agent执行器
+            engine_factory: 注入的引擎工厂
 
         Returns:
             执行输出
         """
-        # 模拟执行延迟
-        await asyncio.sleep(0.1)
+        execution_prompt = self._build_execution_prompt(task, inputs, context)
 
-        # 返回模拟结果
-        # 在真实实现中，这里会调用 Agent 运行时
-        return f"[模拟执行] Agent '{agent.agent_id}' 处理任务: {task[:100]}..."
+        if subagent_executor is not None:
+            result = subagent_executor(
+                agent=agent,
+                task=task,
+                inputs=inputs,
+                context=context,
+                prompt=execution_prompt,
+            )
+            if inspect.isawaitable(result):
+                result = await result
+            return str(result)
+
+        if engine_factory is not None:
+            engine = self._create_engine(engine_factory, agent)
+            if engine is None or not hasattr(engine, "run"):
+                raise RuntimeError(f"无法为子Agent '{agent.agent_id}' 创建运行时")
+
+            result = engine.run(execution_prompt)
+            if inspect.isawaitable(result):
+                result = await result
+            return str(result)
+
+        raise RuntimeError(
+            f"子Agent '{agent.agent_id}' 运行时不可用，请注入 subagent_executor 或 engine_factory"
+        )
+
+    def _create_engine(self, engine_factory: Any, agent: Any) -> Any:
+        """通过注入的工厂创建子Agent运行时。"""
+        try:
+            return engine_factory(agent.agent_id, agent)
+        except TypeError:
+            return engine_factory(agent.agent_id)
+
+    def _build_execution_prompt(
+        self,
+        task: str,
+        inputs: dict[str, Any],
+        context: dict[str, Any],
+    ) -> str:
+        """构造传递给子Agent运行时的执行提示。"""
+        sections = [f"Task:\n{task}"]
+
+        if inputs:
+            sections.append(
+                "Inputs:\n" + json.dumps(inputs, ensure_ascii=False, indent=2)
+            )
+
+        if context:
+            sections.append(
+                "Context:\n" + json.dumps(context, ensure_ascii=False, indent=2)
+            )
+
+        return "\n\n".join(sections)
 
     def _format_subagent_result(self, result: SubagentResult) -> str:
         """格式化子Agent执行结果"""
-        import json
-
         output = {
             "success": result.status == SubagentStatus.COMPLETED,
             "agent_id": result.agent_id,
@@ -476,7 +531,7 @@ class SpawnMultipleSubagentsTool(MateAgentTool):
         # 解析结果
         parsed_results = []
         for i, result in enumerate(results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 parsed_results.append(SubagentResult(
                     agent_id=subagents[i]["agent_id"],
                     status=SubagentStatus.FAILED,
@@ -484,9 +539,9 @@ class SpawnMultipleSubagentsTool(MateAgentTool):
                 ))
             else:
                 # 解析 JSON 结果
-                import json
+                result_text = str(result)
                 try:
-                    data = json.loads(result)
+                    data = json.loads(result_text)
                     parsed_results.append(SubagentResult(
                         agent_id=data.get("agent_id", subagents[i]["agent_id"]),
                         status=SubagentStatus(data.get("status", "completed")),
@@ -497,7 +552,7 @@ class SpawnMultipleSubagentsTool(MateAgentTool):
                     parsed_results.append(SubagentResult(
                         agent_id=subagents[i]["agent_id"],
                         status=SubagentStatus.COMPLETED,
-                        output=result,
+                        output=result_text,
                     ))
 
         return parsed_results

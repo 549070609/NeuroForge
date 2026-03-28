@@ -5,7 +5,7 @@ Monitors context usage and triggers preemptive compaction to prevent token limit
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from pyagentforge.config.settings import get_settings
 from pyagentforge.core.context_monitor import ContextMonitor
@@ -16,8 +16,9 @@ from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from pyagentforge.core.context import ContextManager
-    from pyagentforge.providers.base import BaseProvider
 
+class SupportsModelName(Protocol):
+    model: str
 logger = get_logger(__name__)
 
 
@@ -105,7 +106,7 @@ class ContextLifecyclePlugin(Plugin):
         self.context.hook_registry.unregister_all(self)
         await super().on_plugin_deactivate()
 
-    def initialize_monitor(self, provider: "BaseProvider") -> None:
+    def initialize_monitor(self, provider: "SupportsModelName") -> None:
         """
         Initialize the context monitor with provider
 

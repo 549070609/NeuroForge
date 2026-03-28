@@ -20,38 +20,38 @@ from pyagentforge.kernel.engine import AgentEngine
 from pyagentforge.kernel.model_registry import (
     ModelRegistry,
     ModelConfig,
-    ProviderType,
-    ProviderInfo,
     get_registry,
     register_model,
     get_model,
-    register_provider,
+)
+from pyagentforge.kernel.checkpoint import (
+    BaseCheckpointer,
+    Checkpoint,
+    FileCheckpointer,
+    MemoryCheckpointer,
 )
 
 __all__ = [
-    # Message types
     "Message",
     "TextBlock",
     "ToolUseBlock",
     "ToolResultBlock",
     "ThinkingBlock",
     "ProviderResponse",
-    # Base classes
     "BaseTool",
     "BaseProvider",
-    # Core components
     "ContextManager",
     "ToolExecutor",
     "ToolRegistry",
     "PermissionChecker",
     "AgentEngine",
-    # Model registry
     "ModelRegistry",
     "ModelConfig",
-    "ProviderType",
-    "ProviderInfo",
     "get_registry",
     "register_model",
     "get_model",
-    "register_provider",
+    "BaseCheckpointer",
+    "Checkpoint",
+    "FileCheckpointer",
+    "MemoryCheckpointer",
 ]

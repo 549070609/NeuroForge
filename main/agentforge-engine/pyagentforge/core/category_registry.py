@@ -245,9 +245,15 @@ class CategoryRegistry:
             matched = []
 
             for keyword in category.keywords:
-                # Case-insensitive keyword matching
-                pattern = r"\b" + re.escape(keyword.lower()) + r"\b"
-                if re.search(pattern, task_lower):
+                keyword_lower = keyword.lower()
+                contains_cjk = any("\u4e00" <= char <= "\u9fff" for char in keyword_lower)
+                if contains_cjk:
+                    is_match = keyword_lower in task_lower
+                else:
+                    pattern = r"\b" + re.escape(keyword_lower) + r"\b"
+                    is_match = re.search(pattern, task_lower) is not None
+
+                if is_match:
                     score += 1
                     matched.append(keyword)
 
@@ -269,7 +275,7 @@ class CategoryRegistry:
         # Determine confidence
         if best_score >= 0.5:
             confidence = min(1.0, best_score)
-        elif best_score >= 0.2:
+        elif best_score >= 0.2 or best_keywords:
             confidence = best_score * 0.8
         else:
             # Fallback to default category
@@ -311,7 +317,7 @@ class CategoryRegistry:
             Model ID
         """
         result = self.classify(task_description)
-        return result.category.model if result.category else "gpt-4o-mini"
+        return result.category.model if result.category else "default"
 
     def get_complexity_for_task(self, task_description: str) -> TaskComplexity:
         """

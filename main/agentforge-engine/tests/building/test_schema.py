@@ -84,7 +84,7 @@ class TestModelConfiguration:
         config = ModelConfiguration()
 
         assert config.provider == "anthropic"
-        assert config.model == "claude-sonnet-4-20250514"
+        assert config.model == "default"
         assert config.temperature == 1.0
         assert config.max_tokens == 4096
 

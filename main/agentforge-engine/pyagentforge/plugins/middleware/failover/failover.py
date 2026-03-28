@@ -11,19 +11,19 @@ import random
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Protocol
 
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def _get_base_provider():
-    """延迟导入 BaseProvider 以避免循环导入"""
-    from pyagentforge.providers.base import BaseProvider
+class RuntimeLLMHandle(Protocol):
+    model: str
 
-    return BaseProvider
+    async def create_message(self, system: Any, messages: Any, tools: Any = None, **kwargs: Any) -> Any: ...
 
+    async def stream_message(self, system: Any, messages: Any, tools: Any = None, **kwargs: Any) -> Any: ...
 
 def _get_provider_response():
     """延迟导入 ProviderResponse 以避免循环导入"""
@@ -65,7 +65,7 @@ class CircuitState(Enum):
 class ProviderHealth:
     """Provider 健康状态"""
 
-    provider: Any  # BaseProvider 实例，使用 Any 避免循环导入
+    provider: RuntimeLLMHandle
     name: str
     priority: int = 0
     weight: int = 100  # 权重 (v3.0 新增)，用于 WEIGHTED 调度
@@ -224,7 +224,7 @@ class ProviderPool:
     def add_provider(
         self,
         name: str,
-        provider: BaseProvider,
+        provider: RuntimeLLMHandle,
         priority: int = 0,
         **health_config: Any,
     ) -> None:
@@ -264,7 +264,7 @@ class ProviderPool:
                 extra_data={"name": name},
             )
 
-    def get_provider(self, name: str) -> BaseProvider | None:
+    def get_provider(self, name: str) -> RuntimeLLMHandle | None:
         """获取指定 Provider"""
         health = self._providers.get(name)
         return health.provider if health else None

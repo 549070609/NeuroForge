@@ -10,10 +10,13 @@ from typing import Any
 from pyagentforge.agents.config import AgentConfig
 from pyagentforge.agents.types import AGENT_TYPES, get_agent_type_config
 from pyagentforge.config.settings import get_settings
-from pyagentforge.core.context import ContextManager
-from pyagentforge.core.engine import AgentEngine
-from pyagentforge.core.parallel import ParallelSubagentExecutor, SubagentStatus
-from pyagentforge.providers.base import BaseProvider
+from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentEngine
+from pyagentforge.plugins.integration.parallel_executor.executor import (
+    ParallelSubagentExecutor,
+    SubagentStatus,
+)
+from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.utils.logging import get_logger
@@ -170,8 +173,9 @@ class TaskTool(BaseTool):
                 ask_callback=self.ask_callback,
             )
             # 替换 Task 工具
+            filtered_tools = sub_tools
             sub_tools = ToolRegistry()
-            for tool in self.tool_registry:
+            for tool in filtered_tools:
                 if tool.name != "Task":
                     sub_tools.register(tool)
             sub_tools.register(sub_task_tool)

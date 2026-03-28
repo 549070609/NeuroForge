@@ -125,8 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 不再从顶层 `pyagentforge` 导出以下 v1.x API：
     - `ParallelSubagentExecutor`, `SubagentStatus` → 使用 `pyagentforge.plugins.integration.parallel_executor`
     - `SkillLoader` → 使用 `pyagentforge.plugins.skills.skill_loader`
-    - `create_provider`, `get_supported_models` → 使用 `pyagentforge.plugins.providers.*`
-    - `ModelRegistry`, `ModelConfig`, `ProviderType`, `get_registry` → 使用 `pyagentforge.core.model_registry`
+    - `get_supported_models` → 使用 `pyagentforge.plugins.providers.*`
+    - `ModelRegistry`, `ModelConfig`, `get_registry` → 使用 `pyagentforge.core.model_registry`
     - `ThinkingLevel`, `create_thinking_config` → 使用 `pyagentforge.core.thinking`
 
 #### 迁移指南

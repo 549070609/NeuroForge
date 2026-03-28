@@ -11,6 +11,8 @@ class CreateSessionRequest(BaseModel):
     """Request body for creating a runtime session."""
 
     agent_id: str | None = Field(default=None, description="Optional legacy agent identifier")
+    model: str | None = Field(default=None, description="Optional runtime model id")
+    provider: str | None = Field(default=None, description="Optional runtime provider name")
     system_prompt: str | None = Field(default=None, description="Optional session system prompt")
 
 
@@ -25,6 +27,8 @@ class SendMessageRequest(BaseModel):
     """Request body for sending a message to a session."""
 
     message: str = Field(..., description="User message content")
+    model: str | None = Field(default=None, description="Optional runtime model id override")
+    provider: str | None = Field(default=None, description="Optional runtime provider name override")
     stream: bool = Field(default=False, description="Reserved compatibility flag")
 
 
@@ -54,7 +58,7 @@ class AgentCreateRequest(BaseModel):
         description="System prompt associated with the agent",
     )
     allowed_tools: list[str] = Field(default_factory=lambda: ["*"], description="Allowed tools")
-    model: str = Field(default="claude-sonnet-4-20250514", description="Model id")
+    model: str = Field(default="default", description="Model id")
 
 
 class AgentUpdateRequest(BaseModel):

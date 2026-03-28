@@ -1,21 +1,14 @@
-"""
-OpenAI 模型提示词变体
-"""
+﻿"""Chat/Responses protocol prompt variants."""
 
-from pyagentforge.kernel.model_registry import ModelConfig, ProviderType
-from pyagentforge.prompts.base import PromptVariant
-from pyagentforge.prompts.registry import PromptTemplateRegistry
+from pyagentforge.prompts.registry import register_prompt_variant, PromptVariant
 
 
-def register_openai_variants(registry: PromptTemplateRegistry) -> None:
-    """注册 OpenAI 模型变体"""
-
-    registry.register_variant(
+def register_openai_variants() -> None:
+    """注册 chat/responses 协议提示词变体。"""
+    register_prompt_variant(
         PromptVariant(
             name="openai_autonomous",
-            applies_to=lambda mid, cfg: cfg.provider == ProviderType.OPENAI,
+            description="自主执行风格提示词模板",
             template_path="openai/autonomous.md",
-            priority=50,
-            description="自主工作流，适合 GPT 系列",
         )
     )

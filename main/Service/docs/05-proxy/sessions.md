@@ -45,24 +45,3 @@ create_session(workspace_id, agent_id)
   → execute / execute_stream (multi-turn)
   → delete_session
 ```
-
-## LegacyRuntimeService Sessions
-
-Separate in-memory session store, not using Proxy sub-system:
-
-```python
-from Service.services.legacy_runtime_service import LegacyRuntimeService
-
-result     = await service.create_session(agent_id=None, system_prompt="...")
-# result   = {"session_id": "session_xxxxxxxxxxxx"}
-
-response   = await service.send_message(result["session_id"], "hello")
-# response = {"role": "assistant", "content": "..."}
-
-async for event in service.stream_message(result["session_id"], "task"):
-    # event["type"]: "stream" | "complete" | "error"
-    pass
-
-await service.delete_session(result["session_id"])
-service.list_sessions() -> list[dict]
-```
