@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,6 +62,17 @@ class ServiceSettings(BaseSettings):
     # === SSE Configuration ===
     sse_heartbeat: int = 30  # seconds
     sse_retry_timeout: int = 3000  # milliseconds
+
+    # === Governance / P2 ===
+    guardrails_enabled: bool = True
+    hitl_enabled: bool = True
+    approval_ttl: int = 900
+    approval_auto_approve: bool = False
+    slo_window_size: int = 1000
+    slo_target_success_rate: float = 0.995
+    slo_target_p95_ms: int = 30000
+    circuit_failure_threshold: int = 5
+    circuit_open_seconds: int = 60
 
 
 # Global settings instance

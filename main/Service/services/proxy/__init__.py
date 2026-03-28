@@ -15,6 +15,11 @@ _EXPORT_MAP = {
     "SessionManager": "session_manager",
     "SessionState": "session_manager",
     "AgentProxyService": "agent_proxy_service",
+    "GuardrailEngine": "governance",
+    "HumanApprovalManager": "governance",
+    "HandoffProtocol": "governance",
+    "HandoffEnvelopeV1": "governance",
+    "SLOManager": "governance",
 }
 
 __all__ = list(_EXPORT_MAP.keys())

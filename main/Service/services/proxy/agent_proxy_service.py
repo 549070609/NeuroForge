@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from pyagentforge import FileCheckpointer
@@ -26,10 +28,24 @@ from ...core.registry import ServiceRegistry
 from ...persistence import StateStore, StoreRecord, create_store
 from ...services.base import BaseService
 from .agent_executor import AgentExecutor, ExecutionResult
+from .governance import (
+    GuardrailEngine,
+    GuardrailResult,
+    HandoffProtocol,
+    HumanApprovalManager,
+    SLOManager,
+)
 from .session_manager import SessionManager, SessionState
 from .workspace_manager import WorkspaceConfig, WorkspaceContext, WorkspaceManager
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _ExecutionGateFailure:
+    error_message: str
+    requires_approval: bool
+    metadata: dict[str, Any]
 
 
 class AgentProxyService(BaseService):
@@ -49,6 +65,12 @@ class AgentProxyService(BaseService):
         self._store: StateStore | None = None
         self._workflow_checkpointer: FileCheckpointer | None = None
         self._session_ttl: int = 3600
+        self._guardrails_enabled = True
+        self._hitl_enabled = True
+        self._guardrail_engine: GuardrailEngine | None = None
+        self._approval_manager: HumanApprovalManager | None = None
+        self._handoff_protocol: HandoffProtocol | None = None
+        self._slo_manager: SLOManager | None = None
 
     async def _on_initialize(self) -> None:
         self._logger.info("Initializing AgentProxyService...")
@@ -56,12 +78,29 @@ class AgentProxyService(BaseService):
         settings = get_settings()
         self._session_ttl = settings.session_ttl
         self._store = create_store(settings)
+        self._guardrails_enabled = settings.guardrails_enabled
+        self._hitl_enabled = settings.hitl_enabled
 
         self._workspace_manager = WorkspaceManager()
         self._session_manager = SessionManager(
             store=self._store,
             session_ttl=settings.session_ttl,
             max_sessions=settings.max_sessions,
+        )
+        self._guardrail_engine = GuardrailEngine()
+        self._approval_manager = HumanApprovalManager(
+            store=self._store,
+            approval_ttl=settings.approval_ttl,
+            auto_approve=settings.approval_auto_approve,
+        )
+        self._handoff_protocol = HandoffProtocol()
+        self._slo_manager = SLOManager(
+            store=self._store,
+            window_size=settings.slo_window_size,
+            target_success_rate=settings.slo_target_success_rate,
+            target_p95_ms=settings.slo_target_p95_ms,
+            circuit_failure_threshold=settings.circuit_failure_threshold,
+            circuit_open_seconds=settings.circuit_open_seconds,
         )
 
         checkpoints_dir = Path(settings.sqlite_path).parent / "workflow_checkpoints"
@@ -252,6 +291,10 @@ class AgentProxyService(BaseService):
             raise ValueError(f"Session not found: {session_id}")
 
         executor = await self._ensure_executor_for_session(session)
+        runtime_context = dict(context or {})
+        start = perf_counter()
+        failure_class: str | None = None
+        scope = f"execute:{session.agent_id}"
 
         collector = self._new_trace_collector(trace_id)
         root_span = collector.start_span(
@@ -267,14 +310,81 @@ class AgentProxyService(BaseService):
         executor.set_trace_collector(collector)
         await self._session_manager.add_message(session_id, "user", prompt)
 
-        result = await executor.execute(prompt, context)
+        try:
+            allowed, reason = self._should_allow(scope)
+            if not allowed:
+                failure_class = "circuit_open"
+                result = ExecutionResult(success=False, output="", error=reason, metadata={})
+                await self._session_manager.add_message(session_id, "assistant", f"Error: {reason}")
+            else:
+                gate = await self._guard_execution_input(
+                    session=session,
+                    scope_kind="execute",
+                    prompt=prompt,
+                    context=runtime_context,
+                )
+                if gate is not None:
+                    failure_class = "guardrail_review" if gate.requires_approval else "guardrail_blocked"
+                    result = ExecutionResult(
+                        success=False,
+                        output="",
+                        error=gate.error_message,
+                        metadata=gate.metadata,
+                    )
+                    await self._session_manager.add_message(
+                        session_id,
+                        "assistant",
+                        f"Error: {gate.error_message}",
+                    )
+                else:
+                    result = await executor.execute(prompt, runtime_context)
+                    output_guardrail = self._evaluate_output_guardrail(result.output if result.success else "")
+                    if output_guardrail and output_guardrail.blocked:
+                        failure_class = "output_guardrail_blocked"
+                        top = output_guardrail.top_decision()
+                        blocked_message = (
+                            top.message
+                            if top is not None
+                            else "Output blocked by governance policy."
+                        )
+                        result = ExecutionResult(
+                            success=False,
+                            output="",
+                            error=blocked_message,
+                            iterations=result.iterations,
+                            tool_calls=result.tool_calls,
+                            metadata={
+                                **result.metadata,
+                                "guardrail": output_guardrail.to_dict(),
+                                "failure_class": failure_class,
+                            },
+                        )
+                        await self._session_manager.add_message(
+                            session_id,
+                            "assistant",
+                            f"Error: {blocked_message}",
+                        )
+                    elif result.success:
+                        await self._session_manager.add_message(session_id, "assistant", result.output)
+                    else:
+                        failure_class = failure_class or "execution_error"
+                        await self._session_manager.add_message(
+                            session_id,
+                            "assistant",
+                            f"Error: {result.error}",
+                        )
 
-        if result.success:
-            await self._session_manager.add_message(session_id, "assistant", result.output)
-            collector.finish_span(root_span, status=SpanStatus.OK)
-        else:
-            await self._session_manager.add_message(session_id, "assistant", f"Error: {result.error}")
+            collector.finish_span(root_span, status=SpanStatus.OK if result.success else SpanStatus.ERROR)
+        except Exception:
             collector.finish_span(root_span, status=SpanStatus.ERROR)
+            latency_ms = int((perf_counter() - start) * 1000)
+            await self._record_slo(
+                scope=scope,
+                success=False,
+                latency_ms=latency_ms,
+                failure_class=failure_class or "runtime_exception",
+            )
+            raise
 
         await self._persist_trace(
             collector,
@@ -284,10 +394,19 @@ class AgentProxyService(BaseService):
         )
         await self._session_manager.update_session(session_id, {"trace_id": collector.trace_id})
 
+        latency_ms = int((perf_counter() - start) * 1000)
+        await self._record_slo(
+            scope=scope,
+            success=result.success,
+            latency_ms=latency_ms,
+            failure_class=failure_class if not result.success else None,
+        )
+
         result.metadata.update(
             {
                 "trace_id": collector.trace_id,
                 "span_id": root_span.span_id,
+                "latency_ms": latency_ms,
             }
         )
         return result
@@ -305,6 +424,10 @@ class AgentProxyService(BaseService):
             return
 
         executor = await self._ensure_executor_for_session(session)
+        runtime_context = dict(context or {})
+        start = perf_counter()
+        failure_class: str | None = None
+        scope = f"execute_stream:{session.agent_id}"
 
         collector = self._new_trace_collector(trace_id)
         root_span = collector.start_span(
@@ -320,26 +443,95 @@ class AgentProxyService(BaseService):
 
         await self._session_manager.add_message(session_id, "user", prompt)
 
-        final_text = ""
-        has_error = False
-        async for event in executor.execute_stream(prompt, context):
-            event = {
-                **event,
+        try:
+            allowed, reason = self._should_allow(scope)
+            if not allowed:
+                failure_class = "circuit_open"
+                error_event = {
+                    "type": "error",
+                    "message": reason,
+                    "trace_id": collector.trace_id,
+                    "span_id": root_span.span_id,
+                }
+                yield error_event
+                await self._session_manager.add_message(session_id, "assistant", f"Error: {reason}")
+                collector.finish_span(root_span, status=SpanStatus.ERROR)
+            else:
+                gate = await self._guard_execution_input(
+                    session=session,
+                    scope_kind="execute_stream",
+                    prompt=prompt,
+                    context=runtime_context,
+                )
+                if gate is not None:
+                    failure_class = "guardrail_review" if gate.requires_approval else "guardrail_blocked"
+                    error_event = {
+                        "type": "error",
+                        "message": gate.error_message,
+                        "trace_id": collector.trace_id,
+                        "span_id": root_span.span_id,
+                    }
+                    error_event.update(gate.metadata)
+                    yield error_event
+                    await self._session_manager.add_message(
+                        session_id,
+                        "assistant",
+                        f"Error: {gate.error_message}",
+                    )
+                    collector.finish_span(root_span, status=SpanStatus.ERROR)
+                else:
+                    final_text = ""
+                    has_error = False
+                    async for event in executor.execute_stream(prompt, runtime_context):
+                        event = {
+                            **event,
+                            "trace_id": collector.trace_id,
+                            "span_id": root_span.span_id,
+                        }
+                        yield event
+
+                        if event.get("type") == "complete":
+                            final_text = event.get("text", "")
+                        elif event.get("type") == "error":
+                            has_error = True
+                            final_text = f"Error: {event.get('message', 'Unknown error')}"
+
+                    if final_text and not has_error:
+                        output_guardrail = self._evaluate_output_guardrail(final_text)
+                        if output_guardrail and output_guardrail.blocked:
+                            failure_class = "output_guardrail_blocked"
+                            has_error = True
+                            top = output_guardrail.top_decision()
+                            blocked_message = (
+                                top.message
+                                if top is not None
+                                else "Output blocked by governance policy."
+                            )
+                            yield {
+                                "type": "error",
+                                "message": blocked_message,
+                                "guardrail": output_guardrail.to_dict(),
+                                "trace_id": collector.trace_id,
+                                "span_id": root_span.span_id,
+                            }
+                            final_text = f"Error: {blocked_message}"
+
+                    if final_text:
+                        await self._session_manager.add_message(session_id, "assistant", final_text)
+
+                    if has_error and failure_class is None:
+                        failure_class = "execution_error"
+                    collector.finish_span(root_span, status=SpanStatus.ERROR if has_error else SpanStatus.OK)
+        except Exception as exc:
+            failure_class = failure_class or "runtime_exception"
+            collector.finish_span(root_span, status=SpanStatus.ERROR)
+            yield {
+                "type": "error",
+                "message": str(exc),
                 "trace_id": collector.trace_id,
                 "span_id": root_span.span_id,
             }
-            yield event
 
-            if event.get("type") == "complete":
-                final_text = event.get("text", "")
-            elif event.get("type") == "error":
-                has_error = True
-                final_text = f"Error: {event.get('message', 'Unknown error')}"
-
-        if final_text:
-            await self._session_manager.add_message(session_id, "assistant", final_text)
-
-        collector.finish_span(root_span, status=SpanStatus.ERROR if has_error else SpanStatus.OK)
         await self._persist_trace(
             collector,
             session_id=session_id,
@@ -347,6 +539,13 @@ class AgentProxyService(BaseService):
             scope="execute_stream",
         )
         await self._session_manager.update_session(session_id, {"trace_id": collector.trace_id})
+        latency_ms = int((perf_counter() - start) * 1000)
+        await self._record_slo(
+            scope=scope,
+            success=failure_class is None,
+            latency_ms=latency_ms,
+            failure_class=failure_class,
+        )
 
     # ==================== Workflow ====================
 
@@ -365,6 +564,38 @@ class AgentProxyService(BaseService):
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
+        runtime_metadata = dict(metadata or {})
+        guardrail_result = self._evaluate_input_guardrail(task, runtime_metadata)
+        approval_id: str | None = None
+        status = "created"
+        if guardrail_result and guardrail_result.blocked:
+            top = guardrail_result.top_decision()
+            message = top.message if top else "Workflow blocked by governance policy."
+            raise ValueError(message)
+
+        if (
+            guardrail_result
+            and guardrail_result.requires_approval
+            and self._hitl_enabled
+            and self._approval_manager is not None
+        ):
+            approval_payload = self._workflow_approval_payload(
+                session_id=session_id,
+                task=task,
+                workflow_type=workflow_type,
+            )
+            approval = await self._approval_manager.create(
+                kind="workflow",
+                reason="Workflow requires human approval before execution.",
+                payload=approval_payload,
+                idempotency_key=idempotency_key,
+            )
+            approval_id = approval.approval_id
+            runtime_metadata["approval_id"] = approval.approval_id
+            runtime_metadata["guardrail"] = guardrail_result.to_dict()
+            if approval.status != "approved":
+                status = "awaiting_approval"
+
         workflow_id = f"wf-{datetime.utcnow().strftime('%Y%m%d')}-{uuid_hex(8)}"
         now = utc_now_iso()
         payload = {
@@ -372,16 +603,18 @@ class AgentProxyService(BaseService):
             "session_id": session_id,
             "task": task,
             "workflow_type": workflow_type,
-            "status": "created",
+            "status": status,
             "thread_id": f"thread-{workflow_id}",
             "result": None,
             "error": None,
             "trace_id": None,
             "steps": [],
+            "handoff_envelopes": [],
             "elapsed_ms": 0,
             "created_at": now,
             "updated_at": now,
-            "metadata": metadata or {},
+            "metadata": runtime_metadata,
+            "approval_id": approval_id,
         }
 
         write_result = await self._store.set(
@@ -400,7 +633,7 @@ class AgentProxyService(BaseService):
             {
                 "workflow_id": workflow_id,
                 "session_id": session_id,
-                "status": "created",
+                "status": status,
                 "updated_at": now,
             },
             namespace=self.TASK_NAMESPACE,
@@ -420,7 +653,11 @@ class AgentProxyService(BaseService):
         return {**record.value, "version": record.version}
 
     async def start_workflow(self, workflow_id: str, trace_id: str | None = None) -> dict[str, Any]:
-        return await self._run_workflow(workflow_id, require_status={"created", "paused", "failed"}, trace_id=trace_id)
+        return await self._run_workflow(
+            workflow_id,
+            require_status={"created", "paused", "failed", "awaiting_approval"},
+            trace_id=trace_id,
+        )
 
     async def resume_workflow(self, workflow_id: str, trace_id: str | None = None) -> dict[str, Any]:
         return await self._run_workflow(workflow_id, require_status={"paused"}, trace_id=trace_id)
@@ -470,6 +707,74 @@ class AgentProxyService(BaseService):
             return None
         return record.value
 
+    async def list_approvals(self, status: str | None = None) -> list[dict[str, Any]]:
+        if self._approval_manager is None:
+            return []
+        approvals = await self._approval_manager.list(status=status)
+        return [approval.to_dict() for approval in approvals]
+
+    async def get_approval(self, approval_id: str) -> dict[str, Any] | None:
+        if self._approval_manager is None:
+            return None
+        approval = await self._approval_manager.get(approval_id)
+        if approval is None:
+            return None
+        return approval.to_dict()
+
+    async def approve_approval(
+        self,
+        approval_id: str,
+        *,
+        reviewer: str,
+        comment: str | None = None,
+    ) -> dict[str, Any] | None:
+        if self._approval_manager is None:
+            return None
+        approval = await self._approval_manager.resolve(
+            approval_id,
+            approved=True,
+            reviewer=reviewer,
+            comment=comment,
+        )
+        if approval is None:
+            return None
+        return approval.to_dict()
+
+    async def reject_approval(
+        self,
+        approval_id: str,
+        *,
+        reviewer: str,
+        comment: str | None = None,
+    ) -> dict[str, Any] | None:
+        if self._approval_manager is None:
+            return None
+        approval = await self._approval_manager.resolve(
+            approval_id,
+            approved=False,
+            reviewer=reviewer,
+            comment=comment,
+        )
+        if approval is None:
+            return None
+        return approval.to_dict()
+
+    async def get_slo_dashboard(self) -> dict[str, Any]:
+        if self._slo_manager is None:
+            return {
+                "timestamp": utc_now_iso(),
+                "targets": {},
+                "by_scope": {},
+                "alerts": [],
+            }
+        return await self._slo_manager.get_snapshot()
+
+    def parse_handoff_payload(self, payload: str) -> dict[str, Any]:
+        if self._handoff_protocol is None:
+            raise ValueError("handoff protocol not initialized")
+        envelope = self._handoff_protocol.parse(payload)
+        return envelope.model_dump()
+
     async def get_stats(self) -> dict[str, Any]:
         session_stats = await self._session_manager.get_stats() if self._session_manager else {}
         workflow_total = 0
@@ -485,9 +790,184 @@ class AgentProxyService(BaseService):
             "workflows": {"total": workflow_total},
             "traces": {"total": trace_total},
             "store_backend": self._store.__class__.__name__ if self._store else "none",
+            "governance": {
+                "guardrails_enabled": self._guardrails_enabled,
+                "hitl_enabled": self._hitl_enabled,
+            },
         }
 
     # ==================== Internal ====================
+
+    def _should_allow(self, scope: str) -> tuple[bool, str | None]:
+        if self._slo_manager is None:
+            return True, None
+        return self._slo_manager.should_allow(scope)
+
+    async def _record_slo(
+        self,
+        *,
+        scope: str,
+        success: bool,
+        latency_ms: int,
+        failure_class: str | None = None,
+        retried: bool = False,
+    ) -> None:
+        if self._slo_manager is None:
+            return
+        await self._slo_manager.record(
+            scope=scope,
+            success=success,
+            latency_ms=latency_ms,
+            failure_class=failure_class,
+            retried=retried,
+        )
+
+    def _evaluate_input_guardrail(
+        self,
+        prompt: str,
+        context: dict[str, Any] | None,
+    ) -> GuardrailResult | None:
+        if not self._guardrails_enabled or self._guardrail_engine is None:
+            return None
+        return self._guardrail_engine.evaluate_input(prompt, context=context)
+
+    def _evaluate_output_guardrail(self, output_text: str) -> GuardrailResult | None:
+        if not self._guardrails_enabled or self._guardrail_engine is None:
+            return None
+        return self._guardrail_engine.evaluate_output(output_text)
+
+    async def _guard_execution_input(
+        self,
+        *,
+        session: SessionState,
+        scope_kind: str,
+        prompt: str,
+        context: dict[str, Any] | None,
+    ) -> _ExecutionGateFailure | None:
+        guardrail_result = self._evaluate_input_guardrail(prompt, context)
+        if guardrail_result is None:
+            return None
+
+        if guardrail_result.blocked:
+            top = guardrail_result.top_decision()
+            message = top.message if top else "Request blocked by governance policy."
+            return _ExecutionGateFailure(
+                error_message=message,
+                requires_approval=False,
+                metadata={
+                    "guardrail": guardrail_result.to_dict(),
+                    "failure_class": "guardrail_blocked",
+                },
+            )
+
+        if not (guardrail_result.requires_approval and self._hitl_enabled and self._approval_manager):
+            return None
+
+        sanitized_context = {
+            key: value
+            for key, value in (context or {}).items()
+            if key not in {"approval_id", "idempotency_key"}
+        }
+        payload = {
+            "session_id": session.session_id,
+            "workspace_id": session.workspace_id,
+            "agent_id": session.agent_id,
+            "prompt": prompt,
+            "context": sanitized_context,
+            "scope_kind": scope_kind,
+        }
+        approval_id = (context or {}).get("approval_id")
+        if await self._approval_manager.is_approved(approval_id, kind=scope_kind, payload=payload):
+            return None
+
+        approval = await self._approval_manager.create(
+            kind=scope_kind,
+            reason="Guardrail policy requires human approval for this request.",
+            payload=payload,
+            idempotency_key=(context or {}).get("idempotency_key"),
+        )
+        top = guardrail_result.top_decision()
+        message = (
+            f"{top.message if top else 'Request requires approval.'} "
+            f"Provide approval_id={approval.approval_id} after approval."
+        )
+        return _ExecutionGateFailure(
+            error_message=message,
+            requires_approval=True,
+            metadata={
+                "approval_id": approval.approval_id,
+                "approval_status": approval.status,
+                "requires_approval": True,
+                "guardrail": guardrail_result.to_dict(),
+                "failure_class": "guardrail_review",
+            },
+        )
+
+    def _workflow_approval_payload(
+        self,
+        *,
+        session_id: str,
+        task: str,
+        workflow_type: str,
+    ) -> dict[str, Any]:
+        return {
+            "session_id": session_id,
+            "task": task,
+            "workflow_type": workflow_type,
+        }
+
+    async def _ensure_workflow_approval(self, workflow: dict[str, Any]) -> None:
+        if not self._hitl_enabled or self._approval_manager is None:
+            return
+
+        approval_id = workflow.get("approval_id") or workflow.get("metadata", {}).get("approval_id")
+        if not approval_id:
+            return
+
+        approval_payload = self._workflow_approval_payload(
+            session_id=workflow["session_id"],
+            task=workflow["task"],
+            workflow_type=workflow.get("workflow_type", "graph"),
+        )
+        approved = await self._approval_manager.is_approved(
+            approval_id,
+            kind="workflow",
+            payload=approval_payload,
+        )
+        if not approved:
+            raise ValueError(f"Workflow requires approval: {approval_id}")
+
+    def _build_workflow_handoffs(
+        self,
+        workflow: dict[str, Any],
+        steps: list[dict[str, Any]],
+        trace_id: str,
+    ) -> list[dict[str, Any]]:
+        if self._handoff_protocol is None or not steps:
+            return []
+
+        envelopes: list[dict[str, Any]] = []
+        for idx, step in enumerate(steps):
+            source = str(step.get("node", "unknown"))
+            target = str(steps[idx + 1].get("node")) if idx + 1 < len(steps) else "final_output"
+            artifacts: list[dict[str, Any]] = []
+            output_preview = step.get("output_preview")
+            if output_preview:
+                artifacts.append({"type": "preview", "content": str(output_preview)})
+            envelope = self._handoff_protocol.build_envelope(
+                source_agent=source,
+                target_agent=target,
+                task=str(workflow.get("task", "workflow handoff")),
+                context={
+                    "workflow_id": workflow.get("id"),
+                    "session_id": workflow.get("session_id"),
+                    "step_index": idx,
+                },
+                artifacts=artifacts,
+                trace_id=trace_id,
+            )
+            envelopes.append(envelope.model_dump())
+        return envelopes
 
     async def _bootstrap_session_state(self, session: SessionState) -> None:
         if self._store is None:
@@ -543,6 +1023,19 @@ class AgentProxyService(BaseService):
         if workflow["status"] not in require_status:
             raise ValueError(f"Workflow status {workflow['status']} does not allow start/resume")
 
+        await self._ensure_workflow_approval(workflow)
+
+        scope = f"workflow:{workflow.get('workflow_type', 'graph')}"
+        allowed, reason = self._should_allow(scope)
+        if not allowed:
+            await self._record_slo(
+                scope=scope,
+                success=False,
+                latency_ms=0,
+                failure_class="circuit_open",
+            )
+            raise ValueError(reason or "workflow circuit open")
+
         workflow["status"] = "running"
         workflow["updated_at"] = utc_now_iso()
         running_write = await self._store.set(
@@ -559,19 +1052,24 @@ class AgentProxyService(BaseService):
         if not session:
             raise ValueError(f"Session not found: {workflow['session_id']}")
 
+        start = perf_counter()
+        failure_class: str | None = None
         try:
             result_payload = await self._execute_workflow_runtime(workflow, session, trace_id=trace_id)
             workflow["status"] = "completed"
             workflow["result"] = result_payload["result"]
             workflow["error"] = None
             workflow["steps"] = result_payload["steps"]
+            workflow["handoff_envelopes"] = result_payload.get("handoff_envelopes", [])
             workflow["elapsed_ms"] = result_payload["elapsed_ms"]
             workflow["trace_id"] = result_payload["trace_id"]
             workflow["updated_at"] = utc_now_iso()
         except Exception as exc:
             workflow["status"] = "failed"
             workflow["error"] = str(exc)
+            workflow["handoff_envelopes"] = []
             workflow["updated_at"] = utc_now_iso()
+            failure_class = "workflow_runtime_error"
 
         final_write = await self._store.set(
             workflow_id,
@@ -593,6 +1091,14 @@ class AgentProxyService(BaseService):
             },
             namespace=self.TASK_NAMESPACE,
             ttl=self._session_ttl,
+        )
+
+        latency_ms = int((perf_counter() - start) * 1000)
+        await self._record_slo(
+            scope=scope,
+            success=workflow["status"] == "completed",
+            latency_ms=latency_ms,
+            failure_class=failure_class if workflow["status"] != "completed" else None,
         )
 
         return final_write.record.value
@@ -669,9 +1175,17 @@ class AgentProxyService(BaseService):
         ]
 
         output = self._extract_workflow_output(result.state)
+        output_guardrail = self._evaluate_output_guardrail(output)
+        if output_guardrail and output_guardrail.blocked:
+            top = output_guardrail.top_decision()
+            message = top.message if top else "Workflow output blocked by governance policy."
+            raise RuntimeError(message)
+
+        handoff_envelopes = self._build_workflow_handoffs(workflow, steps, collector.trace_id)
         return {
             "result": output,
             "steps": steps,
+            "handoff_envelopes": handoff_envelopes,
             "elapsed_ms": result.total_elapsed_ms,
             "trace_id": collector.trace_id,
         }

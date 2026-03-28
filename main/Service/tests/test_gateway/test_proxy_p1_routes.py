@@ -126,3 +126,131 @@ def test_workflow_routes_and_trace_route(monkeypatch):
     trace = client.get("/proxy/traces/trace-resume")
     assert trace.status_code == 200
     assert trace.json()["trace_id"] == "trace-resume"
+
+
+def test_governance_routes(monkeypatch):
+    class FakeProxyService:
+        async def list_approvals(self, status: str | None = None):
+            if status == "approved":
+                return []
+            return [
+                {
+                    "approval_id": "apr-1",
+                    "kind": "execute",
+                    "reason": "needs review",
+                    "payload_hash": "hash",
+                    "payload": {"prompt": "x"},
+                    "status": "pending",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "expires_at": 1893456000,
+                    "resolved_at": None,
+                    "reviewer": None,
+                    "comment": None,
+                }
+            ]
+
+        async def get_approval(self, approval_id: str):
+            if approval_id != "apr-1":
+                return None
+            return {
+                "approval_id": approval_id,
+                "kind": "execute",
+                "reason": "needs review",
+                "payload_hash": "hash",
+                "payload": {"prompt": "x"},
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+                "expires_at": 1893456000,
+                "resolved_at": None,
+                "reviewer": None,
+                "comment": None,
+            }
+
+        async def approve_approval(self, approval_id: str, *, reviewer: str, comment: str | None = None):
+            return {
+                "approval_id": approval_id,
+                "kind": "execute",
+                "reason": "needs review",
+                "payload_hash": "hash",
+                "payload": {"prompt": "x"},
+                "status": "approved",
+                "created_at": "2026-01-01T00:00:00Z",
+                "expires_at": 1893456000,
+                "resolved_at": "2026-01-01T00:00:10Z",
+                "reviewer": reviewer,
+                "comment": comment,
+            }
+
+        async def reject_approval(self, approval_id: str, *, reviewer: str, comment: str | None = None):
+            return {
+                "approval_id": approval_id,
+                "kind": "execute",
+                "reason": "needs review",
+                "payload_hash": "hash",
+                "payload": {"prompt": "x"},
+                "status": "rejected",
+                "created_at": "2026-01-01T00:00:00Z",
+                "expires_at": 1893456000,
+                "resolved_at": "2026-01-01T00:00:10Z",
+                "reviewer": reviewer,
+                "comment": comment,
+            }
+
+        async def get_slo_dashboard(self):
+            return {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "targets": {"success_rate": 0.995, "p95_latency_ms": 30000},
+                "by_scope": {"execute:agent-1": {"total": 10}},
+                "alerts": [],
+            }
+
+        def parse_handoff_payload(self, payload: str):
+            if not payload:
+                raise ValueError("handoff payload is empty")
+            return {
+                "version": "1.0",
+                "source_agent": "a",
+                "target_agent": "b",
+                "task": "t",
+                "context": {},
+                "artifacts": [],
+                "error": None,
+                "trace_id": None,
+                "timestamp": "2026-01-01T00:00:00Z",
+            }
+
+    monkeypatch.setattr(proxy_route, "get_proxy_service", lambda: FakeProxyService())
+
+    app = FastAPI()
+    app.include_router(proxy_route.router)
+    client = TestClient(app)
+
+    listed = client.get("/proxy/approvals")
+    assert listed.status_code == 200
+    assert listed.json()["total"] == 1
+
+    found = client.get("/proxy/approvals/apr-1")
+    assert found.status_code == 200
+    assert found.json()["approval_id"] == "apr-1"
+
+    approved = client.post(
+        "/proxy/approvals/apr-1/approve",
+        json={"reviewer": "qa", "comment": "ok"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+
+    rejected = client.post(
+        "/proxy/approvals/apr-1/reject",
+        json={"reviewer": "qa", "comment": "no"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+
+    slo = client.get("/proxy/slo")
+    assert slo.status_code == 200
+    assert "by_scope" in slo.json()
+
+    handoff = client.post("/proxy/handoff/parse", json={"payload": "{\"source_agent\":\"a\",\"target_agent\":\"b\"}"})
+    assert handoff.status_code == 200
+    assert handoff.json()["envelope"]["source_agent"] == "a"

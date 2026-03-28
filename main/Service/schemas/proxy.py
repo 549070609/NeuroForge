@@ -125,6 +125,11 @@ class WorkflowResponse(BaseModel):
     error: str | None = Field(default=None, description="Workflow error")
     trace_id: str | None = Field(default=None, description="Trace ID")
     steps: list[dict[str, Any]] = Field(default_factory=list, description="Step traces")
+    handoff_envelopes: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Typed handoff envelopes",
+    )
+    approval_id: str | None = Field(default=None, description="Approval ID if governance required")
     elapsed_ms: int = Field(default=0, description="Elapsed ms")
     created_at: str = Field(description="Created timestamp")
     updated_at: str = Field(description="Updated timestamp")
@@ -142,10 +147,50 @@ class TraceResponse(BaseModel):
     updated_at: str = Field(description="Updated timestamp")
 
 
+class ApprovalResolveRequest(BaseModel):
+    reviewer: str = Field(description="Reviewer identity")
+    comment: str | None = Field(default=None, description="Optional reviewer comment")
+
+
+class ApprovalResponse(BaseModel):
+    approval_id: str = Field(description="Approval ID")
+    kind: str = Field(description="Approval kind")
+    reason: str = Field(description="Reason for approval")
+    payload_hash: str = Field(description="Payload hash")
+    payload: dict[str, Any] = Field(default_factory=dict, description="Approval payload")
+    status: Literal["pending", "approved", "rejected", "expired"] = Field(description="Approval status")
+    created_at: str = Field(description="Created timestamp")
+    expires_at: int = Field(description="Expiry unix timestamp")
+    resolved_at: str | None = Field(default=None, description="Resolved timestamp")
+    reviewer: str | None = Field(default=None, description="Reviewer")
+    comment: str | None = Field(default=None, description="Comment")
+
+
+class ApprovalListResponse(BaseModel):
+    approvals: list[ApprovalResponse] = Field(default_factory=list, description="Approval list")
+    total: int = Field(description="Total")
+
+
+class HandoffParseRequest(BaseModel):
+    payload: str = Field(description="Handoff payload, JSON envelope or legacy XML-like format")
+
+
+class HandoffParseResponse(BaseModel):
+    envelope: dict[str, Any] = Field(default_factory=dict, description="Parsed typed envelope")
+
+
+class SLODashboardResponse(BaseModel):
+    timestamp: str = Field(description="Snapshot timestamp")
+    targets: dict[str, Any] = Field(default_factory=dict, description="SLO target values")
+    by_scope: dict[str, Any] = Field(default_factory=dict, description="Per-scope aggregated metrics")
+    alerts: list[dict[str, Any]] = Field(default_factory=list, description="Recent alerts")
+
+
 class ProxyStatsResponse(BaseModel):
     workspaces: dict[str, Any] = Field(description="Workspace stats")
     sessions: dict[str, Any] = Field(description="Session stats")
     executor_cache_size: int = Field(description="Executor cache size")
     workflows: dict[str, Any] = Field(default_factory=dict, description="Workflow stats")
     traces: dict[str, Any] = Field(default_factory=dict, description="Trace stats")
+    governance: dict[str, Any] = Field(default_factory=dict, description="Governance stats")
     store_backend: str | None = Field(default=None, description="Storage backend")

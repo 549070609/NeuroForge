@@ -10,6 +10,11 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from ...schemas.proxy import (
+    ApprovalListResponse,
+    ApprovalResolveRequest,
+    ApprovalResponse,
+    HandoffParseRequest,
+    HandoffParseResponse,
     ProxyExecuteRequest,
     ProxyExecuteResponse,
     ProxyStatsResponse,
@@ -17,6 +22,7 @@ from ...schemas.proxy import (
     SessionCreate,
     SessionListResponse,
     SessionResponse,
+    SLODashboardResponse,
     TraceResponse,
     WorkflowCreateRequest,
     WorkflowResponse,
@@ -262,6 +268,77 @@ async def get_trace(trace_id: str) -> TraceResponse:
     if not trace:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trace not found: {trace_id}")
     return TraceResponse(**trace)
+
+
+@router.get("/approvals", response_model=ApprovalListResponse)
+async def list_approvals(status: str | None = None) -> ApprovalListResponse:
+    service = get_proxy_service()
+    approvals = await service.list_approvals(status=status)
+    return ApprovalListResponse(
+        approvals=[ApprovalResponse(**approval) for approval in approvals],
+        total=len(approvals),
+    )
+
+
+@router.get("/approvals/{approval_id}", response_model=ApprovalResponse)
+async def get_approval(approval_id: str) -> ApprovalResponse:
+    service = get_proxy_service()
+    approval = await service.get_approval(approval_id)
+    if not approval:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Approval not found: {approval_id}",
+        )
+    return ApprovalResponse(**approval)
+
+
+@router.post("/approvals/{approval_id}/approve", response_model=ApprovalResponse)
+async def approve_approval(approval_id: str, request: ApprovalResolveRequest) -> ApprovalResponse:
+    service = get_proxy_service()
+    approval = await service.approve_approval(
+        approval_id,
+        reviewer=request.reviewer,
+        comment=request.comment,
+    )
+    if not approval:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Approval not found: {approval_id}",
+        )
+    return ApprovalResponse(**approval)
+
+
+@router.post("/approvals/{approval_id}/reject", response_model=ApprovalResponse)
+async def reject_approval(approval_id: str, request: ApprovalResolveRequest) -> ApprovalResponse:
+    service = get_proxy_service()
+    approval = await service.reject_approval(
+        approval_id,
+        reviewer=request.reviewer,
+        comment=request.comment,
+    )
+    if not approval:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Approval not found: {approval_id}",
+        )
+    return ApprovalResponse(**approval)
+
+
+@router.get("/slo", response_model=SLODashboardResponse)
+async def get_slo_dashboard() -> SLODashboardResponse:
+    service = get_proxy_service()
+    dashboard = await service.get_slo_dashboard()
+    return SLODashboardResponse(**dashboard)
+
+
+@router.post("/handoff/parse", response_model=HandoffParseResponse)
+async def parse_handoff_payload(request: HandoffParseRequest) -> HandoffParseResponse:
+    service = get_proxy_service()
+    try:
+        envelope = service.parse_handoff_payload(request.payload)
+        return HandoffParseResponse(envelope=envelope)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/stats", response_model=ProxyStatsResponse)
