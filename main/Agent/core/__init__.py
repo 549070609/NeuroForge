@@ -6,6 +6,7 @@ Agent 底座核心模块
 
 from .directory import AgentDirectory, AgentOrigin, AgentInfo
 from .config import AgentBaseConfig, get_agent_base_config
+from .plan_manager import PlanFileManager, PlanFile, PlanStep, PlanStatus, StepStatus
 
 __all__ = [
     "AgentDirectory",
@@ -13,4 +14,9 @@ __all__ = [
     "AgentInfo",
     "AgentBaseConfig",
     "get_agent_base_config",
+    "PlanFileManager",
+    "PlanFile",
+    "PlanStep",
+    "PlanStatus",
+    "StepStatus",
 ]

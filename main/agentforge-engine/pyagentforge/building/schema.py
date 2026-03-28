@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pyagentforge.agents.config import AgentConfig
+from pyagentforge.kernel.engine import AgentConfig
 from pyagentforge.agents.metadata import (
     AgentCategory,
     AgentCost,
@@ -201,21 +201,6 @@ class AgentSchema(BaseModel):
         Returns:
             AgentConfig 实例
         """
-        from pyagentforge.tools.permission import PermissionConfig
-
-        # 构建权限配置
-        perm_config = PermissionConfig(
-            allowed=self.capabilities.tools,
-            denied=self.capabilities.denied_tools,
-            ask=self.capabilities.ask_tools,
-            command_whitelist=self.capabilities.command_whitelist,
-            command_blacklist=self.capabilities.command_blacklist,
-            allowed_paths=self.capabilities.allowed_paths,
-            denied_paths=self.capabilities.denied_paths,
-            allowed_hosts=self.capabilities.allowed_hosts,
-            denied_hosts=self.capabilities.denied_hosts,
-        )
-
         return AgentConfig(
             name=self.identity.name,
             description=self.identity.description,
@@ -228,6 +213,7 @@ class AgentSchema(BaseModel):
             allowed_tools=self.capabilities.tools,
             denied_tools=self.capabilities.denied_tools,
             ask_tools=self.capabilities.ask_tools,
+            max_iterations=self.limits.max_iterations,
             max_subagent_depth=self.limits.max_subagent_depth,
             permission_checker=None,  # 将在 post_init 中创建
         )

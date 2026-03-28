@@ -32,6 +32,9 @@ from .core import (
     AgentInfo,
     AgentBaseConfig,
     get_agent_base_config,
+    PlanFileManager,
+    PlanFile,
+    PlanStep,
 )
 
 # 从 mate-agent 导入工具和模板
