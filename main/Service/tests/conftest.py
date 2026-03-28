@@ -5,9 +5,13 @@ import pytest
 from pathlib import Path
 import sys
 
-# Add Service to path
-SERVICE_PATH = Path(__file__).parent.parent
-sys.path.insert(0, str(SERVICE_PATH))
+# Add repository `main/` to PYTHONPATH so `import Service` resolves correctly.
+SERVICE_PATH = Path(__file__).resolve().parents[2]
+if str(SERVICE_PATH) not in sys.path:
+    sys.path.insert(0, str(SERVICE_PATH))
+ENGINE_PATH = SERVICE_PATH / "agentforge-engine"
+if str(ENGINE_PATH) not in sys.path:
+    sys.path.insert(0, str(ENGINE_PATH))
 
 from fastapi.testclient import TestClient
 

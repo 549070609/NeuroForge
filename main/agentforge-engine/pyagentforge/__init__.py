@@ -142,107 +142,6 @@ from pyagentforge.config.settings import get_settings as get_engine_settings
 from pyagentforge.core.background_manager import BackgroundManager
 from pyagentforge.core.concurrency_manager import ConcurrencyConfig, ConcurrencyManager
 
-# ============================================================================
-# Factory functions (v2.0 - 新架构)
-# ============================================================================
-from typing import Any, Dict, Optional
-import logging
-
-
-async def create_engine(
-    model_id: Optional[str] = None,
-    config: Optional[Dict[str, Any]] = None,
-    plugin_config: Optional[PluginConfig] = None,
-    working_dir: Optional[str] = None,
-    llm_client: Optional[LLMClient] = None,
-    **kwargs,
-) -> AgentEngine:
-    """
-    创建配置好的 AgentEngine
-
-    Args:
-        model_id: 模型 ID，未传时自动解析默认模型
-        config: Agent 配置
-        plugin_config: 插件配置
-        working_dir: 工作目录
-        llm_client: LLM 客户端（可选，用于测试）
-        **kwargs: 其他参数
-
-    Returns:
-        配置好的 AgentEngine
-
-    Example:
-        >>> engine = await create_engine(
-        ...     model_id="claude-sonnet-4",
-        ...     config={"system_prompt": "You are a helpful assistant."},
-        ... )
-    """
-    resolved_model_id = model_id or _resolve_default_model_id()
-    tool_registry = ToolRegistry()
-    register_core_tools(tool_registry, working_dir=working_dir)
-
-    agent_config = AgentConfig(**config) if config else AgentConfig()
-
-    engine = AgentEngine(
-        model_id=resolved_model_id,
-        tool_registry=tool_registry,
-        config=agent_config,
-        llm_client=llm_client,
-        **kwargs,
-    )
-
-    if plugin_config:
-        plugin_manager = PluginManager(engine=engine)
-        await plugin_manager.initialize(
-            plugin_config.to_dict(),
-            working_dir=working_dir,
-        )
-        engine.plugin_manager = plugin_manager
-
-        for tool in plugin_manager.get_tools_from_plugins():
-            tool_registry.register(tool)
-
-    return engine
-
-
-def create_minimal_engine(
-    model_id: Optional[str] = None,
-    working_dir: Optional[str] = None,
-    llm_client: Optional[LLMClient] = None,
-    **kwargs,
-) -> AgentEngine:
-    """
-    创建最小化引擎（无插件）
-
-    Args:
-        model_id: 模型 ID
-        working_dir: 工作目录
-        llm_client: LLM 客户端（可选）
-        **kwargs: 其他参数
-
-    Returns:
-        最小化 AgentEngine
-    """
-    resolved_model_id = model_id or _resolve_default_model_id()
-    tool_registry = ToolRegistry()
-    register_core_tools(tool_registry, working_dir=working_dir)
-
-    return AgentEngine(
-        model_id=resolved_model_id,
-        tool_registry=tool_registry,
-        llm_client=llm_client,
-        **kwargs,
-    )
-
-
-def _resolve_default_model_id() -> str:
-    registry = get_registry()
-    models = registry.get_all_models()
-    if models:
-        return models[0].id
-    return "default"
-
-
 __all__ = [
     # Version
     "__version__",
@@ -329,7 +228,4 @@ __all__ = [
     "StepTrace",
     "EngineFactory",
     "WORKFLOW_END",
-    # Factory (v2.0)
-    "create_engine",
-    "create_minimal_engine",
 ]

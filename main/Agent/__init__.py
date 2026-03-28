@@ -35,6 +35,8 @@ from .core import (
     PlanFileManager,
     PlanFile,
     PlanStep,
+    PlanStatus,
+    StepStatus,
 )
 
 # 从 mate-agent 导入工具和模板
@@ -81,6 +83,8 @@ __all__ = [
     "PlanFileManager",
     "PlanFile",
     "PlanStep",
+    "PlanStatus",
+    "StepStatus",
     # Tools
     "MateAgentTool",
     "MateAgentToolRegistry",

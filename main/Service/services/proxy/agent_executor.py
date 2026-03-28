@@ -15,9 +15,9 @@ from pyagentforge import (
     AgentConfig,
     ToolRegistry,
     register_core_tools,
-    get_registry,
 )
 from pyagentforge.client import LLMClient
+from pyagentforge.kernel.base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,66 @@ class ExecutionResult:
     iterations: int = 0
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class LLMClientProvider(BaseProvider):
+    """Bridge LLMClient into AgentEngine's BaseProvider contract."""
+
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        model_id: str,
+        *,
+        max_tokens: int = 4096,
+        temperature: float = 1.0,
+    ) -> None:
+        super().__init__(model=model_id, max_tokens=max_tokens, temperature=temperature)
+        self._llm_client = llm_client
+
+    async def create_message(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ):
+        max_tokens = kwargs.pop("max_tokens", self.max_tokens)
+        temperature = kwargs.pop("temperature", self.temperature)
+        return await self._llm_client.create_message(
+            model_id=self.model,
+            messages=messages,
+            system=system,
+            tools=tools or [],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs,
+        )
+
+    async def count_tokens(self, messages: list[dict[str, Any]]) -> int:
+        return await self._llm_client.count_tokens(
+            model_id=self.model,
+            messages=messages,
+        )
+
+    async def stream_message(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ):
+        max_tokens = kwargs.pop("max_tokens", self.max_tokens)
+        temperature = kwargs.pop("temperature", self.temperature)
+        async for chunk in self._llm_client.stream_message(
+            model_id=self.model,
+            messages=messages,
+            system=system,
+            tools=tools or [],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs,
+        ):
+            yield chunk
 
 
 class AgentExecutor:
@@ -51,6 +111,7 @@ class AgentExecutor:
         self._workspace_context = workspace_context
         self._model_id: str = "default"
         self._llm_client: LLMClient | None = None
+        self._provider: BaseProvider | None = None
         self._tool_registry: ToolRegistry | None = None
         self._engine: AgentEngine | None = None
         self._config: AgentConfig | None = None
@@ -84,7 +145,11 @@ class AgentExecutor:
 
             # 获取模型 ID
             model_section = agent_definition.get("model", {})
-            self._model_id = model_section.get("id", self._model_id)
+            self._model_id = (
+                model_section.get("id")
+                or model_section.get("model")
+                or self._model_id
+            )
 
             # 创建 LLM 客户端
             self._llm_client = self._create_llm_client()
@@ -94,6 +159,9 @@ class AgentExecutor:
 
             # 创建 Agent 配置
             self._config = self._create_agent_config(agent_definition, system_prompt)
+
+            # 创建 Provider
+            self._provider = self._create_provider()
 
             # 创建 Agent 引擎
             self._engine = self._create_engine()
@@ -217,11 +285,14 @@ class AgentExecutor:
 
         definition = copy.deepcopy(definition)
 
-        _model_keys = {"provider", "model", "temperature", "max_tokens"}
+        _model_keys = {"provider", "model", "id", "temperature", "max_tokens"}
         _limit_keys = {"max_iterations", "timeout"}
 
         for key, value in overrides.items():
             if value is None:
+                continue
+            if key == "model_id":
+                definition.setdefault("model", {})["id"] = value
                 continue
             if key in _model_keys:
                 definition.setdefault("model", {})[key] = value
@@ -320,12 +391,21 @@ class AgentExecutor:
             model_config = agent_definition.get("model", {})
 
             config = AgentConfig(
+                name=agent_definition.get("identity", {}).get("name", "default"),
+                description=agent_definition.get("identity", {}).get("description", ""),
+                version=agent_definition.get("identity", {}).get("version", "1.0.0"),
+                model=model_config.get("id") or model_config.get("model") or self._model_id,
                 system_prompt=system_prompt or agent_definition.get("identity", {}).get(
                     "description", "You are a helpful AI assistant."
                 ),
                 max_tokens=model_config.get("max_tokens", 4096),
                 temperature=model_config.get("temperature", 1.0),
+                timeout=model_config.get("timeout", limits.get("timeout", 120)),
+                allowed_tools=agent_definition.get("capabilities", {}).get("tools", ["*"]),
+                denied_tools=agent_definition.get("capabilities", {}).get("denied_tools", []),
+                ask_tools=agent_definition.get("capabilities", {}).get("ask_tools", []),
                 max_iterations=limits.get("max_iterations", 100),
+                max_subagent_depth=limits.get("max_subagent_depth", 3),
                 permission_checker=getattr(self, "_permission_checker", None),
             )
 
@@ -333,6 +413,18 @@ class AgentExecutor:
 
         except ImportError as exc:
             self._raise_missing_dependency("agent config", exc)
+
+    def _create_provider(self) -> BaseProvider:
+        if self._llm_client is None:
+            raise RuntimeError("LLM client is not initialized")
+        if self._config is None:
+            raise RuntimeError("Agent config is not initialized")
+        return LLMClientProvider(
+            llm_client=self._llm_client,
+            model_id=self._model_id,
+            max_tokens=self._config.max_tokens,
+            temperature=self._config.temperature,
+        )
 
     def _create_engine(self) -> Any:
         """
@@ -342,11 +434,16 @@ class AgentExecutor:
             AgentEngine 实例
         """
         try:
+            if self._provider is None:
+                raise RuntimeError("Provider is not initialized")
+            if self._tool_registry is None:
+                raise RuntimeError("Tool registry is not initialized")
+            if self._config is None:
+                raise RuntimeError("Agent config is not initialized")
             engine = AgentEngine(
-                model_id=self._model_id,
+                provider=self._provider,
                 tool_registry=self._tool_registry,
                 config=self._config,
-                llm_client=self._llm_client,
             )
 
             self._logger.info(f"Created AgentEngine: session_id={engine.session_id}")
@@ -370,7 +467,10 @@ class AgentExecutor:
             return prompt
 
         # 添加工作区上下文
-        workspace_info = f"""Working directory: {self._workspace_context.resolved_root}
+        root = getattr(self._workspace_context, "resolved_root", None)
+        if root is None:
+            root = getattr(self._workspace_context, "root_path", "")
+        workspace_info = f"""Working directory: {root}
 Namespace: {self._workspace_context.config.namespace}
 Read-only: {self._workspace_context.config.is_readonly}
 """

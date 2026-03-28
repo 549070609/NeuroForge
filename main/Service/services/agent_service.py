@@ -6,7 +6,6 @@ Agent Service - Agent 管理服务
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -417,133 +416,90 @@ class AgentService(BaseService):
         context: dict[str, Any] | None = None,
         options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """
-        执行 Agent
+        """Execute agent via real AgentExecutor runtime path."""
+        started_at = datetime.utcnow()
+        options = options or {}
 
-        Args:
-            agent_id: Agent ID
-            task: 任务描述
-            context: 额外上下文
-            options: 执行选项
+        def _error_response(error: str) -> dict[str, Any]:
+            completed_at = datetime.utcnow()
+            return {
+                "agent_id": agent_id,
+                "status": "error",
+                "result": None,
+                "error": error,
+                "plan_id": None,
+                "started_at": started_at.isoformat() + "Z",
+                "completed_at": completed_at.isoformat() + "Z",
+            }
 
-        Returns:
-            执行结果
-        """
-        # 获取 Agent 信息
         agent_info = self.get_agent(agent_id)
         if not agent_info:
-            return {
-                "agent_id": agent_id,
-                "status": "error",
-                "error": f"Agent not found: {agent_id}",
-            }
+            return _error_response(f"Agent not found: {agent_id}")
 
-        # 获取 Agent 定义文件
         if not self._directory:
-            return {
-                "agent_id": agent_id,
-                "status": "error",
-                "error": "Agent directory not available",
-            }
+            return _error_response("Agent directory not available")
 
         agent = self._directory.get_agent(agent_id)
         if not agent:
-            return {
-                "agent_id": agent_id,
-                "status": "error",
-                "error": f"Agent not found: {agent_id}",
-            }
+            return _error_response(f"Agent not found: {agent_id}")
 
-        # 读取系统提示词
-        system_prompt = ""
+        system_prompt: str | None = None
         if agent.system_prompt_path and agent.system_prompt_path.exists():
             system_prompt = agent.system_prompt_path.read_text(encoding="utf-8")
 
-        # 目前返回模拟响应
-        # TODO: 集成 pyagentforge 进行实际执行
-        started_at = datetime.utcnow()
+        metadata = agent.metadata if isinstance(agent.metadata, dict) else {}
+        capabilities = metadata.get("capabilities", {})
+        limits = metadata.get("limits", {})
 
-        self._logger.info(f"Executing agent: {agent_id} with task: {task[:50]}...")
+        root_path = options.get("workspace_root") or options.get("root_path") or str(Path.cwd())
+        namespace = options.get("namespace") or getattr(agent, "namespace", "default")
+        allowed_tools = options.get("allowed_tools") or options.get("tools") or capabilities.get("tools", ["*"])
+        denied_tools = options.get("denied_tools") or capabilities.get("denied_tools", [])
+        is_readonly = bool(options.get("is_readonly", limits.get("is_readonly", False)))
 
-        # 模拟执行 (后续替换为实际 Agent 执行)
-        result = await self._simulate_execution(agent, task, context)
+        from .proxy.agent_executor import AgentExecutor
+        from .proxy.workspace_manager import WorkspaceConfig, WorkspaceContext
 
-        completed_at = datetime.utcnow()
+        workspace_config = WorkspaceConfig(
+            root_path=root_path,
+            namespace=namespace,
+            allowed_tools=allowed_tools,
+            denied_tools=denied_tools,
+            is_readonly=is_readonly,
+        )
+        workspace_context = WorkspaceContext(
+            workspace_id=f"agent-service-{agent_id}",
+            config=workspace_config,
+        )
 
-        return {
-            "agent_id": agent_id,
-            "status": "completed",
-            "result": result.get("result"),
-            "plan_id": result.get("plan_id"),
-            "started_at": started_at.isoformat() + "Z",
-            "completed_at": completed_at.isoformat() + "Z",
-        }
+        self._logger.info("Executing agent %s with real executor path", agent_id)
 
-    async def _simulate_execution(
-        self,
-        agent: Any,
-        task: str,
-        context: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        模拟 Agent 执行
-
-        对于 Plan Agent，创建一个示例计划
-        """
-        if agent.name == "plan":
-            # 为 Plan Agent 创建一个示例计划
-            if self._plan_manager:
-                plan = self._plan_manager.create_plan(
-                    title=f"Plan for: {task[:50]}...",
-                    objective=task,
-                    steps=[
-                        {
-                            "title": "Analyze requirements",
-                            "description": "Gather and analyze all requirements for the task",
-                            "estimated_time": "1h",
-                            "acceptance_criteria": [
-                                "All requirements documented",
-                                "Stakeholders confirmed",
-                            ],
-                        },
-                        {
-                            "title": "Design solution",
-                            "description": "Create technical design for the solution",
-                            "dependencies": ["step-1"],
-                            "estimated_time": "2h",
-                            "acceptance_criteria": [
-                                "Technical spec completed",
-                                "Architecture reviewed",
-                            ],
-                        },
-                        {
-                            "title": "Implement solution",
-                            "description": "Implement the designed solution",
-                            "dependencies": ["step-2"],
-                            "estimated_time": "4h",
-                            "acceptance_criteria": [
-                                "Code implemented",
-                                "Unit tests passed",
-                            ],
-                        },
-                    ],
-                    context=context or {},
-                )
-                return {
-                    "result": f"Plan created successfully with {len(plan.steps)} steps",
-                    "plan_id": plan.id,
-                }
-
-        # 其他 Agent 返回模拟结果
-        await asyncio.sleep(0.1)  # 模拟执行时间
-        return {"result": f"Task '{task[:30]}...' processed by {agent.name}"}
+        try:
+            executor = AgentExecutor(workspace_context)
+            await executor.initialize(
+                agent_definition=metadata,
+                system_prompt=system_prompt,
+                config_overrides=options,
+            )
+            result = await executor.execute(prompt=task, context=context)
+            completed_at = datetime.utcnow()
+            return {
+                "agent_id": agent_id,
+                "status": "completed" if result.success else "error",
+                "result": result.output if result.success else None,
+                "error": result.error if not result.success else None,
+                "plan_id": None,
+                "started_at": started_at.isoformat() + "Z",
+                "completed_at": completed_at.isoformat() + "Z",
+            }
+        except Exception as exc:
+            self._logger.exception("Agent execution failed for %s", agent_id)
+            return _error_response(str(exc))
 
     # ==================== 辅助方法 ====================
 
     def _plan_to_response(self, plan: Any) -> PlanResponse:
         """转换 PlanFile 为 PlanResponse"""
-        from Agent.core.plan_manager import StepStatus
-
         steps = []
         for step in plan.steps:
             steps.append(

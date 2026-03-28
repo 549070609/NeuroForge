@@ -873,3 +873,15 @@ class TestAgentEngineGetCategoryRegistry:
         )
 
         assert engine.get_category_registry() is mock_registry
+
+
+class TestAgentEngineConstructorContract:
+    """Compatibility contract tests for engine constructor."""
+
+    def test_old_model_id_signature_is_rejected(self):
+        """The legacy model_id/llm_client constructor path should fail fast."""
+        with pytest.raises(TypeError):
+            AgentEngine(
+                model_id="legacy-model",  # type: ignore[call-arg]
+                tool_registry=ToolRegistry(),
+            )

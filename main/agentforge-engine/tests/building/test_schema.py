@@ -177,6 +177,15 @@ class TestAgentSchema:
         assert config.max_tokens == 2048
         assert config.allowed_tools == ["read", "write", "bash"]
 
+    def test_schema_to_config_maps_max_iterations(self):
+        """测试 max_iterations 被映射到运行时配置。"""
+        schema = create_test_schema()
+        schema.limits.max_iterations = 7
+
+        config = schema.to_agent_config()
+
+        assert config.max_iterations == 7
+
     def test_schema_from_metadata(self):
         """测试从 AgentMetadata 创建 Schema"""
         metadata = AgentMetadata(

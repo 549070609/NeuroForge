@@ -213,6 +213,8 @@ class PlanFileManager:
                 return None
 
             if status is not None:
+                if not self._is_valid_step_transition(step.status, status):
+                    return None
                 step.status = status
                 if status == StepStatus.IN_PROGRESS and not step.started_at:
                     step.started_at = _utc_now_iso()
@@ -318,6 +320,23 @@ class PlanFileManager:
     def _next_step_id(self, plan: PlanFile) -> str:
         return f"step-{len(plan.steps) + 1}"
 
+    def _is_valid_step_transition(self, current: StepStatus, target: StepStatus) -> bool:
+        if current == target:
+            return True
+        transitions: dict[StepStatus, set[StepStatus]] = {
+            StepStatus.PENDING: {
+                StepStatus.IN_PROGRESS,
+                StepStatus.COMPLETED,
+                StepStatus.BLOCKED,
+                StepStatus.SKIPPED,
+            },
+            StepStatus.IN_PROGRESS: {StepStatus.COMPLETED, StepStatus.BLOCKED, StepStatus.SKIPPED},
+            StepStatus.BLOCKED: {StepStatus.IN_PROGRESS, StepStatus.COMPLETED, StepStatus.SKIPPED},
+            StepStatus.COMPLETED: set(),
+            StepStatus.SKIPPED: set(),
+        }
+        return target in transitions.get(current, set())
+
     def _plan_file_path(self, plan_id: str) -> Path:
         return self._plans_dir / f"{plan_id}.json"
 
@@ -347,4 +366,3 @@ class PlanFileManager:
                     self._plans[plan.id] = plan
             except Exception:
                 continue
-

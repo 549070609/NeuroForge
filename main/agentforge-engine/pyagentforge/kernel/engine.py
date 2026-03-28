@@ -24,11 +24,20 @@ AskCallback = Callable[[str, dict[str, Any]], bool]
 
 @dataclass
 class AgentConfig:
-    """Agent 配置"""
+    """Agent runtime configuration."""
+    name: str = "default"
+    description: str = ""
+    version: str = "1.0.0"
+    model: str = "default"
     system_prompt: str = "You are a helpful AI assistant."
     max_tokens: int = 4096
     temperature: float = 1.0
+    timeout: int = 120
+    allowed_tools: list[str] | None = None
+    denied_tools: list[str] | None = None
+    ask_tools: list[str] | None = None
     max_iterations: int = 100
+    max_subagent_depth: int = 3
     permission_checker: Any = None
 
 
@@ -49,8 +58,10 @@ class AgentEngine:
         self.provider = provider
         self.tools = tool_registry
         self.config = config or AgentConfig()
-        self.context = context or ContextManager(
-            system_prompt=self.config.system_prompt,
+        self.context = (
+            context
+            if context is not None
+            else ContextManager(system_prompt=self.config.system_prompt)
         )
         self.executor = ToolExecutor(
             tool_registry=tool_registry,
@@ -133,7 +144,11 @@ class AgentEngine:
                 modified = await self.plugin_manager.emit_hook(
                     "on_after_llm_call", response
                 )
-                if modified and modified[0]:
+                if (
+                    modified
+                    and modified[0]
+                    and isinstance(modified[0], ProviderResponse)
+                ):
                     response = modified[0]
 
             logger.info(
@@ -273,7 +288,11 @@ class AgentEngine:
                 modified = await self.plugin_manager.emit_hook(
                     "on_after_llm_call", final_response
                 )
-                if modified and modified[0]:
+                if (
+                    modified
+                    and modified[0]
+                    and isinstance(modified[0], ProviderResponse)
+                ):
                     final_response = modified[0]
 
             logger.info(
