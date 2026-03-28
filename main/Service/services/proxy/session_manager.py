@@ -1,27 +1,31 @@
-"""
-Session Manager - 会话管理器
-
-管理 Agent 执行会话的状态和历史记录。
-"""
+﻿"""Session manager with persistent state backend."""
 
 from __future__ import annotations
 
+import copy
 import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from ...persistence import StateStore
+
 logger = logging.getLogger(__name__)
+
+
+def _parse_datetime(raw: str | None) -> datetime:
+    if not raw:
+        return datetime.utcnow()
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return datetime.utcnow()
 
 
 @dataclass
 class SessionState:
-    """
-    会话状态
-
-    存储会话的运行时状态和历史记录。
-    """
+    """Session runtime state."""
 
     session_id: str
     workspace_id: str
@@ -31,16 +35,11 @@ class SessionState:
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     status: str = "active"  # active, paused, completed, error
-    executor: Any = field(default=None, repr=False)  # AgentExecutor 引用
+    version: int = 0
+    trace_id: str | None = None
+    executor: Any = field(default=None, repr=False)  # in-process only
 
     def add_message(self, role: str, content: str | list[dict]) -> None:
-        """
-        添加消息到历史记录
-
-        Args:
-            role: 消息角色 (user, assistant, system)
-            content: 消息内容
-        """
         message = {
             "role": role,
             "content": content,
@@ -50,25 +49,27 @@ class SessionState:
         self.updated_at = datetime.utcnow()
 
     def get_last_message(self) -> dict[str, Any] | None:
-        """获取最后一条消息"""
         if self.message_history:
             return self.message_history[-1]
         return None
 
     def get_messages_for_api(self) -> list[dict[str, Any]]:
-        """
-        获取适合 API 调用的消息格式
+        return [{"role": msg["role"], "content": msg["content"]} for msg in self.message_history]
 
-        Returns:
-            消息列表 (不含 timestamp)
-        """
-        return [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in self.message_history
-        ]
+    def to_store_value(self) -> dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "workspace_id": self.workspace_id,
+            "agent_id": self.agent_id,
+            "status": self.status,
+            "message_history": copy.deepcopy(self.message_history),
+            "metadata": copy.deepcopy(self.metadata),
+            "trace_id": self.trace_id,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
 
     def to_dict(self) -> dict[str, Any]:
-        """转换为字典"""
         return {
             "session_id": self.session_id,
             "workspace_id": self.workspace_id,
@@ -78,18 +79,42 @@ class SessionState:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "metadata": self.metadata,
+            "trace_id": self.trace_id,
         }
+
+    @classmethod
+    def from_store_value(cls, value: dict[str, Any], version: int, executor: Any = None) -> SessionState:
+        return cls(
+            session_id=str(value.get("session_id", "")),
+            workspace_id=str(value.get("workspace_id", "")),
+            agent_id=str(value.get("agent_id", "")),
+            message_history=list(value.get("message_history", [])),
+            metadata=dict(value.get("metadata", {})),
+            created_at=_parse_datetime(value.get("created_at")),
+            updated_at=_parse_datetime(value.get("updated_at")),
+            status=str(value.get("status", "active")),
+            version=version,
+            trace_id=value.get("trace_id"),
+            executor=executor,
+        )
 
 
 class SessionManager:
-    """
-    会话管理器
+    """Persistent session manager with optimistic concurrency."""
 
-    管理会话的创建、查询、更新和删除。
-    """
+    SESSION_NAMESPACE = "session"
 
-    def __init__(self) -> None:
-        self._sessions: dict[str, SessionState] = {}
+    def __init__(
+        self,
+        store: StateStore,
+        *,
+        session_ttl: int = 3600,
+        max_sessions: int = 100,
+    ) -> None:
+        self._store = store
+        self._session_ttl = session_ttl
+        self._max_sessions = max_sessions
+        self._executors: dict[str, Any] = {}
         self._logger = logging.getLogger(f"{__name__}.SessionManager")
 
     async def create_session(
@@ -98,182 +123,170 @@ class SessionManager:
         agent_id: str,
         metadata: dict[str, Any] | None = None,
         executor: Any = None,
+        idempotency_key: str | None = None,
     ) -> SessionState:
-        """
-        创建会话
+        existing_sessions = await self.list_sessions()
+        if self._max_sessions > 0 and len(existing_sessions) >= self._max_sessions:
+            raise ValueError(f"Maximum session limit reached: {self._max_sessions}")
 
-        Args:
-            workspace_id: 工作区域 ID
-            agent_id: Agent ID
-            metadata: 元数据 (可选)
-            executor: AgentExecutor 实例 (可选)
+        for _ in range(5):
+            session_id = self._generate_session_id()
+            session = SessionState(
+                session_id=session_id,
+                workspace_id=workspace_id,
+                agent_id=agent_id,
+                metadata=metadata or {},
+                executor=executor,
+            )
+            write_result = await self._store.set(
+                session_id,
+                session.to_store_value(),
+                namespace=self.SESSION_NAMESPACE,
+                ttl=self._session_ttl,
+                expected_version=0,
+                idempotency_key=idempotency_key,
+            )
+            if write_result.applied and write_result.record:
+                session.version = write_result.record.version
+                if executor is not None:
+                    self._executors[session_id] = executor
+                self._logger.info("Created session: %s for agent %s", session_id, agent_id)
+                return session
 
-        Returns:
-            SessionState 实例
-        """
-        session_id = self._generate_session_id()
-
-        session = SessionState(
-            session_id=session_id,
-            workspace_id=workspace_id,
-            agent_id=agent_id,
-            metadata=metadata or {},
-            executor=executor,
-        )
-
-        self._sessions[session_id] = session
-        self._logger.info(f"Created session: {session_id} for agent {agent_id}")
-
-        return session
+        raise RuntimeError("Failed to create session after multiple retries")
 
     async def get_session(self, session_id: str) -> SessionState | None:
-        """
-        获取会话
+        record = await self._store.get(session_id, namespace=self.SESSION_NAMESPACE)
+        if record is None:
+            self._executors.pop(session_id, None)
+            return None
+        return SessionState.from_store_value(
+            value=record.value,
+            version=record.version,
+            executor=self._executors.get(session_id),
+        )
 
-        Args:
-            session_id: 会话 ID
-
-        Returns:
-            SessionState 或 None
-        """
-        return self._sessions.get(session_id)
-
-    async def update_session(
-        self,
-        session_id: str,
-        updates: dict[str, Any],
-    ) -> SessionState | None:
-        """
-        更新会话
-
-        Args:
-            session_id: 会话 ID
-            updates: 更新内容
-
-        Returns:
-            更新后的 SessionState 或 None
-        """
-        session = self._sessions.get(session_id)
+    async def update_session(self, session_id: str, updates: dict[str, Any]) -> SessionState | None:
+        session = await self.get_session(session_id)
         if not session:
             return None
 
-        # 更新允许的字段
-        allowed_fields = {"status", "metadata"}
+        allowed_fields = {"status", "metadata", "trace_id"}
         for key, value in updates.items():
             if key in allowed_fields:
                 setattr(session, key, value)
-
         session.updated_at = datetime.utcnow()
-        self._logger.debug(f"Updated session: {session_id}")
 
+        write_result = await self._store.set(
+            session_id,
+            session.to_store_value(),
+            namespace=self.SESSION_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=session.version,
+        )
+        if not write_result.applied or write_result.record is None:
+            self._logger.warning("Session update conflict: %s", session_id)
+            return None
+
+        session.version = write_result.record.version
         return session
 
     async def delete_session(self, session_id: str) -> bool:
-        """
-        删除会话
+        session = await self.get_session(session_id)
+        if not session:
+            self._executors.pop(session_id, None)
+            return False
 
-        Args:
-            session_id: 会话 ID
+        executor = self._executors.pop(session_id, None)
+        if executor:
+            try:
+                executor.reset()
+            except Exception as exc:
+                self._logger.warning("Failed to reset executor for session %s: %s", session_id, exc)
 
-        Returns:
-            是否成功删除
-        """
-        session = self._sessions.pop(session_id, None)
-        if session:
-            # 清理会话关联的资源
-            if session.executor:
-                try:
-                    session.executor.reset()
-                except Exception as e:
-                    self._logger.warning(f"Failed to reset executor for session {session_id}: {e}")
+        deleted = await self._store.delete(
+            session_id,
+            namespace=self.SESSION_NAMESPACE,
+            expected_version=session.version,
+        )
+        if deleted:
+            self._logger.info("Deleted session: %s", session_id)
+        return deleted
 
-            self._logger.info(f"Deleted session: {session_id}")
-            return True
-        return False
-
-    async def add_message(
-        self,
-        session_id: str,
-        role: str,
-        content: str | list[dict],
-    ) -> bool:
-        """
-        添加消息到会话
-
-        Args:
-            session_id: 会话 ID
-            role: 消息角色
-            content: 消息内容
-
-        Returns:
-            是否成功添加
-        """
-        session = self._sessions.get(session_id)
+    async def add_message(self, session_id: str, role: str, content: str | list[dict]) -> bool:
+        session = await self.get_session(session_id)
         if not session:
             return False
 
         session.add_message(role, content)
-        self._logger.debug(f"Added {role} message to session: {session_id}")
-
+        write_result = await self._store.set(
+            session_id,
+            session.to_store_value(),
+            namespace=self.SESSION_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=session.version,
+        )
+        if not write_result.applied or write_result.record is None:
+            self._logger.warning("Session message append conflict: %s", session_id)
+            return False
+        session.version = write_result.record.version
         return True
 
-    def list_sessions(
+    async def list_sessions(
         self,
         workspace_id: str | None = None,
         agent_id: str | None = None,
         status: str | None = None,
     ) -> list[SessionState]:
-        """
-        列出会话
-
-        Args:
-            workspace_id: 过滤工作区域 ID (可选)
-            agent_id: 过滤 Agent ID (可选)
-            status: 过滤状态 (可选)
-
-        Returns:
-            SessionState 列表
-        """
-        sessions = list(self._sessions.values())
+        records = await self._store.list(namespace=self.SESSION_NAMESPACE)
+        sessions = [
+            SessionState.from_store_value(
+                value=record.value,
+                version=record.version,
+                executor=self._executors.get(record.key),
+            )
+            for record in records
+        ]
 
         if workspace_id:
             sessions = [s for s in sessions if s.workspace_id == workspace_id]
-
         if agent_id:
             sessions = [s for s in sessions if s.agent_id == agent_id]
-
         if status:
             sessions = [s for s in sessions if s.status == status]
 
-        # 按创建时间倒序排列
-        sessions.sort(key=lambda s: s.created_at, reverse=True)
-
+        sessions.sort(key=lambda session: session.created_at, reverse=True)
         return sessions
 
-    def get_stats(self) -> dict[str, Any]:
-        """获取统计信息"""
+    async def get_stats(self) -> dict[str, Any]:
+        sessions = await self.list_sessions()
         status_counts: dict[str, int] = {}
-        for session in self._sessions.values():
+        for session in sessions:
             status_counts[session.status] = status_counts.get(session.status, 0) + 1
-
         return {
-            "total_sessions": len(self._sessions),
+            "total_sessions": len(sessions),
             "by_status": status_counts,
         }
 
-    def clear(self) -> None:
-        """清空所有会话"""
-        # 重置所有执行器
-        for session in self._sessions.values():
-            if session.executor:
+    async def clear(self) -> None:
+        for session_id, executor in list(self._executors.items()):
+            if executor:
                 try:
-                    session.executor.reset()
-                except Exception as e:
-                    self._logger.warning(f"Failed to reset executor: {e}")
-
-        self._sessions.clear()
+                    executor.reset()
+                except Exception as exc:
+                    self._logger.warning("Failed to reset executor %s: %s", session_id, exc)
+        self._executors.clear()
+        await self._store.clear(namespace=self.SESSION_NAMESPACE)
         self._logger.info("Cleared all sessions")
 
+    def set_executor(self, session_id: str, executor: Any) -> None:
+        self._executors[session_id] = executor
+
+    def remove_executor(self, session_id: str) -> None:
+        self._executors.pop(session_id, None)
+
+    def get_executor(self, session_id: str) -> Any:
+        return self._executors.get(session_id)
+
     def _generate_session_id(self) -> str:
-        """生成会话 ID"""
         return f"sess-{uuid.uuid4().hex[:12]}"

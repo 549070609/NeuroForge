@@ -6,18 +6,21 @@ Agent Executor - Agent 执行器
 
 from __future__ import annotations
 
+import inspect
 import logging
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from pyagentforge import (
-    AgentEngine,
     AgentConfig,
+    AgentEngine,
     ToolRegistry,
     register_core_tools,
 )
 from pyagentforge.client import LLMClient
 from pyagentforge.kernel.base_provider import BaseProvider
+from pyagentforge.workflow import EngineFactory, TraceCollector, TracingPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +97,24 @@ class LLMClientProvider(BaseProvider):
             yield chunk
 
 
+class _TracingHookBridge:
+    """Minimal hook bridge to wire TracingPlugin into AgentEngine."""
+
+    def __init__(self, tracing_plugin: TracingPlugin) -> None:
+        self._tracing_plugin = tracing_plugin
+
+    async def emit_hook(self, hook_name: str, *args: Any, **kwargs: Any) -> list[Any]:
+        callback = getattr(self._tracing_plugin, hook_name, None)
+        if callback is None:
+            return []
+        result = callback(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        if result is None:
+            return []
+        return [result]
+
+
 class AgentExecutor:
     """
     Agent 执行器
@@ -115,6 +136,9 @@ class AgentExecutor:
         self._tool_registry: ToolRegistry | None = None
         self._engine: AgentEngine | None = None
         self._config: AgentConfig | None = None
+        self._trace_collector: TraceCollector | None = None
+        self._tracing_plugin: TracingPlugin | None = None
+        self._tracing_bridge: _TracingHookBridge | None = None
         self._initialized = False
         self._logger = logging.getLogger(f"{__name__}.AgentExecutor")
 
@@ -173,6 +197,31 @@ class AgentExecutor:
             self._logger.error(f"Failed to initialize AgentExecutor: {e}")
             raise
 
+    def set_trace_collector(self, collector: TraceCollector | None) -> None:
+        """Attach an external trace collector before engine creation."""
+        self._trace_collector = collector
+
+    def get_trace_id(self) -> str | None:
+        if self._tracing_plugin:
+            return self._tracing_plugin.collector.trace_id
+        if self._trace_collector:
+            return self._trace_collector.trace_id
+        return None
+
+    def get_trace_summary(self) -> dict[str, Any] | None:
+        if self._tracing_plugin:
+            return self._tracing_plugin.collector.get_summary()
+        if self._trace_collector:
+            return self._trace_collector.get_summary()
+        return None
+
+    def get_trace_spans(self) -> list[dict[str, Any]]:
+        if self._tracing_plugin:
+            return self._tracing_plugin.collector.export_json()
+        if self._trace_collector:
+            return self._trace_collector.export_json()
+        return []
+
     async def execute(
         self,
         prompt: str,
@@ -206,6 +255,8 @@ class AgentExecutor:
                 metadata={
                     "session_id": self._engine.session_id,
                     "model": self._model_id,
+                    "trace_id": self.get_trace_id(),
+                    "trace_summary": self.get_trace_summary(),
                 },
             )
 
@@ -215,6 +266,7 @@ class AgentExecutor:
                 success=False,
                 output="",
                 error=str(e),
+                metadata={"trace_id": self.get_trace_id()},
             )
 
     async def execute_stream(
@@ -242,7 +294,10 @@ class AgentExecutor:
             full_prompt = self._build_prompt(prompt, context)
 
             # 流式运行 Agent
+            trace_id = self.get_trace_id()
             async for event in self._engine.run_stream(full_prompt):
+                if trace_id and isinstance(event, dict):
+                    event = {**event, "trace_id": trace_id}
                 yield event
 
         except Exception as e:
@@ -260,6 +315,21 @@ class AgentExecutor:
         if self._engine:
             return self._engine.get_context_summary()
         return {}
+
+    def create_engine_factory(self) -> EngineFactory:
+        """Create workflow engine factory from the initialized executor context."""
+        if not self._initialized:
+            raise RuntimeError("Executor not initialized. Call initialize() first.")
+        if self._provider is None:
+            raise RuntimeError("Provider is not initialized")
+        if self._tool_registry is None:
+            raise RuntimeError("Tool registry is not initialized")
+        plugin_manager = self._engine.plugin_manager if self._engine else None
+        return EngineFactory(
+            provider=self._provider,
+            base_tool_registry=self._tool_registry,
+            plugin_manager=plugin_manager,
+        )
 
     def _apply_config_overrides(
         self,
@@ -440,10 +510,16 @@ class AgentExecutor:
                 raise RuntimeError("Tool registry is not initialized")
             if self._config is None:
                 raise RuntimeError("Agent config is not initialized")
+            if self._tracing_plugin is None:
+                self._tracing_plugin = TracingPlugin()
+            if self._trace_collector is not None:
+                self._tracing_plugin.collector = self._trace_collector
+            self._tracing_bridge = _TracingHookBridge(self._tracing_plugin)
             engine = AgentEngine(
                 provider=self._provider,
                 tool_registry=self._tool_registry,
                 config=self._config,
+                plugin_manager=self._tracing_bridge,
             )
 
             self._logger.info(f"Created AgentEngine: session_id={engine.session_id}")

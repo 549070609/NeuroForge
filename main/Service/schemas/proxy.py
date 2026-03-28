@@ -1,134 +1,91 @@
-"""
-Proxy Schemas - API 请求和响应模型
-
-定义代理服务相关的 API 数据结构。
-"""
+﻿"""Proxy schemas for workspace/session, execution, workflow, and tracing APIs."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-# ==================== Workspace Schemas ====================
-
-
 class WorkspaceCreate(BaseModel):
-    """创建工作区域请求"""
-
-    workspace_id: str = Field(description="工作区域 ID")
-    root_path: str = Field(description="工作区域根路径")
-    namespace: str = Field(default="default", description="命名空间")
-    allowed_tools: list[str] = Field(default=["*"], description="允许的工具列表")
-    denied_tools: list[str] = Field(default=[], description="拒绝的工具列表")
-    is_readonly: bool = Field(default=False, description="是否只读")
-    denied_paths: list[str] = Field(default=[], description="拒绝访问的路径模式")
-    max_file_size: int = Field(default=10485760, description="最大文件大小 (字节)")
-    enable_symlinks: bool = Field(default=False, description="是否允许符号链接")
+    workspace_id: str = Field(description="Workspace ID")
+    root_path: str = Field(description="Workspace root path")
+    namespace: str = Field(default="default", description="Namespace")
+    allowed_tools: list[str] = Field(default=["*"], description="Allowed tools")
+    denied_tools: list[str] = Field(default=[], description="Denied tools")
+    is_readonly: bool = Field(default=False, description="Read-only mode")
+    denied_paths: list[str] = Field(default=[], description="Denied path patterns")
+    max_file_size: int = Field(default=10485760, description="Max file size")
+    enable_symlinks: bool = Field(default=False, description="Allow symlinks")
 
 
 class WorkspaceResponse(BaseModel):
-    """工作区域响应"""
-
-    workspace_id: str = Field(description="工作区域 ID")
-    root_path: str = Field(description="工作区域根路径")
-    namespace: str = Field(description="命名空间")
-    is_readonly: bool = Field(description="是否只读")
-    allowed_tools: list[str] = Field(description="允许的工具列表")
-    denied_tools: list[str] = Field(description="拒绝的工具列表")
+    workspace_id: str = Field(description="Workspace ID")
+    root_path: str = Field(description="Workspace root path")
+    namespace: str = Field(description="Namespace")
+    is_readonly: bool = Field(description="Read-only mode")
+    allowed_tools: list[str] = Field(description="Allowed tools")
+    denied_tools: list[str] = Field(description="Denied tools")
 
 
 class WorkspaceListResponse(BaseModel):
-    """工作区域列表响应"""
-
-    workspaces: list[str] = Field(description="工作区域 ID 列表")
-    total: int = Field(description="总数")
-
-
-# ==================== Agent Config Override Schemas ====================
+    workspaces: list[str] = Field(description="Workspace ID list")
+    total: int = Field(description="Total")
 
 
 class AgentConfigOverride(BaseModel):
-    """Agent 运行时配置覆盖
-
-    所有字段均为可选，仅提供的字段会覆盖 agent.yaml 中的默认值。
-    优先级：运行时覆盖 > agent.yaml 定义 > 系统默认值。
-    """
-
-    provider: str | None = Field(default=None, description="LLM 提供商 (anthropic/openai/google)")
-    model: str | None = Field(default=None, description="模型 ID")
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="温度参数")
-    max_tokens: int | None = Field(default=None, gt=0, description="最大 token 数")
-    max_iterations: int | None = Field(default=None, gt=0, description="最大迭代次数")
-    system_prompt: str | None = Field(default=None, description="覆盖系统提示词")
-    extra: dict[str, Any] | None = Field(default=None, description="其他扩展配置")
-
-
-# ==================== Session Schemas ====================
+    provider: str | None = Field(default=None, description="Provider")
+    model: str | None = Field(default=None, description="Model ID")
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="Temperature")
+    max_tokens: int | None = Field(default=None, gt=0, description="Max tokens")
+    max_iterations: int | None = Field(default=None, gt=0, description="Max iterations")
+    system_prompt: str | None = Field(default=None, description="Override system prompt")
+    extra: dict[str, Any] | None = Field(default=None, description="Extra config")
 
 
 class SessionCreate(BaseModel):
-    """创建会话请求"""
-
-    workspace_id: str = Field(description="工作区域 ID")
+    workspace_id: str = Field(description="Workspace ID")
     agent_id: str = Field(description="Agent ID")
-    metadata: dict[str, Any] | None = Field(default=None, description="元数据")
-    agent_config: AgentConfigOverride | None = Field(
-        default=None, description="Agent 运行时配置覆盖（优先级高于 agent.yaml）"
-    )
+    metadata: dict[str, Any] | None = Field(default=None, description="Metadata")
+    agent_config: AgentConfigOverride | None = Field(default=None, description="Runtime config override")
 
 
 class SessionResponse(BaseModel):
-    """会话响应"""
-
-    session_id: str = Field(description="会话 ID")
-    workspace_id: str = Field(description="工作区域 ID")
+    session_id: str = Field(description="Session ID")
+    workspace_id: str = Field(description="Workspace ID")
     agent_id: str = Field(description="Agent ID")
-    status: str = Field(description="会话状态")
-    message_count: int = Field(description="消息数量")
-    created_at: str = Field(description="创建时间")
-    updated_at: str = Field(description="更新时间")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="元数据")
+    status: str = Field(description="Session status")
+    message_count: int = Field(description="Message count")
+    created_at: str = Field(description="Created timestamp")
+    updated_at: str = Field(description="Updated timestamp")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata")
+    trace_id: str | None = Field(default=None, description="Last trace ID")
 
 
 class SessionListResponse(BaseModel):
-    """会话列表响应"""
-
-    sessions: list[SessionResponse] = Field(description="会话列表")
-    total: int = Field(description="总数")
-
-
-# ==================== Execute Schemas ====================
+    sessions: list[SessionResponse] = Field(description="Session list")
+    total: int = Field(description="Total")
 
 
 class ProxyExecuteRequest(BaseModel):
-    """执行请求"""
-
-    session_id: str = Field(description="会话 ID")
-    prompt: str = Field(description="用户输入")
-    context: dict[str, Any] | None = Field(default=None, description="执行上下文")
+    session_id: str = Field(description="Session ID")
+    prompt: str = Field(description="User prompt")
+    context: dict[str, Any] | None = Field(default=None, description="Execution context")
+    trace_id: str | None = Field(default=None, description="Optional upstream trace ID")
 
 
 class ProxyExecuteResponse(BaseModel):
-    """执行响应"""
-
-    session_id: str = Field(description="会话 ID")
-    success: bool = Field(description="是否成功")
-    output: str = Field(description="输出内容")
-    error: str | None = Field(default=None, description="错误信息")
-    iterations: int = Field(default=0, description="迭代次数")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="元数据")
+    session_id: str = Field(description="Session ID")
+    success: bool = Field(description="Success")
+    output: str = Field(description="Output")
+    error: str | None = Field(default=None, description="Error")
+    iterations: int = Field(default=0, description="Iteration count")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata")
+    trace_id: str | None = Field(default=None, description="Trace ID")
+    span_id: str | None = Field(default=None, description="Root span ID")
 
 
 class ProxyStreamEvent(BaseModel):
-    """流式事件
-
-    phase 字段标识当前输出所处的执行阶段（从 1 开始递增）。
-    前端可据此实现分段渲染：Phase 1 快速直达回复、Phase 2+ 深度分析。
-    """
-
     type: Literal[
         "stream",
         "tool_start",
@@ -136,29 +93,59 @@ class ProxyStreamEvent(BaseModel):
         "complete",
         "error",
         "phase_start",
-    ] = Field(description="事件类型")
-    phase: int | None = Field(default=None, description="当前执行阶段 (1=快速响应, 2+=深度分析)")
-    # For phase_start events
-    phase_label: str | None = Field(default=None, description="阶段标签 (如 '快速响应', '深度分析')")
-    # For stream events
-    event: Any | None = Field(default=None, description="流式事件数据")
-    # For tool_start events
-    tool_name: str | None = Field(default=None, description="工具名称")
-    tool_id: str | None = Field(default=None, description="工具调用 ID")
-    # For tool_result events
-    result: str | None = Field(default=None, description="工具执行结果")
-    # For complete events
-    text: str | None = Field(default=None, description="完成文本")
-    # For error events
-    message: str | None = Field(default=None, description="错误消息")
+    ] = Field(description="Event type")
+    phase: int | None = Field(default=None, description="Execution phase")
+    phase_label: str | None = Field(default=None, description="Phase label")
+    event: Any | None = Field(default=None, description="Stream payload")
+    tool_name: str | None = Field(default=None, description="Tool name")
+    tool_id: str | None = Field(default=None, description="Tool call ID")
+    result: str | None = Field(default=None, description="Tool result")
+    text: str | None = Field(default=None, description="Completion text")
+    message: str | None = Field(default=None, description="Error message")
+    trace_id: str | None = Field(default=None, description="Trace ID")
+    span_id: str | None = Field(default=None, description="Span ID")
 
 
-# ==================== Stats Schemas ====================
+class WorkflowCreateRequest(BaseModel):
+    session_id: str = Field(description="Session ID")
+    task: str = Field(description="Workflow task")
+    workflow_type: Literal["graph", "team"] = Field(default="graph", description="Workflow runtime")
+    metadata: dict[str, Any] | None = Field(default=None, description="Workflow metadata")
+    idempotency_key: str | None = Field(default=None, description="Idempotency key")
+
+
+class WorkflowResponse(BaseModel):
+    id: str = Field(description="Workflow ID")
+    session_id: str = Field(description="Session ID")
+    task: str = Field(description="Task")
+    workflow_type: str = Field(description="Workflow type")
+    status: str = Field(description="Workflow status")
+    thread_id: str = Field(description="Workflow thread ID")
+    result: str | None = Field(default=None, description="Workflow result")
+    error: str | None = Field(default=None, description="Workflow error")
+    trace_id: str | None = Field(default=None, description="Trace ID")
+    steps: list[dict[str, Any]] = Field(default_factory=list, description="Step traces")
+    elapsed_ms: int = Field(default=0, description="Elapsed ms")
+    created_at: str = Field(description="Created timestamp")
+    updated_at: str = Field(description="Updated timestamp")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata")
+    version: int | None = Field(default=None, description="Store version")
+
+
+class TraceResponse(BaseModel):
+    trace_id: str = Field(description="Trace ID")
+    scope: str = Field(description="Trace scope")
+    session_id: str | None = Field(default=None, description="Session ID")
+    workflow_id: str | None = Field(default=None, description="Workflow ID")
+    summary: dict[str, Any] = Field(default_factory=dict, description="Trace summary")
+    spans: list[dict[str, Any]] = Field(default_factory=list, description="Span list")
+    updated_at: str = Field(description="Updated timestamp")
 
 
 class ProxyStatsResponse(BaseModel):
-    """代理服务统计响应"""
-
-    workspaces: dict[str, Any] = Field(description="工作区域统计")
-    sessions: dict[str, Any] = Field(description="会话统计")
-    executor_cache_size: int = Field(description="执行器缓存大小")
+    workspaces: dict[str, Any] = Field(description="Workspace stats")
+    sessions: dict[str, Any] = Field(description="Session stats")
+    executor_cache_size: int = Field(description="Executor cache size")
+    workflows: dict[str, Any] = Field(default_factory=dict, description="Workflow stats")
+    traces: dict[str, Any] = Field(default_factory=dict, description="Trace stats")
+    store_backend: str | None = Field(default=None, description="Storage backend")

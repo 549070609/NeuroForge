@@ -1,5 +1,21 @@
 """Persistence module."""
 
-from .store import MemoryStore, SessionStore, create_store
+from .store import (
+    MemoryStore,
+    SessionStore,
+    SQLiteStateStore,
+    StateStore,
+    StoreRecord,
+    StoreWriteResult,
+    create_store,
+)
 
-__all__ = ["SessionStore", "MemoryStore", "create_store"]
+__all__ = [
+    "SessionStore",
+    "StateStore",
+    "StoreRecord",
+    "StoreWriteResult",
+    "MemoryStore",
+    "SQLiteStateStore",
+    "create_store",
+]

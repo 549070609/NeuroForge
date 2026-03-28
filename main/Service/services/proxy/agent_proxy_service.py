@@ -1,53 +1,74 @@
-"""
-Agent Proxy Service - 代理 Agent 服务
-
-提供工作区域管理、会话管理和 Agent 执行的主服务。
-"""
+﻿"""Agent proxy service for workspace/session execution and workflow orchestration."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
+from pyagentforge import FileCheckpointer
+from pyagentforge.workflow import (
+    AgentRole,
+    SpanKind,
+    SpanStatus,
+    StepNode,
+    TeamDefinition,
+    TeamExecutor,
+    TeamProcess,
+    TraceCollector,
+    WorkflowGraph,
+)
+
+from ...config import get_settings
 from ...core.registry import ServiceRegistry
+from ...persistence import StateStore, StoreRecord, create_store
 from ...services.base import BaseService
-from .workspace_manager import WorkspaceConfig, WorkspaceContext, WorkspaceManager
-from .permission_bridge import WorkspacePathValidator, create_permission_checker_from_workspace
 from .agent_executor import AgentExecutor, ExecutionResult
 from .session_manager import SessionManager, SessionState
+from .workspace_manager import WorkspaceConfig, WorkspaceContext, WorkspaceManager
 
 logger = logging.getLogger(__name__)
 
 
 class AgentProxyService(BaseService):
-    """
-    代理 Agent 服务
+    """Proxy Agent service with persistence, workflow API, and tracing."""
 
-    继承 BaseService，提供:
-    - 工作区域管理 (创建、查询、删除)
-    - 会话管理 (创建、查询、删除)
-    - Agent 执行 (同步和流式)
-    """
+    WORKFLOW_NAMESPACE = "workflow"
+    TRACE_NAMESPACE = "trace"
+    TASK_NAMESPACE = "task"
+    PLAN_NAMESPACE = "plan"
 
     def __init__(self, registry: ServiceRegistry) -> None:
         super().__init__(registry)
         self._workspace_manager: WorkspaceManager | None = None
         self._session_manager: SessionManager | None = None
-        self._agent_directory: Any = None  # AgentDirectory
+        self._agent_directory: Any = None
         self._executor_cache: dict[str, AgentExecutor] = {}
+        self._store: StateStore | None = None
+        self._workflow_checkpointer: FileCheckpointer | None = None
+        self._session_ttl: int = 3600
 
     async def _on_initialize(self) -> None:
-        """初始化服务"""
         self._logger.info("Initializing AgentProxyService...")
 
-        # 初始化管理器
-        self._workspace_manager = WorkspaceManager()
-        self._session_manager = SessionManager()
+        settings = get_settings()
+        self._session_ttl = settings.session_ttl
+        self._store = create_store(settings)
 
-        # 延迟导入 Agent 模块
+        self._workspace_manager = WorkspaceManager()
+        self._session_manager = SessionManager(
+            store=self._store,
+            session_ttl=settings.session_ttl,
+            max_sessions=settings.max_sessions,
+        )
+
+        checkpoints_dir = Path(settings.sqlite_path).parent / "workflow_checkpoints"
+        self._workflow_checkpointer = FileCheckpointer(checkpoints_dir)
+
         try:
             import sys
-            from pathlib import Path
 
             agent_path = Path("main/Agent")
             if str(agent_path) not in sys.path:
@@ -58,37 +79,34 @@ class AgentProxyService(BaseService):
             self._agent_directory = AgentDirectory()
             self._agent_directory.scan()
             self._logger.info("Agent directory loaded")
-
-        except ImportError as e:
-            self._logger.warning(f"Agent module not fully available: {e}")
+        except ImportError as exc:
+            self._logger.warning("Agent module not fully available: %s", exc)
             self._agent_directory = None
 
         self._logger.info("AgentProxyService initialized")
 
     async def _on_shutdown(self) -> None:
-        """关闭服务"""
         self._logger.info("Shutting down AgentProxyService...")
 
-        # 清理执行器缓存
         for executor in self._executor_cache.values():
             try:
                 executor.reset()
-            except Exception as e:
-                self._logger.warning(f"Failed to reset executor: {e}")
-
+            except Exception as exc:
+                self._logger.warning("Failed to reset executor: %s", exc)
         self._executor_cache.clear()
 
-        # 清理会话
         if self._session_manager:
-            self._session_manager.clear()
+            await self._session_manager.clear()
 
-        # 清理工作区域
         if self._workspace_manager:
             self._workspace_manager.clear()
 
+        if self._store:
+            await self._store.close()
+
         self._logger.info("AgentProxyService shut down")
 
-    # ==================== 工作区域管理 ====================
+    # ==================== Workspace ====================
 
     def create_workspace(
         self,
@@ -100,21 +118,6 @@ class AgentProxyService(BaseService):
         is_readonly: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """
-        创建工作区域
-
-        Args:
-            workspace_id: 工作区域 ID
-            root_path: 根路径
-            namespace: 命名空间
-            allowed_tools: 允许的工具列表
-            denied_tools: 拒绝的工具列表
-            is_readonly: 是否只读
-            **kwargs: 其他配置参数
-
-        Returns:
-            工作区域信息
-        """
         if not self._workspace_manager:
             raise RuntimeError("Service not initialized")
 
@@ -139,15 +142,6 @@ class AgentProxyService(BaseService):
         }
 
     def get_workspace(self, workspace_id: str) -> dict[str, Any] | None:
-        """
-        获取工作区域信息
-
-        Args:
-            workspace_id: 工作区域 ID
-
-        Returns:
-            工作区域信息或 None
-        """
         if not self._workspace_manager:
             return None
 
@@ -165,36 +159,24 @@ class AgentProxyService(BaseService):
         }
 
     async def remove_workspace(self, workspace_id: str) -> bool:
-        """
-        移除工作区域
-
-        注意：这不会删除文件系统上的目录。
-
-        Args:
-            workspace_id: 工作区域 ID
-
-        Returns:
-            是否成功移除
-        """
         if not self._workspace_manager:
             return False
 
-        # 先清理关联的会话
         if self._session_manager:
-            sessions = self._session_manager.list_sessions(workspace_id=workspace_id)
+            sessions = await self._session_manager.list_sessions(workspace_id=workspace_id)
             for session in sessions:
                 self._executor_cache.pop(session.session_id, None)
+                self._session_manager.remove_executor(session.session_id)
                 await self._session_manager.delete_session(session.session_id)
 
         return self._workspace_manager.remove_workspace(workspace_id)
 
     def list_workspaces(self) -> list[str]:
-        """列出所有工作区域"""
         if not self._workspace_manager:
             return []
         return self._workspace_manager.list_workspaces()
 
-    # ==================== 会话管理 ====================
+    # ==================== Session ====================
 
     async def create_session(
         self,
@@ -203,130 +185,111 @@ class AgentProxyService(BaseService):
         metadata: dict[str, Any] | None = None,
         agent_config: dict[str, Any] | None = None,
     ) -> SessionState:
-        """
-        创建会话
-
-        Args:
-            workspace_id: 工作区域 ID
-            agent_id: Agent ID
-            metadata: 元数据
-            agent_config: 运行时配置覆盖（优先级高于 agent.yaml）
-
-        Returns:
-            SessionState
-
-        Raises:
-            ValueError: 如果工作区域不存在
-        """
         if not self._workspace_manager or not self._session_manager:
             raise RuntimeError("Service not initialized")
 
-        # 验证工作区域存在
         workspace = self._workspace_manager.get_workspace(workspace_id)
         if not workspace:
             raise ValueError(f"Workspace not found: {workspace_id}")
 
-        # 创建执行器（携带运行时配置覆盖）
         executor = await self._create_executor(workspace, agent_id, config_overrides=agent_config)
 
-        # 将 agent_config 持久化到 metadata，供执行器缓存失效时重建使用
         merged_metadata = dict(metadata or {})
         if agent_config:
             merged_metadata["_agent_config"] = agent_config
 
-        # 创建会话
         session = await self._session_manager.create_session(
             workspace_id=workspace_id,
             agent_id=agent_id,
             metadata=merged_metadata,
             executor=executor,
+            idempotency_key=merged_metadata.get("idempotency_key"),
         )
 
-        # 缓存执行器
         self._executor_cache[session.session_id] = executor
+        self._session_manager.set_executor(session.session_id, executor)
 
+        await self._bootstrap_session_state(session)
         return session
 
     async def get_session(self, session_id: str) -> SessionState | None:
-        """获取会话"""
         if not self._session_manager:
             return None
         return await self._session_manager.get_session(session_id)
 
     async def delete_session(self, session_id: str) -> bool:
-        """删除会话"""
         if not self._session_manager:
             return False
 
-        # 清理执行器缓存
-        if session_id in self._executor_cache:
-            del self._executor_cache[session_id]
+        self._executor_cache.pop(session_id, None)
+        self._session_manager.remove_executor(session_id)
 
-        return await self._session_manager.delete_session(session_id)
+        deleted = await self._session_manager.delete_session(session_id)
+        if deleted and self._store:
+            await self._delete_session_scoped_state(session_id)
+        return deleted
 
     async def list_sessions(
         self,
         workspace_id: str | None = None,
         agent_id: str | None = None,
     ) -> list[SessionState]:
-        """列出租话"""
         if not self._session_manager:
             return []
-        return self._session_manager.list_sessions(workspace_id=workspace_id, agent_id=agent_id)
+        return await self._session_manager.list_sessions(workspace_id=workspace_id, agent_id=agent_id)
 
-    # ==================== Agent 执行 ====================
+    # ==================== Execution ====================
 
     async def execute(
         self,
         session_id: str,
         prompt: str,
         context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ) -> ExecutionResult:
-        """
-        执行 Agent
-
-        Args:
-            session_id: 会话 ID
-            prompt: 用户输入
-            context: 执行上下文
-
-        Returns:
-            ExecutionResult
-
-        Raises:
-            ValueError: 如果会话不存在
-        """
         session = await self.get_session(session_id)
         if not session:
             raise ValueError(f"Session not found: {session_id}")
 
-        executor = self._executor_cache.get(session_id)
-        if not executor or not executor._initialized:
-            # 重新创建执行器（从 session metadata 恢复配置覆盖）
-            workspace = self._workspace_manager.get_workspace(session.workspace_id)
-            if not workspace:
-                raise ValueError(f"Workspace not found: {session.workspace_id}")
+        executor = await self._ensure_executor_for_session(session)
 
-            saved_config = session.metadata.get("_agent_config") if session.metadata else None
-            executor = await self._create_executor(
-                workspace, session.agent_id, config_overrides=saved_config
-            )
-            self._executor_cache[session_id] = executor
+        collector = self._new_trace_collector(trace_id)
+        root_span = collector.start_span(
+            "proxy.execute",
+            kind=SpanKind.AGENT,
+            attributes={
+                "session_id": session_id,
+                "workspace_id": session.workspace_id,
+                "agent_id": session.agent_id,
+            },
+        )
 
-        # 添加用户消息到历史
+        executor.set_trace_collector(collector)
         await self._session_manager.add_message(session_id, "user", prompt)
 
-        # 执行
         result = await executor.execute(prompt, context)
 
-        # 添加助手响应到历史
         if result.success:
             await self._session_manager.add_message(session_id, "assistant", result.output)
+            collector.finish_span(root_span, status=SpanStatus.OK)
         else:
-            await self._session_manager.add_message(
-                session_id, "assistant", f"Error: {result.error}"
-            )
+            await self._session_manager.add_message(session_id, "assistant", f"Error: {result.error}")
+            collector.finish_span(root_span, status=SpanStatus.ERROR)
 
+        await self._persist_trace(
+            collector,
+            session_id=session_id,
+            workflow_id=None,
+            scope="execute",
+        )
+        await self._session_manager.update_session(session_id, {"trace_id": collector.trace_id})
+
+        result.metadata.update(
+            {
+                "trace_id": collector.trace_id,
+                "span_id": root_span.span_id,
+            }
+        )
         return result
 
     async def execute_stream(
@@ -334,54 +297,478 @@ class AgentProxyService(BaseService):
         session_id: str,
         prompt: str,
         context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """
-        流式执行 Agent
-
-        Args:
-            session_id: 会话 ID
-            prompt: 用户输入
-            context: 执行上下文
-
-        Yields:
-            流式事件
-        """
         session = await self.get_session(session_id)
         if not session:
             yield {"type": "error", "message": f"Session not found: {session_id}"}
             return
 
-        executor = self._executor_cache.get(session_id)
-        if not executor or not executor._initialized:
-            workspace = self._workspace_manager.get_workspace(session.workspace_id)
-            if not workspace:
-                yield {"type": "error", "message": f"Workspace not found: {session.workspace_id}"}
-                return
+        executor = await self._ensure_executor_for_session(session)
 
-            saved_config = session.metadata.get("_agent_config") if session.metadata else None
-            executor = await self._create_executor(
-                workspace, session.agent_id, config_overrides=saved_config
-            )
-            self._executor_cache[session_id] = executor
+        collector = self._new_trace_collector(trace_id)
+        root_span = collector.start_span(
+            "proxy.execute_stream",
+            kind=SpanKind.AGENT,
+            attributes={
+                "session_id": session_id,
+                "workspace_id": session.workspace_id,
+                "agent_id": session.agent_id,
+            },
+        )
+        executor.set_trace_collector(collector)
 
-        # 添加用户消息到历史
         await self._session_manager.add_message(session_id, "user", prompt)
 
-        # 流式执行
         final_text = ""
+        has_error = False
         async for event in executor.execute_stream(prompt, context):
+            event = {
+                **event,
+                "trace_id": collector.trace_id,
+                "span_id": root_span.span_id,
+            }
             yield event
 
             if event.get("type") == "complete":
                 final_text = event.get("text", "")
             elif event.get("type") == "error":
+                has_error = True
                 final_text = f"Error: {event.get('message', 'Unknown error')}"
 
-        # 添加助手响应到历史
         if final_text:
             await self._session_manager.add_message(session_id, "assistant", final_text)
 
-    # ==================== 辅助方法 ====================
+        collector.finish_span(root_span, status=SpanStatus.ERROR if has_error else SpanStatus.OK)
+        await self._persist_trace(
+            collector,
+            session_id=session_id,
+            workflow_id=None,
+            scope="execute_stream",
+        )
+        await self._session_manager.update_session(session_id, {"trace_id": collector.trace_id})
+
+    # ==================== Workflow ====================
+
+    async def create_workflow(
+        self,
+        session_id: str,
+        task: str,
+        workflow_type: str = "graph",
+        metadata: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        if self._store is None:
+            raise RuntimeError("Service not initialized")
+
+        session = await self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session not found: {session_id}")
+
+        workflow_id = f"wf-{datetime.utcnow().strftime('%Y%m%d')}-{uuid_hex(8)}"
+        now = utc_now_iso()
+        payload = {
+            "id": workflow_id,
+            "session_id": session_id,
+            "task": task,
+            "workflow_type": workflow_type,
+            "status": "created",
+            "thread_id": f"thread-{workflow_id}",
+            "result": None,
+            "error": None,
+            "trace_id": None,
+            "steps": [],
+            "elapsed_ms": 0,
+            "created_at": now,
+            "updated_at": now,
+            "metadata": metadata or {},
+        }
+
+        write_result = await self._store.set(
+            workflow_id,
+            payload,
+            namespace=self.WORKFLOW_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=0,
+            idempotency_key=idempotency_key,
+        )
+        if not write_result.record:
+            raise RuntimeError("Failed to persist workflow")
+
+        await self._store.set(
+            f"{session_id}:{workflow_id}",
+            {
+                "workflow_id": workflow_id,
+                "session_id": session_id,
+                "status": "created",
+                "updated_at": now,
+            },
+            namespace=self.TASK_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=0,
+            idempotency_key=idempotency_key,
+        )
+
+        return write_result.record.value
+
+    async def get_workflow(self, workflow_id: str) -> dict[str, Any] | None:
+        if self._store is None:
+            return None
+        record = await self._store.get(workflow_id, namespace=self.WORKFLOW_NAMESPACE)
+        if not record:
+            return None
+        return {**record.value, "version": record.version}
+
+    async def start_workflow(self, workflow_id: str, trace_id: str | None = None) -> dict[str, Any]:
+        return await self._run_workflow(workflow_id, require_status={"created", "paused", "failed"}, trace_id=trace_id)
+
+    async def resume_workflow(self, workflow_id: str, trace_id: str | None = None) -> dict[str, Any]:
+        return await self._run_workflow(workflow_id, require_status={"paused"}, trace_id=trace_id)
+
+    async def pause_workflow(self, workflow_id: str) -> dict[str, Any]:
+        workflow, record = await self._get_workflow_with_record(workflow_id)
+        if not workflow or record is None:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+
+        if workflow["status"] in {"completed", "failed"}:
+            raise ValueError(f"Workflow cannot be paused in status: {workflow['status']}")
+
+        workflow["status"] = "paused"
+        workflow["updated_at"] = utc_now_iso()
+
+        write = await self._store.set(
+            workflow_id,
+            workflow,
+            namespace=self.WORKFLOW_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=record.version,
+        )
+        if not write.applied or not write.record:
+            raise RuntimeError("Failed to pause workflow due to version conflict")
+
+        await self._store.set(
+            f"{workflow['session_id']}:{workflow_id}",
+            {
+                "workflow_id": workflow_id,
+                "session_id": workflow["session_id"],
+                "status": "paused",
+                "updated_at": workflow["updated_at"],
+            },
+            namespace=self.TASK_NAMESPACE,
+            ttl=self._session_ttl,
+        )
+
+        return write.record.value
+
+    # ==================== Trace ====================
+
+    async def get_trace(self, trace_id: str) -> dict[str, Any] | None:
+        if self._store is None:
+            return None
+        record = await self._store.get(trace_id, namespace=self.TRACE_NAMESPACE)
+        if not record:
+            return None
+        return record.value
+
+    async def get_stats(self) -> dict[str, Any]:
+        session_stats = await self._session_manager.get_stats() if self._session_manager else {}
+        workflow_total = 0
+        trace_total = 0
+        if self._store:
+            workflow_total = len(await self._store.list(namespace=self.WORKFLOW_NAMESPACE))
+            trace_total = len(await self._store.list(namespace=self.TRACE_NAMESPACE))
+
+        return {
+            "workspaces": self._workspace_manager.get_stats() if self._workspace_manager else {},
+            "sessions": session_stats,
+            "executor_cache_size": len(self._executor_cache),
+            "workflows": {"total": workflow_total},
+            "traces": {"total": trace_total},
+            "store_backend": self._store.__class__.__name__ if self._store else "none",
+        }
+
+    # ==================== Internal ====================
+
+    async def _bootstrap_session_state(self, session: SessionState) -> None:
+        if self._store is None:
+            return
+        base_payload = {
+            "session_id": session.session_id,
+            "workspace_id": session.workspace_id,
+            "agent_id": session.agent_id,
+            "status": "active",
+            "created_at": utc_now_iso(),
+        }
+        await self._store.set(
+            f"{session.session_id}:bootstrap",
+            base_payload,
+            namespace=self.PLAN_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=0,
+        )
+        await self._store.set(
+            f"{session.session_id}:bootstrap",
+            base_payload,
+            namespace=self.TASK_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=0,
+        )
+
+    async def _delete_session_scoped_state(self, session_id: str) -> None:
+        if self._store is None:
+            return
+        for namespace in (self.TASK_NAMESPACE, self.PLAN_NAMESPACE, self.WORKFLOW_NAMESPACE):
+            records = await self._store.list(namespace=namespace, prefix=f"{session_id}:")
+            for record in records:
+                await self._store.delete(record.key, namespace=namespace)
+
+    async def _get_workflow_with_record(self, workflow_id: str) -> tuple[dict[str, Any] | None, StoreRecord | None]:
+        if self._store is None:
+            return None, None
+        record = await self._store.get(workflow_id, namespace=self.WORKFLOW_NAMESPACE)
+        if record is None:
+            return None, None
+        return record.value, record
+
+    async def _run_workflow(
+        self,
+        workflow_id: str,
+        require_status: set[str],
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        workflow, record = await self._get_workflow_with_record(workflow_id)
+        if not workflow or record is None:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+
+        if workflow["status"] not in require_status:
+            raise ValueError(f"Workflow status {workflow['status']} does not allow start/resume")
+
+        workflow["status"] = "running"
+        workflow["updated_at"] = utc_now_iso()
+        running_write = await self._store.set(
+            workflow_id,
+            workflow,
+            namespace=self.WORKFLOW_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=record.version,
+        )
+        if not running_write.applied or not running_write.record:
+            raise RuntimeError("Failed to mark workflow running due to version conflict")
+
+        session = await self.get_session(workflow["session_id"])
+        if not session:
+            raise ValueError(f"Session not found: {workflow['session_id']}")
+
+        try:
+            result_payload = await self._execute_workflow_runtime(workflow, session, trace_id=trace_id)
+            workflow["status"] = "completed"
+            workflow["result"] = result_payload["result"]
+            workflow["error"] = None
+            workflow["steps"] = result_payload["steps"]
+            workflow["elapsed_ms"] = result_payload["elapsed_ms"]
+            workflow["trace_id"] = result_payload["trace_id"]
+            workflow["updated_at"] = utc_now_iso()
+        except Exception as exc:
+            workflow["status"] = "failed"
+            workflow["error"] = str(exc)
+            workflow["updated_at"] = utc_now_iso()
+
+        final_write = await self._store.set(
+            workflow_id,
+            workflow,
+            namespace=self.WORKFLOW_NAMESPACE,
+            ttl=self._session_ttl,
+            expected_version=running_write.record.version,
+        )
+        if not final_write.applied or not final_write.record:
+            raise RuntimeError("Failed to persist final workflow state")
+
+        await self._store.set(
+            f"{workflow['session_id']}:{workflow_id}",
+            {
+                "workflow_id": workflow_id,
+                "session_id": workflow["session_id"],
+                "status": workflow["status"],
+                "updated_at": workflow["updated_at"],
+            },
+            namespace=self.TASK_NAMESPACE,
+            ttl=self._session_ttl,
+        )
+
+        return final_write.record.value
+
+    async def _execute_workflow_runtime(
+        self,
+        workflow: dict[str, Any],
+        session: SessionState,
+        *,
+        trace_id: str | None,
+    ) -> dict[str, Any]:
+        executor = await self._ensure_executor_for_session(session)
+
+        collector = self._new_trace_collector(trace_id)
+        root_span = collector.start_span(
+            "proxy.workflow",
+            kind=SpanKind.WORKFLOW,
+            attributes={
+                "workflow_id": workflow["id"],
+                "session_id": workflow["session_id"],
+                "workflow_type": workflow.get("workflow_type", "graph"),
+            },
+        )
+
+        engine_factory = executor.create_engine_factory()
+        workflow_type = workflow.get("workflow_type", "graph")
+
+        if workflow_type == "team":
+            team = TeamDefinition(
+                name=f"wf-{workflow['id']}",
+                goal="analysis -> code -> review",
+                process=TeamProcess.SEQUENTIAL,
+                agents=[
+                    AgentRole(name="analysis", role="Analyst", goal="Break down the task", agent_type="explore"),
+                    AgentRole(name="implementation", role="Engineer", goal="Implement solution", agent_type="code"),
+                    AgentRole(name="review", role="Reviewer", goal="Review and finalize", agent_type="review"),
+                ],
+            )
+            team_executor = TeamExecutor(team=team, checkpointer=self._workflow_checkpointer)
+            result = await team_executor.run(
+                task=workflow["task"],
+                engine_factory=engine_factory,
+                thread_id=workflow["thread_id"],
+            )
+        else:
+            graph = self._build_default_workflow(workflow_name=workflow["id"])
+            compiled = graph.compile(checkpointer=self._workflow_checkpointer)
+            result = await compiled.invoke(
+                initial_state={
+                    "task": workflow["task"],
+                    "input": workflow["task"],
+                },
+                engine_factory=engine_factory,
+                thread_id=workflow["thread_id"],
+            )
+
+        collector.finish_span(root_span, status=SpanStatus.OK)
+        await self._persist_trace(
+            collector,
+            session_id=workflow["session_id"],
+            workflow_id=workflow["id"],
+            scope="workflow",
+        )
+
+        steps = [
+            {
+                "node": step.node,
+                "agent_type": step.agent_type,
+                "elapsed_ms": step.elapsed_ms,
+                "update_keys": step.update_keys,
+                "output_preview": step.output_preview,
+            }
+            for step in result.trace
+        ]
+
+        output = self._extract_workflow_output(result.state)
+        return {
+            "result": output,
+            "steps": steps,
+            "elapsed_ms": result.total_elapsed_ms,
+            "trace_id": collector.trace_id,
+        }
+
+    def _build_default_workflow(self, workflow_name: str) -> WorkflowGraph:
+        graph = WorkflowGraph(name=f"workflow-{workflow_name}")
+        graph.add_node(
+            StepNode(
+                name="analysis",
+                agent_type="explore",
+                output_key="analysis",
+                prompt_template=(
+                    "Task: {task}\n"
+                    "Analyze requirements, risks, and constraints. Output concise bullet points."
+                ),
+                max_iterations=8,
+            )
+        )
+        graph.add_node(
+            StepNode(
+                name="implementation",
+                agent_type="code",
+                output_key="implementation",
+                prompt_template=(
+                    "Task: {task}\n"
+                    "Analysis: {analysis}\n"
+                    "Produce implementation details and key decisions."
+                ),
+                max_iterations=10,
+            )
+        )
+        graph.add_node(
+            StepNode(
+                name="review",
+                agent_type="review",
+                output_key="review",
+                prompt_template=(
+                    "Task: {task}\n"
+                    "Analysis: {analysis}\n"
+                    "Implementation: {implementation}\n"
+                    "Review and provide final output with risks and next steps."
+                ),
+                max_iterations=6,
+            )
+        )
+
+        graph.add_edge("analysis", "implementation")
+        graph.add_edge("implementation", "review")
+        graph.add_edge("review", None)
+        return graph
+
+    async def _persist_trace(
+        self,
+        collector: TraceCollector,
+        *,
+        session_id: str | None,
+        workflow_id: str | None,
+        scope: str,
+    ) -> None:
+        if self._store is None:
+            return
+        trace_payload = {
+            "trace_id": collector.trace_id,
+            "scope": scope,
+            "session_id": session_id,
+            "workflow_id": workflow_id,
+            "summary": collector.get_summary(),
+            "spans": collector.export_json(),
+            "updated_at": utc_now_iso(),
+        }
+        await self._store.set(
+            collector.trace_id,
+            trace_payload,
+            namespace=self.TRACE_NAMESPACE,
+            ttl=self._session_ttl,
+        )
+
+    async def _ensure_executor_for_session(self, session: SessionState) -> AgentExecutor:
+        executor = self._executor_cache.get(session.session_id)
+        if executor and executor._initialized:
+            return executor
+
+        if not self._workspace_manager:
+            raise RuntimeError("Service not initialized")
+
+        workspace = self._workspace_manager.get_workspace(session.workspace_id)
+        if not workspace:
+            raise ValueError(f"Workspace not found: {session.workspace_id}")
+
+        saved_config = session.metadata.get("_agent_config") if session.metadata else None
+        executor = await self._create_executor(workspace, session.agent_id, config_overrides=saved_config)
+
+        self._executor_cache[session.session_id] = executor
+        if self._session_manager:
+            self._session_manager.set_executor(session.session_id, executor)
+
+        return executor
 
     async def _create_executor(
         self,
@@ -389,37 +776,19 @@ class AgentProxyService(BaseService):
         agent_id: str,
         config_overrides: dict[str, Any] | None = None,
     ) -> AgentExecutor:
-        """
-        创建 Agent 执行器
-
-        Args:
-            workspace: 工作区域上下文
-            agent_id: Agent ID
-            config_overrides: 运行时配置覆盖，优先级高于 agent.yaml
-
-        Returns:
-            AgentExecutor 实例
-        """
-        # 获取 Agent 定义
         agent_definition = await self._get_agent_definition(agent_id)
-
-        # 读取系统提示词
         system_prompt = await self._get_system_prompt(agent_id)
 
-        # 创建执行器（传入运行时覆盖）
         executor = AgentExecutor(workspace)
         await executor.initialize(agent_definition, system_prompt, config_overrides=config_overrides)
-
         return executor
 
     async def _get_agent_definition(self, agent_id: str) -> dict[str, Any]:
-        """获取 Agent 定义"""
         if self._agent_directory:
             agent_info = self._agent_directory.get_agent(agent_id)
             if agent_info:
                 return agent_info.metadata
 
-        # 返回默认定义
         return {
             "identity": {"name": agent_id, "description": f"Agent: {agent_id}"},
             "model": {"id": "default"},
@@ -428,21 +797,35 @@ class AgentProxyService(BaseService):
         }
 
     async def _get_system_prompt(self, agent_id: str) -> str | None:
-        """获取系统提示词"""
         if self._agent_directory:
             agent_info = self._agent_directory.get_agent(agent_id)
             if agent_info and agent_info.system_prompt_path:
                 try:
                     return agent_info.system_prompt_path.read_text(encoding="utf-8")
-                except Exception as e:
-                    self._logger.warning(f"Failed to read system prompt: {e}")
-
+                except Exception as exc:
+                    self._logger.warning("Failed to read system prompt: %s", exc)
         return None
 
-    def get_stats(self) -> dict[str, Any]:
-        """获取服务统计信息"""
-        return {
-            "workspaces": self._workspace_manager.get_stats() if self._workspace_manager else {},
-            "sessions": self._session_manager.get_stats() if self._session_manager else {},
-            "executor_cache_size": len(self._executor_cache),
-        }
+    def _new_trace_collector(self, trace_id: str | None = None) -> TraceCollector:
+        collector = TraceCollector()
+        if trace_id:
+            # TraceCollector intentionally keeps trace id private; we allow propagation here.
+            collector._trace_id = trace_id  # type: ignore[attr-defined]
+        return collector
+
+    @staticmethod
+    def _extract_workflow_output(state: dict[str, Any]) -> str:
+        for key in ("review", "final_review", "implementation", "analysis"):
+            if key in state:
+                return str(state[key])
+        return str(state)
+
+
+def utc_now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def uuid_hex(length: int) -> str:
+    import uuid
+
+    return uuid.uuid4().hex[:length]

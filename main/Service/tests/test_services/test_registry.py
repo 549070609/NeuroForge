@@ -12,13 +12,13 @@ class MockService(BaseService):
     def __init__(self, registry: ServiceRegistry):
         super().__init__(registry)
         self.initialized = False
-        self.shutdown = False
+        self.shutdown_called = False
 
     async def _on_initialize(self) -> None:
         self.initialized = True
 
     async def _on_shutdown(self) -> None:
-        self.shutdown = True
+        self.shutdown_called = True
 
 
 def test_registry_singleton():
@@ -88,4 +88,4 @@ async def test_shutdown_all():
     await registry.initialize_all()
     await registry.shutdown_all()
 
-    assert service.shutdown
+    assert service.shutdown_called
