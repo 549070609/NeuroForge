@@ -4,16 +4,16 @@ Dynamic Prompt Plugin
 Integrates the DynamicPromptBuilder into the system.
 """
 
-from typing import Any, List
+from typing import Any
 
-from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginContext, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
 from pyagentforge.agents.dynamic_prompt_builder import (
     DynamicPromptBuilder,
     PromptContext,
     create_prompt_context,
 )
 from pyagentforge.agents.metadata import BUILTIN_AGENTS
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -71,7 +71,7 @@ class DynamicPromptPlugin(Plugin):
 
             self.context.logger.info("Dynamic Prompt plugin activated")
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         return []
 
@@ -208,7 +208,7 @@ class DynamicPromptPlugin(Plugin):
         # Schedule async update
         import asyncio
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             asyncio.create_task(self._update_engine_prompt())
             return True
         except RuntimeError:

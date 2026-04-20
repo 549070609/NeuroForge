@@ -7,9 +7,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable
+from enum import StrEnum
+from typing import Any
 
 END = "__END__"
 
@@ -31,7 +32,7 @@ def last_write_wins(_existing: Any, new: Any) -> Any:
     return new
 
 
-class EdgeType(str, Enum):
+class EdgeType(StrEnum):
     NORMAL = "normal"
     CONDITIONAL = "conditional"
 
@@ -144,7 +145,7 @@ class WorkflowGraph:
     def compile(
         self,
         checkpointer: Any | None = None,
-    ) -> "WorkflowExecutor":
+    ) -> WorkflowExecutor:
         """编译图为可执行的 WorkflowExecutor"""
         from pyagentforge.workflow.executor import WorkflowExecutor
 
@@ -166,17 +167,16 @@ class WorkflowGraph:
                     raise ValueError(
                         f"Edge target '{edge.target}' not in nodes"
                     )
-            if edge.edge_type == EdgeType.CONDITIONAL:
-                if edge.routes:
-                    for route_target in edge.routes.values():
-                        if (
-                            route_target
-                            and route_target != END
-                            and route_target not in self.nodes
-                        ):
-                            raise ValueError(
-                                f"Conditional route target '{route_target}' not in nodes"
-                            )
+            if edge.edge_type == EdgeType.CONDITIONAL and edge.routes:
+                for route_target in edge.routes.values():
+                    if (
+                        route_target
+                        and route_target != END
+                        and route_target not in self.nodes
+                    ):
+                        raise ValueError(
+                            f"Conditional route target '{route_target}' not in nodes"
+                        )
 
     # ── 可视化 ──────────────────────────────────────────────
 

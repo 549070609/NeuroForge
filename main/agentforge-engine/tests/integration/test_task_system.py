@@ -6,28 +6,28 @@ monitoring, execution, and result retrieval.
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from pyagentforge.core.background_manager import (
+import pytest
+
+from pyagentforge.kernel.background_manager import (
     BackgroundManager,
     BackgroundTask,
     TaskStatus,
 )
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.message import (
+    ProviderResponse,
     TextBlock,
     ToolUseBlock,
-    ProviderResponse,
 )
-from pyagentforge.tools.registry import ToolRegistry
-from pyagentforge.tools.base import BaseTool
 from pyagentforge.plugins.integration.task_persistence.task_store import (
-    TaskStore,
     StoredTask,
+    TaskStore,
 )
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class MockProvider:

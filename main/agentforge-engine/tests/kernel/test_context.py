@@ -4,7 +4,6 @@ Tests for ContextManager class
 Comprehensive tests for context management, message handling, and state persistence.
 """
 
-import json
 import pytest
 
 from pyagentforge.kernel.context import ContextManager
@@ -12,7 +11,6 @@ from pyagentforge.kernel.message import (
     Message,
     TextBlock,
     ToolUseBlock,
-    ToolResultBlock,
 )
 
 

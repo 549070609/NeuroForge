@@ -4,7 +4,6 @@ Grep 工具
 文件内容搜索
 """
 
-import asyncio
 import re
 from pathlib import Path
 from typing import Any
@@ -93,7 +92,7 @@ class GrepTool(BaseTool):
         """执行 grep 搜索"""
         ignore_case = kwargs.get("-i", False)
         context = kwargs.get("-C", 0)
-        show_line_numbers = kwargs.get("-n", True)
+        kwargs.get("-n", True)
         head_limit = kwargs.get("head_limit", 0)
 
         logger.info(
@@ -124,10 +123,7 @@ class GrepTool(BaseTool):
             if search_path.is_file():
                 files = [search_path]
             else:
-                if glob:
-                    files = list(search_path.rglob(glob))
-                else:
-                    files = list(search_path.rglob("*"))
+                files = list(search_path.rglob(glob)) if glob else list(search_path.rglob("*"))
                 files = [f for f in files if f.is_file() and not f.name.startswith(".")]
 
             # 执行搜索

@@ -5,25 +5,17 @@ Tests background task management, isolated execution, and batched notifications.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
-from pyagentforge.core.background_manager import (
+from pyagentforge.kernel.background_manager import (
     BackgroundManager,
     BackgroundTask,
-    NotificationBatch,
     TaskStatus,
-    CLEANUP_INTERVAL_SECONDS,
-    MIN_STABILITY_TIME_MS,
-    MIN_STABLE_POLLS,
-    STALE_TASK_THRESHOLD_MS,
-    TASK_TTL_MS,
 )
-from pyagentforge.core.concurrency_manager import ConcurrencyConfig
-
+from pyagentforge.kernel.concurrency_manager import ConcurrencyConfig
 
 # ============================================================================
 # Fixtures
@@ -415,7 +407,7 @@ async def test_stale_tasks_are_detected():
 
         # Manually set started_at to simulate stale task
         # Set started_at to 2 hours ago
-        stale_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        stale_time = datetime.now(UTC) - timedelta(hours=2)
         task.started_at = stale_time.isoformat()
 
         # Run cleanup
@@ -784,7 +776,7 @@ async def test_get_stats(background_manager_with_factory):
     manager = background_manager_with_factory
 
     # Launch a task
-    task = await manager.launch("explore", "Test", "session-1")
+    await manager.launch("explore", "Test", "session-1")
 
     stats = manager.get_stats()
 

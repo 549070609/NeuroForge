@@ -4,9 +4,9 @@ Tests for GlobTool
 Tests for file pattern matching search functionality.
 """
 
-import pytest
-from pathlib import Path
 import time
+
+import pytest
 
 from pyagentforge.tools.builtin.glob import GlobTool
 from pyagentforge.tools.permission import PermissionChecker, PermissionConfig
@@ -115,7 +115,7 @@ class TestGlobTool:
         result = await tool.execute(pattern="*.py", path=str(temp_workspace))
 
         # Most recently modified should appear first
-        lines = result.split("\n")
+        result.split("\n")
         # test.py should be first (most recently touched)
         assert "test.py" in result
 
@@ -182,10 +182,12 @@ class TestGlobToolPatterns:
     async def test_question_mark_single_char(self, temp_workspace):
         """Test ? pattern for single character."""
         tool = GlobTool()
+        (temp_workspace / "test1.py").write_text("print('x')\n")
 
         result = await tool.execute(pattern="test?.py", path=str(temp_workspace))
 
-        assert "test.py" in result
+        assert "test1.py" in result
+        assert "test.py" not in result
 
     @pytest.mark.asyncio
     async def test_multiple_extensions(self, temp_workspace):

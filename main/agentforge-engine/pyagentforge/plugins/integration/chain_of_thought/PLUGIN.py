@@ -9,33 +9,33 @@ Phase 2 增强:
 - 阶段转换跟踪
 """
 
+from datetime import UTC
 from pathlib import Path
 from typing import Any
-import re
 
 from pyagentforge.plugin.base import Plugin, PluginType
-from pyagentforge.plugin.hooks import HookType, HookDecision
+from pyagentforge.plugin.hooks import HookDecision
 from pyagentforge.utils.logging import get_logger
 
 from .cot_manager import ChainOfThoughtManager
 from .cot_tools import (
-    LoadCoTTool,
-    UpdateCoTTool,
-    ValidatePlanTool,
-    GetCoTInfoTool,
-    CreateCoTTool,
     AnalyzeCoTTool,
+    CloneCoTTool,
+    CombineCoTTool,
+    CreateCoTTool,
+    DeleteCoTTool,
+    ExportCoTTool,
+    GetCoTInfoTool,
+    ImportCoTTool,
     ImproveCoTTool,
+    ListAllCoTTool,
+    LoadCoTTool,
     ReflectCoTTool,
     StatsCoTTool,
+    UpdateCoTTool,
+    ValidatePlanTool,
     # Phase 4 工具
     VersionCoTTool,
-    CombineCoTTool,
-    ExportCoTTool,
-    ImportCoTTool,
-    ListAllCoTTool,
-    DeleteCoTTool,
-    CloneCoTTool,
 )
 from .models import ConstraintType
 
@@ -428,8 +428,8 @@ class ChainOfThoughtPlugin(Plugin):
 
     def _get_timestamp(self) -> str:
         """获取当前时间戳"""
-        from datetime import datetime, timezone
-        return datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+        return datetime.now(UTC).isoformat()
 
 
 # 导出

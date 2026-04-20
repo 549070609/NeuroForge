@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """简单验证命令文件格式"""
 
-import yaml
 from pathlib import Path
+
+import yaml
 
 commands_dir = Path(__file__).parent.parent / "data" / "commands"
 

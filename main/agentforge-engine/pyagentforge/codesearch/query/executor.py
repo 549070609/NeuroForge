@@ -1,21 +1,20 @@
 """
-查询执行器
+鏌ヨ鎵ц鍣?
 
-执行查询 AST 并返回结果
+鎵ц鏌ヨ AST 骞惰繑鍥炵粨鏋?
 """
 
 from pathlib import Path
-from typing import Any
 
 from pyagentforge.codesearch.query.nodes import (
-    QueryNode,
-    KindFilter,
-    NameMatch,
     AndExpr,
-    OrExpr,
-    NotExpr,
-    LanguageFilter,
     FileFilter,
+    KindFilter,
+    LanguageFilter,
+    NameMatch,
+    NotExpr,
+    OrExpr,
+    QueryNode,
 )
 from pyagentforge.codesearch.storage.database import CodeSearchDatabase
 from pyagentforge.codesearch.storage.models import Symbol, SymbolKind
@@ -38,21 +37,21 @@ class QueryExecutor:
         limit: int = 100,
     ) -> list[Symbol]:
         """
-        执行查询 AST
+        鎵ц鏌ヨ AST
 
         Args:
-            node: 查询 AST 根节点
-            path: 搜索路径
-            file_pattern: 文件模式
-            limit: 最大结果数
+            node: 鏌ヨ AST 鏍硅妭鐐?
+            path: 鎼滅储璺緞
+            file_pattern: 鏂囦欢妯紡
+            limit: 鏈€澶х粨鏋滄暟
 
         Returns:
-            匹配的符号列表
+            鍖归厤鐨勭鍙峰垪琛?
         """
-        # 先从数据库获取候选符号
+        #
         candidates = await self._get_candidates(node, path, file_pattern, limit * 2)
 
-        # 在内存中过滤
+        # 鍦ㄥ唴瀛樹腑杩囨护
         results = []
         for symbol in candidates:
             if self._matches(symbol, node):
@@ -69,20 +68,23 @@ class QueryExecutor:
         file_pattern: str,
         limit: int,
     ) -> list[Symbol]:
-        """从数据库获取候选符号"""
-        # 提取查询中的名称模式
+        """获取候选符号"""
+        #
         name = self._extract_name_pattern(node)
         kind = self._extract_kind(node)
+        effective_pattern = file_pattern
+        if path != ".":
+            effective_pattern = str(Path(path) / file_pattern)
 
         return await self.db.search_symbols(
             name=name,
             kind=kind,
-            file_pattern=path if path != "." else None,
+            file_pattern=effective_pattern if effective_pattern != "*" else None,
             limit=limit,
         )
 
     def _extract_name_pattern(self, node: QueryNode) -> str | None:
-        """从查询 AST 提取名称模式"""
+        """"""
         if isinstance(node, NameMatch):
             if node.is_wildcard:
                 return node.pattern.rstrip("*")
@@ -96,7 +98,7 @@ class QueryExecutor:
         return None
 
     def _extract_kind(self, node: QueryNode) -> SymbolKind | None:
-        """从查询 AST 提取符号类型"""
+        """浠庢煡璇?AST 鎻愬彇绗﹀彿绫诲瀷"""
         if isinstance(node, KindFilter):
             return node.kind
         elif isinstance(node, AndExpr):
@@ -124,7 +126,7 @@ class QueryExecutor:
         return True
 
     def _match_name(self, name: str, node: NameMatch) -> bool:
-        """匹配名称"""
+        """鍖归厤鍚嶇О"""
         import fnmatch
 
         pattern = node.pattern
@@ -139,7 +141,7 @@ class QueryExecutor:
             return search_pattern.lower() in target.lower()
 
     def _match_kind(self, symbol: Symbol, node: KindFilter) -> bool:
-        """匹配符号类型"""
+        """鍖归厤绗﹀彿绫诲瀷"""
         if symbol.kind != node.kind:
             return False
 
@@ -148,3 +150,5 @@ class QueryExecutor:
 
         import fnmatch
         return fnmatch.fnmatch(symbol.name.lower(), node.pattern.lower())
+
+

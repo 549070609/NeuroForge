@@ -8,7 +8,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from pyagentforge.commands import CommandRegistry
+from pyagentforge.agents.commands import CommandRegistry
 
 
 def test_commands():

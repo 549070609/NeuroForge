@@ -5,19 +5,15 @@ Tests concurrency control, slot management, and resource limits.
 """
 
 import asyncio
-from datetime import datetime
-from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from pyagentforge.core.concurrency_manager import (
+from pyagentforge.kernel.concurrency_manager import (
     ConcurrencyConfig,
     ConcurrencyManager,
     ConcurrencySlot,
     ResourceType,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -180,8 +176,8 @@ async def test_acquire_timeout_returns_none(small_manager):
     - Partially acquired resources are released
     """
     # Exhaust global slots
-    slot1 = await small_manager.acquire(session_id="s1", task_id="t1")
-    slot2 = await small_manager.acquire(session_id="s2", task_id="t2")
+    await small_manager.acquire(session_id="s1", task_id="t1")
+    await small_manager.acquire(session_id="s2", task_id="t2")
 
     # Third request should timeout
     slot3 = await small_manager.acquire(
@@ -241,7 +237,7 @@ async def test_release_notifies_waiters(small_manager):
     """
     # Exhaust slots
     slot1 = await small_manager.acquire(session_id="s1", task_id="t1")
-    slot2 = await small_manager.acquire(session_id="s2", task_id="t2")
+    await small_manager.acquire(session_id="s2", task_id="t2")
 
     # Create waiter
     waiter_event = asyncio.Event()
@@ -274,9 +270,9 @@ async def test_clear_releases_all(manager):
     - Waiters are notified
     """
     # Acquire multiple slots
-    slot1 = await manager.acquire(session_id="s1", task_id="t1")
-    slot2 = await manager.acquire(model="gpt-4o", session_id="s2", task_id="t2")
-    slot3 = await manager.acquire(provider="openai", session_id="s3", task_id="t3")
+    await manager.acquire(session_id="s1", task_id="t1")
+    await manager.acquire(model="gpt-4o", session_id="s2", task_id="t2")
+    await manager.acquire(provider="openai", session_id="s3", task_id="t3")
 
     assert len(manager._active_slots) == 3
 
@@ -307,7 +303,7 @@ async def test_get_stats_returns_accurate_data(manager):
     """
     # Acquire slots
     slot1 = await manager.acquire(session_id="s1", task_id="t1")
-    slot2 = await manager.acquire(model="gpt-4o", session_id="s2", task_id="t2")
+    await manager.acquire(model="gpt-4o", session_id="s2", task_id="t2")
 
     stats = manager.get_stats()
 
@@ -344,7 +340,7 @@ async def test_get_active_count_for_resource(manager):
         session_id="s1",
         task_id="t1",
     )
-    slot2 = await manager.acquire(
+    await manager.acquire(
         model="gpt-4o",
         session_id="s2",
         task_id="t2",
@@ -407,7 +403,6 @@ async def test_concurrent_acquire_respects_limits():
     manager = ConcurrencyManager(config=config)
 
     acquired_order = []
-    release_events = []
 
     async def acquire_and_hold(session_id: str, hold_time: float):
         slot_id = await manager.acquire(session_id=session_id, task_id=f"task-{session_id}")

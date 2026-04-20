@@ -7,10 +7,15 @@ Model Config Service - 模型配置管理服务
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge import ModelConfig, ModelRegistry, get_registry, register_model
+
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+from pyagentforge import ModelConfig, get_registry, register_model
 
 from ..schemas.models import (
     ModelConfigCreate,
@@ -244,7 +249,7 @@ class ModelConfigService:
         register_model(config)
 
         # 记录时间戳
-        now = datetime.utcnow()
+        now = _utcnow()
         self._config_timestamps[request.id] = {
             "created_at": now,
             "updated_at": now,
@@ -317,8 +322,8 @@ class ModelConfigService:
 
         # 更新时间戳
         if model_id not in self._config_timestamps:
-            self._config_timestamps[model_id] = {"created_at": datetime.utcnow()}
-        self._config_timestamps[model_id]["updated_at"] = datetime.utcnow()
+            self._config_timestamps[model_id] = {"created_at": _utcnow()}
+        self._config_timestamps[model_id]["updated_at"] = _utcnow()
 
         self._logger.info(f"Updated model config: {model_id}")
 

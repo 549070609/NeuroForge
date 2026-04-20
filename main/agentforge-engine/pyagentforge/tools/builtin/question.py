@@ -4,7 +4,8 @@ Question 工具
 向用户提问并等待回答
 """
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.utils.logging import get_logger

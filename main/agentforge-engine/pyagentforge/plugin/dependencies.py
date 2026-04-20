@@ -6,7 +6,7 @@
 
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin
 from pyagentforge.plugin.registry import PluginRegistry
@@ -30,7 +30,7 @@ class DependencyResolver:
     def __init__(self, registry: PluginRegistry):
         self.registry = registry
 
-    def resolve_load_order(self, plugin_ids: List[str]) -> List[str]:
+    def resolve_load_order(self, plugin_ids: list[str]) -> list[str]:
         """
         解析插件加载顺序（拓扑排序）
 
@@ -45,8 +45,8 @@ class DependencyResolver:
             DependencyMissingError: 缺少必需依赖
         """
         # 构建依赖图
-        graph: Dict[str, Set[str]] = defaultdict(set)
-        in_degree: Dict[str, int] = defaultdict(int)
+        graph: dict[str, set[str]] = defaultdict(set)
+        in_degree: dict[str, int] = defaultdict(int)
 
         # 初始化所有节点
         all_plugins = set(plugin_ids)
@@ -95,7 +95,7 @@ class DependencyResolver:
         self,
         plugin: Plugin,
         check_optional: bool = False,
-    ) -> Tuple[bool, List[str]]:
+    ) -> tuple[bool, list[str]]:
         """
         检查插件依赖是否满足
 
@@ -121,7 +121,7 @@ class DependencyResolver:
 
         return len(missing) == 0, missing
 
-    def check_conflicts(self, plugin: Plugin) -> Tuple[bool, List[str]]:
+    def check_conflicts(self, plugin: Plugin) -> tuple[bool, list[str]]:
         """
         检查插件冲突
 
@@ -139,7 +139,7 @@ class DependencyResolver:
 
         return len(conflicts) > 0, conflicts
 
-    def get_dependents(self, plugin_id: str) -> List[str]:
+    def get_dependents(self, plugin_id: str) -> list[str]:
         """
         获取依赖于指定插件的所有插件
 
@@ -162,7 +162,7 @@ class DependencyResolver:
         plugin = self.registry.get(plugin_id)
         return plugin.metadata.priority if plugin else 0
 
-    def build_dependency_tree(self, plugin_id: str) -> Dict[str, Any]:
+    def build_dependency_tree(self, plugin_id: str) -> dict[str, Any]:
         """
         构建插件的依赖树
 

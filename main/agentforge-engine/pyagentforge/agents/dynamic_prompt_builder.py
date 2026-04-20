@@ -8,10 +8,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from pyagentforge.agents.metadata import (
+    BUILTIN_AGENTS,
     AgentCategory,
     AgentCost,
     AgentMetadata,
-    BUILTIN_AGENTS,
 )
 from pyagentforge.utils.logging import get_logger
 
@@ -165,7 +165,7 @@ class DynamicPromptBuilder:
         lines = ["| 代理 | 类别 | 成本 | 描述 | 触发关键词 |"]
         lines.append("|------|------|------|------|----------|")
 
-        for i, agent in enumerate(context.available_agents[: context.max_table_rows]):
+        for _i, agent in enumerate(context.available_agents[: context.max_table_rows]):
             cost_str = self.COST_SYMBOLS.get(agent.cost, "")
             if context.include_cost_info:
                 cost_display = f"{cost_str} {agent.cost.value}"
@@ -215,7 +215,7 @@ class DynamicPromptBuilder:
     def _build_delegation_guide(self, context: PromptContext) -> str:
         """Build category-based delegation guide"""
         # Get categories present in available agents
-        present_categories = set(a.category for a in context.available_agents)
+        present_categories = {a.category for a in context.available_agents}
 
         if not context.include_category_guide:
             return "根据任务类型选择合适的代理。"
@@ -234,7 +234,7 @@ class DynamicPromptBuilder:
 
         return "\n\n".join(guides) if guides else "根据任务类型选择合适的代理。"
 
-    def _build_usage_guidelines(self, context: PromptContext) -> str:
+    def _build_usage_guidelines(self, _context: PromptContext) -> str:
         """Build usage guidelines"""
         return self.USAGE_GUIDELINES
 
@@ -267,7 +267,7 @@ class DynamicPromptBuilder:
         if not context.include_cost_info:
             return ""
 
-        cost_counts = {cost: 0 for cost in AgentCost}
+        cost_counts = dict.fromkeys(AgentCost, 0)
 
         for agent in context.available_agents:
             cost_counts[agent.cost] += 1
@@ -282,7 +282,7 @@ class DynamicPromptBuilder:
 
         return "\n".join(lines)
 
-    def build_quick_reference(self, context: PromptContext) -> str:
+    def build_quick_reference(self, _context: PromptContext) -> str:
         """
         Build quick reference card
 

@@ -10,12 +10,12 @@ import sys
 sys.path.insert(0, ".")
 
 from Service.core.registry import ServiceRegistry
-from Service.services.model_config_service import ModelConfigService
 from Service.schemas.models import (
+    ApiType,
     ModelConfigCreate,
     ModelConfigUpdate,
-    ApiType,
 )
+from Service.services.model_config_service import ModelConfigService
 
 
 async def main():
@@ -31,8 +31,9 @@ async def main():
     # 1. 列出所有模型
     print("\n[1] List all models")
     models = service.list_models()
+    providers = {m.provider for m in models}
     print(f"   Total: {len(models)} models")
-    print(f"   Providers: {set(m.provider for m in models)}")
+    print(f"   Providers: {providers}")
 
     # 2. 获取统计信息
     print("\n[2] Get statistics")

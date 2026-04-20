@@ -7,8 +7,7 @@ Compaction Plugin
 - 动态配置压缩参数
 """
 
-import logging
-from typing import Any, Callable
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 

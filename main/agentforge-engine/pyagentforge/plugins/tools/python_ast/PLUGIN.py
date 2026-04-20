@@ -4,16 +4,15 @@ Python AST Plugin
 Provides AST-based code analysis tools for Python.
 """
 
-from typing import List
 
-from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginContext, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
 from pyagentforge.plugins.tools.python_ast.tools import (
+    PythonASTAnalyzeComplexityTool,
+    PythonASTExtractClassesTool,
+    PythonASTFindCallsTool,
     PythonASTFindDefinitionsTool,
     PythonASTFindImportsTool,
-    PythonASTFindCallsTool,
-    PythonASTExtractClassesTool,
-    PythonASTAnalyzeComplexityTool,
 )
 from pyagentforge.utils.logging import get_logger
 
@@ -54,7 +53,7 @@ class PythonASTPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self._tools: List[BaseTool] = []
+        self._tools: list[BaseTool] = []
 
     async def on_plugin_load(self, context: PluginContext) -> None:
         """插件加载时初始化"""
@@ -79,7 +78,7 @@ class PythonASTPlugin(Plugin):
                 f"Python AST tools activated: {len(self._tools)} tools"
             )
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         return self._tools
 

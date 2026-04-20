@@ -1,4 +1,4 @@
-﻿"""Session manager with persistent state backend."""
+"""Session manager with persistent state backend."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import copy
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ...persistence import StateStore
@@ -14,13 +14,18 @@ from ...persistence import StateStore
 logger = logging.getLogger(__name__)
 
 
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _parse_datetime(raw: str | None) -> datetime:
     if not raw:
-        return datetime.utcnow()
+        return _utcnow()
     try:
         return datetime.fromisoformat(raw)
     except ValueError:
-        return datetime.utcnow()
+        return _utcnow()
 
 
 @dataclass
@@ -32,8 +37,8 @@ class SessionState:
     agent_id: str
     message_history: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
+    updated_at: datetime = field(default_factory=_utcnow)
     status: str = "active"  # active, paused, completed, error
     version: int = 0
     trace_id: str | None = None
@@ -43,10 +48,10 @@ class SessionState:
         message = {
             "role": role,
             "content": content,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow().isoformat(),
         }
         self.message_history.append(message)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _utcnow()
 
     def get_last_message(self) -> dict[str, Any] | None:
         if self.message_history:
@@ -175,7 +180,7 @@ class SessionManager:
         for key, value in updates.items():
             if key in allowed_fields:
                 setattr(session, key, value)
-        session.updated_at = datetime.utcnow()
+        session.updated_at = _utcnow()
 
         write_result = await self._store.set(
             session_id,

@@ -3,13 +3,13 @@ Telemetry 单元测试
 """
 
 import pytest
+
+from pyagentforge.middleware.base import MiddlewareContext
 from pyagentforge.middleware.telemetry.collector import (
-    TelemetryCollector,
-    MetricType,
     SessionMetrics,
+    TelemetryCollector,
 )
 from pyagentforge.middleware.telemetry.telemetry import TelemetryMiddleware
-from pyagentforge.middleware.base import MiddlewareContext
 
 
 class TestSessionMetrics:

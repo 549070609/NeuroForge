@@ -4,14 +4,13 @@ Task Persistence Plugin
 Persists tasks to disk and restores them on restart.
 """
 
-import os
-from typing import Any, List
+from typing import Any
 
-from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginContext, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
 from pyagentforge.plugins.integration.task_persistence.task_store import (
-    TaskStore,
     StoredTask,
+    TaskStore,
 )
 from pyagentforge.utils.logging import get_logger
 
@@ -93,7 +92,7 @@ class TaskPersistencePlugin(Plugin):
         if self.context:
             self.context.logger.info("Task Persistence plugin activated")
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         return []
 

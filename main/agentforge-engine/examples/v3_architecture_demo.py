@@ -13,14 +13,12 @@ PyAgentForge v3.0 架构功能示例
 """
 
 import asyncio
-from datetime import datetime
 
-# v3.0 新模块
-from pyagentforge.foundation.session import SessionKey
-from pyagentforge.foundation.config import resolve_env_vars
+from pyagentforge.automation import AutomationManager
 from pyagentforge.capabilities.channels.webchat import WebChatChannel
 from pyagentforge.capabilities.channels.webhook import WebhookChannel
-from pyagentforge.automation import AutomationManager, TriggerType
+from pyagentforge.config import resolve_env_vars
+from pyagentforge.plugins.integration.persistence import SessionKey
 from pyagentforge.middleware.telemetry import TelemetryCollector
 
 
@@ -135,7 +133,7 @@ async def example_webchat_channel():
 
     async def on_message(msg):
         received_messages.append(msg)
-        print(f"\n收到消息:")
+        print("\n收到消息:")
         print(f"  Session Key: {msg.session_key}")
         print(f"  Content: {msg.content}")
         print(f"  Sender: {msg.sender}")
@@ -151,7 +149,7 @@ async def example_webchat_channel():
 
     # 5. 获取通道信息
     info = await channel.get_channel_info()
-    print(f"\n通道信息:")
+    print("\n通道信息:")
     print(f"  活跃会话数: {info['active_sessions']}")
     print(f"  最大会话数: {info['max_sessions']}")
 
@@ -188,8 +186,8 @@ async def example_webhook_channel():
     print(f"\n注册的 Webhook 路径: {list(channel._handlers.keys())}")
 
     # 3. 模拟处理 Webhook（带签名）
-    import hmac
     import hashlib
+    import hmac
     import json
 
     payload = {"action": "opened", "repo": {"name": "user/repo"}}
@@ -217,7 +215,7 @@ async def example_webhook_channel():
 
     # 4. 列出所有处理器
     handlers = channel.list_handlers()
-    print(f"\n注册的处理器:")
+    print("\n注册的处理器:")
     for handler_info in handlers:
         print(f"  {handler_info['path']}")
         print(f"    - 有密钥: {handler_info['has_secret']}")
@@ -243,7 +241,7 @@ async def example_automation():
         name="每日报告"
     )
 
-    print(f"\n添加 Cron 任务:")
+    print("\n添加 Cron 任务:")
     print(f"  ID: {task1.id}")
     print(f"  名称: {task1.name}")
     print(f"  Cron: {task1.trigger_config['cron']}")
@@ -323,23 +321,23 @@ async def example_telemetry():
     # 4. 获取指标
     metrics = collector.get_all_metrics()
 
-    print(f"\n请求统计:")
+    print("\n请求统计:")
     print(f"  总请求: {metrics['requests']['total']}")
     print(f"  错误数: {metrics['requests']['errors']}")
     print(f"  错误率: {metrics['requests']['error_rate']:.2%}")
 
-    print(f"\n延迟统计:")
+    print("\n延迟统计:")
     print(f"  平均延迟: {metrics['latency']['average_ms']:.1f}ms")
     print(f"  P50: {metrics['latency']['p50_ms']:.1f}ms")
     print(f"  P95: {metrics['latency']['p95_ms']:.1f}ms")
     print(f"  P99: {metrics['latency']['p99_ms']:.1f}ms")
 
-    print(f"\nToken 统计:")
+    print("\nToken 统计:")
     print(f"  输入: {metrics['tokens']['total_input']}")
     print(f"  输出: {metrics['tokens']['total_output']}")
     print(f"  总计: {metrics['tokens']['total']}")
 
-    print(f"\n会话统计:")
+    print("\n会话统计:")
     print(f"  活跃会话: {metrics['sessions']['active_count']}")
 
     # 5. 导出格式
@@ -353,7 +351,7 @@ async def example_telemetry():
     prometheus_export = collector.export_prometheus()
     prometheus_lines = prometheus_export.split('\n')
     print(f"Prometheus 导出: {len(prometheus_lines)} 行")
-    print(f"示例:")
+    print("示例:")
     for line in prometheus_lines[:5]:
         if line and not line.startswith('#'):
             print(f"  {line}")
@@ -407,7 +405,7 @@ async def example_integration():
 
     # 4. 查看统计
     metrics = telemetry.get_all_metrics()
-    print(f"\n集成统计:")
+    print("\n集成统计:")
     print(f"  处理消息数: {metrics['requests']['total']}")
     print(f"  总 Token: {metrics['tokens']['total']}")
 

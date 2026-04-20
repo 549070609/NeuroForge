@@ -4,16 +4,21 @@ Long Memory 插件
 基于 ChromaDB 的长记忆系统，提供语义搜索和持久化存储。
 """
 
-from typing import Any, Dict, List, Type
+from typing import List
 import logging
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType, PluginContext
-from pyagentforge.kernel.base_tool import BaseTool
-from pyagentforge.kernel.base_provider import BaseProvider
+from pyagentforge.tools.base import BaseTool
 
-from .config import LongMemoryConfig
-from .vector_store import ChromaVectorStore
-from .tools import MemoryStoreTool, MemorySearchTool, MemoryDeleteTool, MemoryListTool
+try:
+    from .config import LongMemoryConfig
+    from .vector_store import ChromaVectorStore
+    from .tools import MemoryDeleteTool, MemoryListTool, MemorySearchTool, MemoryStoreTool
+except ImportError:
+    # 支持独立运行时导入（tests 直接 import PLUGIN）
+    from config import LongMemoryConfig
+    from vector_store import ChromaVectorStore
+    from tools import MemoryDeleteTool, MemoryListTool, MemorySearchTool, MemoryStoreTool
 
 logger = logging.getLogger(__name__)
 

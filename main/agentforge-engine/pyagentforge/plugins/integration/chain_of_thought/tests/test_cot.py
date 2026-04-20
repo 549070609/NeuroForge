@@ -2,20 +2,21 @@
 思维链系统测试
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import json
+import tempfile
+from pathlib import Path
 
+import pytest
+
+from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 from pyagentforge.plugins.integration.chain_of_thought.models import (
     ChainOfThought,
-    CoTPhase,
     Constraint,
     ConstraintType,
     ConstraintViolation,
     CoTExecutionTrace,
+    CoTPhase,
 )
-from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 
 
 class TestModels:

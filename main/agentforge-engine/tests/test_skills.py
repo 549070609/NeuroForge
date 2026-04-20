@@ -4,9 +4,9 @@
 
 import pytest
 
-from pyagentforge.skills.models import Skill, SkillMetadata
-from pyagentforge.skills.parser import SkillParser
-from pyagentforge.skills.loader import SkillLoader
+from pyagentforge.agents.skills.models import Skill, SkillMetadata
+from pyagentforge.agents.skills.parser import SkillParser
+from pyagentforge.agents.skills.loader import SkillLoader
 
 
 class TestSkillParser:

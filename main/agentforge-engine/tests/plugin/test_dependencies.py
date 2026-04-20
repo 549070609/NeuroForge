@@ -5,18 +5,16 @@ Comprehensive tests for plugin dependency management including
 resolution, circular dependency detection, and version compatibility.
 """
 
+
 import pytest
-from typing import List, Set
-from unittest.mock import MagicMock
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.plugin.registry import PluginRegistry
 from pyagentforge.plugin.dependencies import (
-    DependencyResolver,
     CircularDependencyError,
     DependencyMissingError,
+    DependencyResolver,
 )
-
+from pyagentforge.plugin.registry import PluginRegistry
 
 # ============================================================================
 # Mock Plugin Classes
@@ -30,9 +28,9 @@ class MockPlugin(Plugin):
         plugin_id: str,
         name: str = "Mock Plugin",
         version: str = "1.0.0",
-        dependencies: List[str] | None = None,
-        optional_dependencies: List[str] | None = None,
-        conflicts: List[str] | None = None,
+        dependencies: list[str] | None = None,
+        optional_dependencies: list[str] | None = None,
+        conflicts: list[str] | None = None,
         priority: int = 0,
     ):
         super().__init__()

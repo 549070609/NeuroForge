@@ -13,7 +13,7 @@
 from typing import Any, Optional
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
 from .budget_manager import TokenBudgetManager
 from .summary_generator import SummaryGenerator, SummaryStrategy

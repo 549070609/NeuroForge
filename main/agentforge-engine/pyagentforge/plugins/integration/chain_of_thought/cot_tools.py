@@ -819,7 +819,7 @@ class VersionCoTTool(BaseTool):
             # 比较最新两个版本
             v1, v2 = history[0], history[1]
 
-            result = f"=== Comparing Versions ===\n\n"
+            result = "=== Comparing Versions ===\n\n"
             result += f"Version {v1['version']} (newer)\n"
             result += f"  Success Rate: {v1['success_rate']:.1%}\n"
             result += f"  Executions: {v1['execution_count']}\n\n"

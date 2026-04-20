@@ -6,9 +6,9 @@ Telemetry Middleware - 遥测中间件
 """
 
 from pyagentforge.middleware.telemetry.collector import (
-    TelemetryCollector,
     MetricType,
     MetricValue,
+    TelemetryCollector,
 )
 from pyagentforge.middleware.telemetry.telemetry import TelemetryMiddleware
 

@@ -6,11 +6,11 @@ CodeSearch 数据模型
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class SymbolKind(str, Enum):
+class SymbolKind(StrEnum):
     """符号类型"""
     FUNCTION = "function"
     ASYNC_FUNCTION = "async_function"

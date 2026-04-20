@@ -6,13 +6,13 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginContext
-from pyagentforge.plugin.hooks import HookRegistry, HookType
-from pyagentforge.plugin.registry import PluginRegistry, PluginState
 from pyagentforge.plugin.dependencies import DependencyResolver
+from pyagentforge.plugin.hooks import HookRegistry, HookType
 from pyagentforge.plugin.loader import PluginLoader
+from pyagentforge.plugin.registry import PluginRegistry, PluginState
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +32,13 @@ class PluginManager:
         self.hooks = HookRegistry()
         self.resolver = DependencyResolver(self.registry)
         self.loader = PluginLoader(self.registry, self.resolver)
-        self.context: Optional[PluginContext] = None
-        self._config: Dict[str, Dict[str, Any]] = {}
+        self.context: PluginContext | None = None
+        self._config: dict[str, dict[str, Any]] = {}
 
     async def initialize(
         self,
-        config: Dict[str, Any],
-        plugin_dirs: List[str] | None = None,
+        config: dict[str, Any],
+        plugin_dirs: list[str] | None = None,
         working_dir: str | None = None,
     ) -> None:
         """
@@ -97,7 +97,7 @@ class PluginManager:
         for plugin_id in load_order:
             await self.activate_plugin(plugin_id)
 
-    def _get_effective_plugins(self, config: Dict[str, Any]) -> List[str]:
+    def _get_effective_plugins(self, config: dict[str, Any]) -> list[str]:
         """
         计算最终启用的插件列表
 
@@ -120,7 +120,7 @@ class PluginManager:
 
         return list(effective)
 
-    def _discover_plugin_ids(self, plugin_dir: str) -> List[str]:
+    def _discover_plugin_ids(self, plugin_dir: str) -> list[str]:
         """
         发现目录下所有插件的ID
 
@@ -145,7 +145,6 @@ class PluginManager:
             "minimal": set(),
             "standard": {
                 "tools.code_tools",
-                "tools.file_tools",
                 "middleware.compaction",
                 "integration.events",
             },
@@ -153,10 +152,7 @@ class PluginManager:
                 "protocol.mcp_server",
                 "protocol.mcp_client",
                 "protocol.lsp",
-                "tools.web_tools",
                 "tools.code_tools",
-                "tools.file_tools",
-                "tools.interact_tools",
                 "middleware.compaction",
                 "middleware.failover",
                 "middleware.thinking",
@@ -285,7 +281,7 @@ class PluginManager:
         hook_type: str | HookType,
         *args,
         **kwargs,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """
         触发钩子事件
 
@@ -334,7 +330,7 @@ class PluginManager:
                 self.engine.tools.unregister(tool.name)
                 logger.debug(f"Unregistered tool: {tool.name} from {plugin.metadata.id}")
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """获取插件系统摘要"""
         return {
             "registry": self.registry.get_summary(),

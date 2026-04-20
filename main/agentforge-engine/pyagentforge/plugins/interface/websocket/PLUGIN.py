@@ -6,10 +6,10 @@ Use the unified Service gateway under `main/Service`.
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-
 
 _DEPRECATION_MESSAGE = (
     "interface.websocket has been removed from pyagentforge. "

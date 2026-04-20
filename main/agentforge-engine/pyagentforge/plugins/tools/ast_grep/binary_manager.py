@@ -10,7 +10,6 @@ import os
 import platform
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from pyagentforge.plugins.tools.ast_grep.constants import CLI_NAME, CLI_PACKAGE_NAME
 
@@ -20,7 +19,7 @@ class BinaryManager:
 
     def __init__(
         self,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
         auto_install: bool = False,
     ):
         """
@@ -32,9 +31,9 @@ class BinaryManager:
         """
         self.logger = logger or logging.getLogger(__name__)
         self.auto_install = auto_install
-        self._binary_path: Optional[str] = None
+        self._binary_path: str | None = None
         self._checked = False
-        self._version: Optional[str] = None
+        self._version: str | None = None
 
     async def check_availability(self) -> bool:
         """
@@ -78,11 +77,11 @@ class BinaryManager:
         """检查可用性（异步版本）"""
         return await self.check_availability()
 
-    def get_binary_path(self) -> Optional[str]:
+    def get_binary_path(self) -> str | None:
         """获取二进制路径"""
         return self._binary_path
 
-    async def get_version(self) -> Optional[str]:
+    async def get_version(self) -> str | None:
         """
         获取版本号
 
@@ -159,7 +158,7 @@ class BinaryManager:
                 self.logger.warning(
                     f"pip install failed: {stderr.decode()}"
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.logger.warning("pip install timed out")
         except FileNotFoundError:
             self.logger.warning("pip not found")

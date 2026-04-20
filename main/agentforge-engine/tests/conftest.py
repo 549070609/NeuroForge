@@ -5,10 +5,8 @@ Shared fixtures and configuration for all test modules.
 """
 
 import asyncio
-import tempfile
-from pathlib import Path
-from typing import Any, Generator
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import Generator
+from typing import Any
 
 import pytest
 
@@ -19,7 +17,6 @@ from pyagentforge.kernel.engine import AgentEngine
 from pyagentforge.kernel.executor import ToolExecutor
 from pyagentforge.kernel.message import Message, ProviderResponse, TextBlock, ToolUseBlock
 from pyagentforge.tools.registry import ToolRegistry
-
 
 # ============================================================================
 # Event Loop Configuration
@@ -171,10 +168,11 @@ def tool_executor(tool_registry):
 @pytest.fixture
 async def agent_engine(mock_provider, tool_registry):
     """Create an agent engine for testing."""
+    from pyagentforge.kernel.engine import AgentConfig
     engine = AgentEngine(
         provider=mock_provider,
         tool_registry=tool_registry,
-        max_iterations=10
+        config=AgentConfig(max_iterations=10),
     )
     return engine
 
@@ -182,10 +180,11 @@ async def agent_engine(mock_provider, tool_registry):
 @pytest.fixture
 async def agent_engine_with_tools(mock_provider_with_tool_calls, tool_registry):
     """Create an agent engine with tool-calling provider."""
+    from pyagentforge.kernel.engine import AgentConfig
     engine = AgentEngine(
         provider=mock_provider_with_tool_calls,
         tool_registry=tool_registry,
-        max_iterations=10
+        config=AgentConfig(max_iterations=10),
     )
     return engine
 

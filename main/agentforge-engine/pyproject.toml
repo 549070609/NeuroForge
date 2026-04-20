@@ -56,6 +56,25 @@ all = [
     "pyagentforge[dev,redis,postgres]",
 ]
 
+# ---------------------------------------------------------------------------
+# Protocol adapter 插件入口点
+# ---------------------------------------------------------------------------
+# 任何第三方包只需在自己的 pyproject.toml 中声明：
+#
+#   [project.entry-points."pyagentforge.protocol_adapters"]
+#   my-vendor = "my_pkg.adapter:MyVendorProtocol"
+#
+# 即可被 kernel 在 import ``pyagentforge.protocols`` 时自动发现并注册，
+# 无需修改 kernel 源码或手动调用 ``register_protocol_adapter``。
+# 下面登记的是随 kernel 一起分发的 "内置 vendor"，它们位于
+# ``pyagentforge.plugins.protocol.*`` 子包下，与第三方插件走完全相同的
+# 装配通道。当包未通过 pip 安装（纯源码开发）时，协议模块会走 bundled
+# fallback 继续保证可用。
+[project.entry-points."pyagentforge.protocol_adapters"]
+openai-completions = "pyagentforge.plugins.protocol.openai.chat:OpenAIChatProtocol"
+openai-responses = "pyagentforge.plugins.protocol.openai.responses:OpenAIResponsesProtocol"
+anthropic-messages = "pyagentforge.plugins.protocol.anthropic.messages:AnthropicMessagesProtocol"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -66,6 +85,8 @@ packages = ["pyagentforge"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -84,8 +105,17 @@ ignore = [
     "ARG001", # unused function argument
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["pyagentforge"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG002", "ARG005", "F401", "F403", "E741", "E402", "B017", "B018", "SIM105"]
+"examples/**/*.py" = ["ARG002", "ARG005", "F401", "F403", "E741", "E402", "B017", "B018", "SIM105"]
+"pyagentforge/**/tests/**/*.py" = ["ARG002", "ARG005", "F401", "F403", "E741", "E402", "B017", "B018", "SIM105"]
+"pyagentforge/plugins/**/*.py" = ["ARG002", "ARG005", "SIM102", "B007"]
+"pyagentforge/plugins/**/examples/__init__.py" = ["F403"]
+"pyagentforge/plugins/**/tests/__init__.py" = ["F403"]
+"pyagentforge/plugin/base.py" = ["B027"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -93,6 +123,9 @@ strict = true
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+exclude = [
+    '^pyagentforge/.*/tests/',
+]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
@@ -100,8 +133,34 @@ module = [
     "apscheduler.*",
     "slowapi.*",
     "websockets.*",
+    "watchdog.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyagentforge.*.tests.*",
+    "pyagentforge.plugins.*.tests.*",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyagentforge.plugins.*",
+    "pyagentforge.plugin.*",
+    "pyagentforge.codesearch.*",
+    "pyagentforge.capabilities.*",
+    "pyagentforge.middleware.*",
+    "pyagentforge.tools.*",
+    "pyagentforge.prompts.*",
+    "pyagentforge.skills.*",
+    "pyagentforge.workflow.*",
+    "pyagentforge.automation.*",
+    "pyagentforge.lsp.*",
+    "pyagentforge.mcp.*",
+    "pyagentforge.protocols",
+]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

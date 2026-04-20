@@ -6,10 +6,11 @@ Todo 工具
 
 import json
 import threading
-from datetime import datetime, timezone
-from enum import Enum
+from collections.abc import Callable
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -40,7 +41,7 @@ Please continue working on these tasks. Start with the first incomplete task.
 
 # ============ 类型定义 ============
 
-class TodoStatus(str, Enum):
+class TodoStatus(StrEnum):
     """Todo 状态"""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -54,7 +55,7 @@ class TodoItem(BaseModel):
     status: str = "pending"
     priority: str = "medium"
     created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -63,7 +64,7 @@ class TodoEnforcerConfig(BaseModel):
     enabled: bool = True
     countdown_seconds: int = DEFAULT_COUNTDOWN_SECONDS
     max_recovery_attempts: int = DEFAULT_MAX_RECOVERY_ATTEMPTS
-    skip_agents: List[str] = []
+    skip_agents: list[str] = []
     auto_continue: bool = True
 
 
@@ -78,8 +79,8 @@ class TodoStateManager:
 
     def __init__(
         self,
-        config: Optional[TodoEnforcerConfig] = None,
-        continuation_callback: Optional[Callable[[str], None]] = None,
+        config: TodoEnforcerConfig | None = None,
+        continuation_callback: Callable[[str], None] | None = None,
     ):
         """
         初始化状态管理器
@@ -94,24 +95,24 @@ class TodoStateManager:
         # 会话状态
         self._recovery_count: int = 0
         self._is_recovering: bool = False
-        self._countdown_timer: Optional[threading.Timer] = None
+        self._countdown_timer: threading.Timer | None = None
         self._lock = threading.Lock()
 
-    def should_skip_agent(self, agent_name: Optional[str]) -> bool:
+    def should_skip_agent(self, agent_name: str | None) -> bool:
         """检查是否应该跳过此 Agent"""
         if not agent_name:
             return False
         skip_set = set(self.config.skip_agents) | SKIP_AGENTS
         return agent_name.lower() in skip_set
 
-    def has_pending_todos(self, todos: Dict[int, TodoItem]) -> bool:
+    def has_pending_todos(self, todos: dict[int, TodoItem]) -> bool:
         """检查是否有未完成的 Todo"""
         for todo in todos.values():
             if todo.status in [TodoStatus.PENDING.value, TodoStatus.IN_PROGRESS.value]:
                 return True
         return False
 
-    def get_pending_todos(self, todos: Dict[int, TodoItem]) -> List[TodoItem]:
+    def get_pending_todos(self, todos: dict[int, TodoItem]) -> list[TodoItem]:
         """获取未完成的 Todo 列表"""
         pending = []
         for todo in todos.values():
@@ -119,7 +120,7 @@ class TodoStateManager:
                 pending.append(todo)
         return pending
 
-    def get_status_summary(self, todos: Dict[int, TodoItem]) -> Dict[str, Any]:
+    def get_status_summary(self, todos: dict[int, TodoItem]) -> dict[str, Any]:
         """获取状态摘要"""
         total = len(todos)
         pending = sum(
@@ -139,7 +140,7 @@ class TodoStateManager:
             "recovery_count": self._recovery_count,
         }
 
-    def generate_continuation_prompt(self, pending_todos: List[TodoItem]) -> str:
+    def generate_continuation_prompt(self, pending_todos: list[TodoItem]) -> str:
         """生成续接消息"""
         task_lines = []
         for i, todo in enumerate(pending_todos, 1):
@@ -171,9 +172,9 @@ class TodoStateManager:
 
     def on_agent_stop(
         self,
-        todos: Dict[int, TodoItem],
-        agent_name: Optional[str] = None,
-    ) -> Optional[str]:
+        todos: dict[int, TodoItem],
+        agent_name: str | None = None,
+    ) -> str | None:
         """
         Agent 停止时检查是否需要继续
 
@@ -277,11 +278,11 @@ class TodoWriteTool(BaseTool):
     def __init__(
         self,
         storage_path: Path | None = None,
-        enforcer_config: Optional[TodoEnforcerConfig] = None,
-        continuation_callback: Optional[Callable[[str], None]] = None,
+        enforcer_config: TodoEnforcerConfig | None = None,
+        continuation_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.storage_path = storage_path or Path("./data/todos.json")
-        self._todos: Dict[int, TodoItem] = {}
+        self._todos: dict[int, TodoItem] = {}
         self._load()
 
         # 初始化状态管理器
@@ -373,15 +374,15 @@ class TodoWriteTool(BaseTool):
         """检查是否有未完成的 Todo"""
         return self._state_manager.has_pending_todos(self._todos)
 
-    def get_pending_todos(self) -> List[TodoItem]:
+    def get_pending_todos(self) -> list[TodoItem]:
         """获取未完成的 Todo 列表"""
         return self._state_manager.get_pending_todos(self._todos)
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_status_summary(self) -> dict[str, Any]:
         """获取状态摘要"""
         return self._state_manager.get_status_summary(self._todos)
 
-    def on_agent_stop(self, agent_name: Optional[str] = None) -> Optional[str]:
+    def on_agent_stop(self, agent_name: str | None = None) -> str | None:
         """
         Agent 停止时检查是否需要继续
 

@@ -7,29 +7,28 @@ AST-Grep CLI 封装
 import asyncio
 import json
 import logging
-from typing import List, Optional
 
-from pyagentforge.plugins.tools.ast_grep.types import SgMatch, SgResult
 from pyagentforge.plugins.tools.ast_grep.constants import (
-    DEFAULT_TIMEOUT_MS,
-    DEFAULT_MAX_OUTPUT_BYTES,
-    DEFAULT_MAX_MATCHES,
     CLI_LANGUAGES,
+    DEFAULT_MAX_MATCHES,
+    DEFAULT_MAX_OUTPUT_BYTES,
+    DEFAULT_TIMEOUT_MS,
 )
+from pyagentforge.plugins.tools.ast_grep.types import SgMatch, SgResult
 
 
 async def run_sg(
     pattern: str,
     lang: str,
     binary_path: str,
-    paths: Optional[List[str]] = None,
-    globs: Optional[List[str]] = None,
-    rewrite: Optional[str] = None,
+    paths: list[str] | None = None,
+    globs: list[str] | None = None,
+    rewrite: str | None = None,
     context: int = 0,
     update_all: bool = False,
     timeout_ms: int = DEFAULT_TIMEOUT_MS,
     max_matches: int = DEFAULT_MAX_MATCHES,
-    logger: Optional[logging.Logger] = None,
+    logger: logging.Logger | None = None,
 ) -> SgResult:
     """
     执行 ast-grep 命令
@@ -129,7 +128,7 @@ async def run_sg(
         # 解析 JSON 输出
         return parse_sg_output(stdout_str, max_matches)
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"Command timed out after {timeout_ms}ms")
         return SgResult(
             matches=[],

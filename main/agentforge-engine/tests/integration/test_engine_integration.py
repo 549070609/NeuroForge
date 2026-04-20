@@ -6,22 +6,21 @@ and back, ensuring all components integrate correctly.
 """
 
 import asyncio
-import pytest
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
-from pyagentforge.kernel.executor import ToolExecutor, PermissionChecker, PermissionResult
+import pytest
+
+from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
+from pyagentforge.kernel.executor import PermissionChecker, ToolExecutor
 from pyagentforge.kernel.message import (
+    ProviderResponse,
     TextBlock,
     ToolUseBlock,
-    ToolResultBlock,
-    ProviderResponse,
 )
-from pyagentforge.kernel.context import ContextManager
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
-from pyagentforge.plugin.hooks import HookRegistry, HookType, HookDecision
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class MockProvider:
@@ -95,8 +94,10 @@ class SlowTool(BaseTool):
 
     name: str = "slow_tool"
     description: str = "A slow tool"
+    execute_count: int = 0
 
     async def execute(self, **kwargs: Any) -> str:
+        self.execute_count += 1
         await asyncio.sleep(0.1)
         return "Slow tool completed"
 
@@ -520,7 +521,12 @@ class TestPluginHooksInExecution:
 
         # Create mock plugin manager
         plugin_manager = MagicMock()
-        plugin_manager.emit_hook = AsyncMock(side_effect=lambda name, *args: before_llm_hook(*args) if name == "on_before_llm_call" else None)
+        async def emit_hook(name, *args):
+            if name == "on_before_llm_call":
+                await before_llm_hook(*args)
+            return None
+
+        plugin_manager.emit_hook = AsyncMock(side_effect=emit_hook)
 
         engine.plugin_manager = plugin_manager
 
@@ -556,9 +562,12 @@ class TestPluginHooksInExecution:
             return None
 
         plugin_manager = MagicMock()
-        plugin_manager.emit_hook = AsyncMock(
-            side_effect=lambda name, *args: after_llm_hook(*args) if name == "on_after_llm_call" else None
-        )
+        async def emit_hook(name, *args):
+            if name == "on_after_llm_call":
+                await after_llm_hook(*args)
+            return None
+
+        plugin_manager.emit_hook = AsyncMock(side_effect=emit_hook)
 
         engine.plugin_manager = plugin_manager
 
@@ -794,7 +803,7 @@ class TestFullConversationWithMultipleTurns:
         )
 
         # Turn 2: Should reference turn 1 context
-        result2 = await engine2.run("Double it")
+        await engine2.run("Double it")
 
         # Verify: LLM received context from previous turn
         last_messages = mock_provider2.last_messages
@@ -880,7 +889,6 @@ class TestErrorRecoveryInToolExecution:
         mock_provider = MockProvider(responses=responses)
 
         # Create executor with very short timeout
-        from pyagentforge.kernel.executor import ToolExecutor
         executor = ToolExecutor(
             tool_registry=registry,
             timeout=0.01,  # Very short timeout

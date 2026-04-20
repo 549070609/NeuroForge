@@ -5,24 +5,19 @@ Tests the interaction between background task execution and concurrency control.
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timezone, timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
-from pyagentforge.core.background_manager import (
+import pytest
+
+from pyagentforge.kernel.background_manager import (
     BackgroundManager,
-    BackgroundTask,
     TaskStatus,
-    NotificationBatch,
 )
-from pyagentforge.core.concurrency_manager import (
-    ConcurrencyManager,
+from pyagentforge.kernel.concurrency_manager import (
     ConcurrencyConfig,
-    ConcurrencySlot,
-    ResourceType,
+    ConcurrencyManager,
 )
-from pyagentforge.plugin.hooks import HookRegistry, HookType
 
 
 class MockEngine:
@@ -153,7 +148,7 @@ class TestConcurrentBackgroundTasksShareSlots:
         4. Others wait in queue
         """
         config = ConcurrencyConfig(max_global=2)
-        concurrency = ConcurrencyManager(config)
+        ConcurrencyManager(config)
         manager = BackgroundManager(concurrency_config=config)
 
         running_count = 0
@@ -416,7 +411,7 @@ class TestConcurrentLaunchWithLimits:
                 async with lock:
                     running_count += 1
                     max_concurrent = max(max_concurrent, running_count)
-                    start_events.append(datetime.now(timezone.utc))
+                    start_events.append(datetime.now(UTC))
 
                 await asyncio.sleep(0.1)
 
@@ -486,7 +481,7 @@ class TestConcurrentLaunchWithLimits:
         manager.set_engine_factory(engine_factory)
 
         # Launch first task (will acquire slot)
-        task1 = await manager.launch(
+        await manager.launch(
             agent_type="agent",
             prompt="Task 1",
             session_id="s1",
@@ -496,7 +491,7 @@ class TestConcurrentLaunchWithLimits:
         await asyncio.sleep(0.05)
 
         # Launch second task (should timeout in queue)
-        task2 = await manager.launch(
+        await manager.launch(
             agent_type="agent",
             prompt="Task 2",
             session_id="s1",
@@ -577,7 +572,7 @@ class TestCleanupReleasesAllSlots:
         manager.set_engine_factory(lambda _: MockEngine(delay=0.5))
 
         # Launch task
-        task = await manager.launch(
+        await manager.launch(
             agent_type="agent",
             prompt="Test",
             session_id="s1",

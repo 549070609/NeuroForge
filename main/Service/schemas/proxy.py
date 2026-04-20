@@ -1,4 +1,4 @@
-﻿"""Proxy schemas for workspace/session, execution, workflow, and tracing APIs."""
+"""Proxy schemas for workspace/session, execution, workflow, and tracing APIs."""
 
 from __future__ import annotations
 

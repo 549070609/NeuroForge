@@ -4,11 +4,10 @@ LSP Integration Plugin
 Language Server Protocol (LSP) integration for code intelligence
 """
 
-import logging
-from typing import Any, List, Optional
+from typing import Any
 
+from pyagentforge.tools.base import BaseTool
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
 
 
 class LSPTool(BaseTool):
@@ -123,7 +122,7 @@ class LSPPlugin(Plugin):
     def __init__(self):
         super().__init__()
         self._clients: dict[str, Any] = {}
-        self._lsp_tool: Optional[LSPTool] = None
+        self._lsp_tool: LSPTool | None = None
 
     async def on_plugin_activate(self) -> None:
         """Activate LSP plugin"""
@@ -208,7 +207,7 @@ class LSPPlugin(Plugin):
         # Placeholder
         return f"Diagnostics for {file_path}"
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """Return plugin provided tools"""
         if self._lsp_tool:
             return [self._lsp_tool]

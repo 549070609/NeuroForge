@@ -5,10 +5,9 @@ Provides session persistence functionality
 """
 
 import json
-import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 
@@ -29,7 +28,7 @@ class PersistencePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self._storage_path: Optional[Path] = None
+        self._storage_path: Path | None = None
         self._sessions: dict[str, Any] = {}
 
     async def on_plugin_activate(self) -> None:
@@ -54,7 +53,7 @@ class PersistencePlugin(Plugin):
             await self.save_session(session_id)
         await super().on_plugin_deactivate()
 
-    async def save_session(self, session_id: str, data: Optional[dict] = None) -> str:
+    async def save_session(self, session_id: str, data: dict | None = None) -> str:
         """
         Save session data to disk
 
@@ -71,7 +70,7 @@ class PersistencePlugin(Plugin):
         # Add metadata
         data["_metadata"] = {
             "session_id": session_id,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": datetime.now(UTC).isoformat(),
             "version": "1.0",
         }
 
@@ -87,7 +86,7 @@ class PersistencePlugin(Plugin):
 
         return str(session_file)
 
-    async def load_session(self, session_id: str) -> Optional[dict]:
+    async def load_session(self, session_id: str) -> dict | None:
         """
         Load session data from disk
 
@@ -103,7 +102,7 @@ class PersistencePlugin(Plugin):
             return None
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             self._sessions[session_id] = data
@@ -158,7 +157,7 @@ class PersistencePlugin(Plugin):
 
         return [f.stem for f in self._storage_path.glob("*.json")]
 
-    def get_session_data(self, session_id: str) -> Optional[dict]:
+    def get_session_data(self, session_id: str) -> dict | None:
         """Get current session data (in-memory)"""
         return self._sessions.get(session_id)
 

@@ -10,12 +10,10 @@
 4. 环境变量: .env (最高优先级)
 """
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from pydantic import ValidationError
 import yaml
 
 from pyagentforge.utils.logging import get_logger
@@ -205,9 +203,7 @@ class MultiLevelConfig:
                 value = value.strip()
 
                 # 移除引号
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                elif value.startswith("'") and value.endswith("'"):
+                if value.startswith('"') and value.endswith('"') or value.startswith("'") and value.endswith("'"):
                     value = value[1:-1]
 
                 # 转换为嵌套结构（用 _ 分隔）

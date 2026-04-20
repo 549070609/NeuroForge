@@ -6,7 +6,6 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-import json
 
 
 # 默认标签池（分类 -> 标签列表）

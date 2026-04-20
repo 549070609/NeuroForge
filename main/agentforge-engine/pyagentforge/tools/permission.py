@@ -1,7 +1,7 @@
 """
-工具权限控制
+宸ュ叿鏉冮檺鎺у埗
 
-管理工具的访问权限，支持参数级权限控制
+绠＄悊宸ュ叿鐨勮闂潈闄愶紝鏀寔鍙傛暟绾ф潈闄愭帶鍒?
 """
 
 from enum import Enum
@@ -39,15 +39,15 @@ class ParameterPermissionRule(BaseModel):
             value: 参数值
 
         Returns:
-            权限结果
+            鏉冮檺缁撴灉
         """
         if not isinstance(value, str):
             value = str(value)
 
-        # 按模式匹配 (精确匹配优先)
+        # 鎸夋ā寮忓尮閰?(绮剧‘鍖归厤浼樺厛)
         for pattern, result in sorted(
             self.patterns.items(),
-            key=lambda x: -len(x[0].replace("*", "")),  # 更具体的模式优先
+            key=lambda x: -len(x[0].replace("*", "")),  # 鏇村叿浣撶殑妯紡浼樺厛
         ):
             if self._match_pattern(value, pattern):
                 return result
@@ -55,21 +55,21 @@ class ParameterPermissionRule(BaseModel):
         return self.default
 
     def _match_pattern(self, value: str, pattern: str) -> bool:
-        """匹配模式"""
-        # 支持 glob 模式
+        """"""
+        #
         if "*" in pattern or "?" in pattern or "[" in pattern:
             return fnmatch(value, pattern)
-        # 精确匹配
+        # 绮剧‘鍖归厤
         return value == pattern
 
 
 class ParameterPermissionConfig(BaseModel):
     """参数级权限配置"""
 
-    # 各工具的参数规则
+    # 鍚勫伐鍏风殑鍙傛暟瑙勫垯
     tools: dict[str, dict[str, ParameterPermissionRule]] = Field(default_factory=dict)
 
-    # 示例配置:
+    # 绀轰緥閰嶇疆:
     # tools:
     #   write:
     #     file_path:
@@ -93,26 +93,26 @@ class ParameterPermissionConfig(BaseModel):
 
 
 class PermissionConfig(BaseModel):
-    """权限配置"""
+    """鏉冮檺閰嶇疆"""
 
-    # 工具级权限
+    # 宸ュ叿绾ф潈闄?
     allowed: list[str] = Field(default_factory=lambda: ["*"])
     denied: list[str] = Field(default_factory=list)
     ask: list[str] = Field(default_factory=list)
 
-    # 命令白名单 (用于 bash 工具)
+    # 鍛戒护鐧藉悕鍗?(鐢ㄤ簬 bash 宸ュ叿)
     command_whitelist: list[str] = Field(default_factory=list)
     command_blacklist: list[str] = Field(default_factory=list)
 
-    # 路径限制
+    #
     allowed_paths: list[str] = Field(default_factory=list)
     denied_paths: list[str] = Field(default_factory=list)
 
-    # 网络限制
+    # 缃戠粶闄愬埗
     allowed_hosts: list[str] = Field(default_factory=list)
     denied_hosts: list[str] = Field(default_factory=list)
 
-    # 参数级权限 (新增)
+    #
     parameter_rules: ParameterPermissionConfig = Field(
         default_factory=ParameterPermissionConfig
     )
@@ -129,17 +129,17 @@ class PermissionChecker:
         检查工具权限
 
         Args:
-            tool_name: 工具名称
-            tool_input: 工具输入
+            tool_name: 宸ュ叿鍚嶇О
+            tool_input: 宸ュ叿杈撳叆
 
         Returns:
             权限检查结果
         """
-        # 1. 先检查参数级权限 (最高优先级)
+        #
         param_result = self._check_parameter_permissions(tool_name, tool_input)
         if param_result != PermissionResult.ALLOW:
-            # 参数级权限可能返回 DENY 或 ASK
-            # 但不覆盖工具级的 ALLOW
+            # 鍙傛暟绾ф潈闄愬彲鑳借繑鍥?DENY 鎴?ASK
+            # 浣嗕笉瑕嗙洊宸ュ叿绾х殑 ALLOW
             if param_result == PermissionResult.DENY:
                 return PermissionResult.DENY
 
@@ -147,11 +147,11 @@ class PermissionChecker:
         if self._matches_pattern(tool_name, self.config.denied):
             return PermissionResult.DENY
 
-        # 3. 检查需要确认的列表
+        # 3. 妫鏌ラ渶瑕佺‘璁ょ殑鍒楄〃
         if self._matches_pattern(tool_name, self.config.ask):
             return PermissionResult.ASK
 
-        # 4. 如果参数级权限要求确认，且工具级允许
+        #
         if param_result == PermissionResult.ASK:
             return PermissionResult.ASK
 
@@ -159,7 +159,7 @@ class PermissionChecker:
         if self._matches_pattern(tool_name, self.config.allowed):
             return PermissionResult.ALLOW
 
-        # 6. 默认拒绝
+        #
         return PermissionResult.DENY
 
     def _check_parameter_permissions(
@@ -171,18 +171,18 @@ class PermissionChecker:
         检查参数级权限
 
         Args:
-            tool_name: 工具名称
-            tool_input: 工具输入
+            tool_name: 宸ュ叿鍚嶇О
+            tool_input: 宸ュ叿杈撳叆
 
         Returns:
-            权限结果
+            鏉冮檺缁撴灉
         """
-        # 获取该工具的参数规则
+        # 鑾峰彇璇ュ伐鍏风殑鍙傛暟瑙勫垯
         tool_rules = self.config.parameter_rules.tools.get(tool_name)
         if not tool_rules:
             return PermissionResult.ALLOW
 
-        # 检查每个参数
+        #
         for param_name, rule in tool_rules.items():
             if param_name not in tool_input:
                 continue
@@ -210,10 +210,10 @@ class PermissionChecker:
                         "value": value,
                     },
                 )
-                # 继续检查其他参数，但记住需要确认
-                # 如果没有其他参数被拒绝，返回 ASK
+                #
+                #
 
-        # 如果有任何参数需要确认，返回 ASK
+        # 濡傛灉鏈変换浣曞弬鏁伴渶瑕佺‘璁わ紝杩斿洖 ASK
         for param_name, rule in tool_rules.items():
             if param_name in tool_input and rule.check(tool_input[param_name]) == PermissionResult.ASK:
                 return PermissionResult.ASK
@@ -225,29 +225,30 @@ class PermissionChecker:
         检查命令权限
 
         Args:
-            command: Shell 命令
+            command: Shell 鍛戒护
 
         Returns:
             权限检查结果
         """
-        # 先检查参数级规则
+        #
         tool_rules = self.config.parameter_rules.tools.get("bash")
         if tool_rules and "command" in tool_rules:
             result = tool_rules["command"].check(command)
             if result != PermissionResult.ALLOW:
                 return result
 
-        # 提取命令名称
+        # 鎻愬彇鍛戒护鍚嶇О
         cmd_name = command.split()[0] if command else ""
 
         # 检查黑名单
         if self._matches_pattern(cmd_name, self.config.command_blacklist):
             return PermissionResult.DENY
 
-        # 如果有白名单，检查是否在白名单中
-        if self.config.command_whitelist:
-            if not self._matches_pattern(cmd_name, self.config.command_whitelist):
-                return PermissionResult.DENY
+        #
+        if self.config.command_whitelist and not self._matches_pattern(
+            cmd_name, self.config.command_whitelist
+        ):
+            return PermissionResult.DENY
 
         return PermissionResult.ALLOW
 
@@ -256,18 +257,18 @@ class PermissionChecker:
         检查路径权限
 
         Args:
-            path: 文件路径
+            path: 鏂囦欢璺緞
 
         Returns:
             权限检查结果
         """
-        # 标准化路径
+        # 鏍囧噯鍖栬矾寰?
         try:
             normalized = str(Path(path).resolve())
         except Exception:
             normalized = path
 
-        # 检查拒绝的路径
+        #
         for denied_path in self.config.denied_paths:
             try:
                 denied_normalized = str(Path(denied_path).resolve())
@@ -277,7 +278,7 @@ class PermissionChecker:
                 if normalized.startswith(denied_path):
                     return PermissionResult.DENY
 
-        # 如果有允许的路径限制，检查是否在允许范围内
+        #
         if self.config.allowed_paths:
             allowed = False
             for allowed_path in self.config.allowed_paths:
@@ -300,7 +301,7 @@ class PermissionChecker:
         检查主机权限
 
         Args:
-            host: 主机名
+            host: 涓绘満鍚?
 
         Returns:
             权限检查结果
@@ -309,10 +310,9 @@ class PermissionChecker:
         if self._matches_pattern(host, self.config.denied_hosts):
             return PermissionResult.DENY
 
-        # 如果有允许的主机限制，检查是否在允许范围内
-        if self.config.allowed_hosts:
-            if not self._matches_pattern(host, self.config.allowed_hosts):
-                return PermissionResult.DENY
+        #
+        if self.config.allowed_hosts and not self._matches_pattern(host, self.config.allowed_hosts):
+            return PermissionResult.DENY
 
         return PermissionResult.ALLOW
 
@@ -320,22 +320,22 @@ class PermissionChecker:
         """
         检查值是否匹配任意模式
 
-        支持通配符 * 匹配
+        鏀寔閫氶厤绗?* 鍖归厤
         """
         if "*" in patterns:
             return True
 
         for pattern in patterns:
             if pattern.endswith("*"):
-                # 前缀匹配
+                # 鍓嶇紑鍖归厤
                 if value.startswith(pattern[:-1]):
                     return True
             elif pattern.startswith("*"):
-                # 后缀匹配
+                # 鍚庣紑鍖归厤
                 if value.endswith(pattern[1:]):
                     return True
             elif value == pattern:
-                # 精确匹配
+                # 绮剧‘鍖归厤
                 return True
 
         return False
@@ -349,11 +349,11 @@ def create_permission_config_from_dict(config: dict[str, Any]) -> PermissionConf
         config: 配置字典
 
     Returns:
-        PermissionConfig 实例
+        PermissionConfig 瀹炰緥
     """
     param_config = ParameterPermissionConfig()
 
-    # 解析参数级权限
+    # 瑙ｆ瀽鍙傛暟绾ф潈闄?
     for tool_name, tool_config in config.get("parameter_rules", {}).items():
         param_rules = {}
         for param_name, param_config_dict in tool_config.items():
@@ -384,7 +384,7 @@ def create_permission_config_from_dict(config: dict[str, Any]) -> PermissionConf
     )
 
 
-# 预定义的参数级权限配置示例
+#
 EXAMPLE_PARAMETER_PERMISSIONS = {
     "parameter_rules": {
         "write": {
@@ -452,3 +452,4 @@ EXAMPLE_PARAMETER_PERMISSIONS = {
         },
     }
 }
+

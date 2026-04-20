@@ -2,9 +2,8 @@
 Tests for Ralph Loop Plugin
 """
 
-import pytest
 
-from pyagentforge.core.ralph_loop import (
+from pyagentforge.plugins.integration.ralph_loop.ralph_loop import (
     CompletionChecker,
     LoopStatus,
     RalphLoopState,
@@ -161,7 +160,7 @@ Tasks to complete:
 - [x] Task 2
 - [ ] Task 3
 """
-        new_completed = checker.update_todos(state, text)
+        checker.update_todos(state, text)
 
         assert len(state.todos) == 3
         assert state.completed_todos == 1

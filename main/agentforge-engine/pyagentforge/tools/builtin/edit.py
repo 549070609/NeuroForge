@@ -4,7 +4,6 @@ Edit 工具
 精确修改文件内容
 """
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +99,7 @@ class EditTool(BaseTool):
 
             # 检查 old_string 是否存在
             if old_string not in content:
-                return f"Error: old_string not found in file. Make sure it matches exactly (including whitespace)."
+                return "Error: old_string not found in file. Make sure it matches exactly (including whitespace)."
 
             # 检查唯一性 (如果不是 replace_all)
             if not replace_all:

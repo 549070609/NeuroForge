@@ -2,11 +2,12 @@
 Automation Integration Tests - Phase 3
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from pyagentforge.automation.task import TriggerType, AutomationTask
+import pytest
+
 from pyagentforge.automation.scheduler import AutomationManager
+from pyagentforge.automation.task import TriggerType
 
 
 class TestAutomationIntegration:
@@ -51,7 +52,8 @@ class TestAutomationIntegration:
         manager = AutomationManager(engine=mock_engine, event_bus=mock_event_bus)
 
         # 添加带条件的事件任务
-        condition = lambda data: data.get("urgent", False)
+        def condition(data):
+            return data.get("urgent", False)
         task = manager.add_event_task(
             task_id="urgent_only",
             event_type="message.received",
@@ -236,9 +238,9 @@ class TestAutomationTaskExecution:
         manager.add_webhook_handler("/secure", handler, secret="my_secret")
 
         # 生成有效签名
-        import json
-        import hmac
         import hashlib
+        import hmac
+        import json
 
         payload = {"test": "data"}
         signature = "sha256=" + hmac.new(

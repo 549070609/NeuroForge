@@ -20,6 +20,20 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, BaseTool] = {}
         self._tool_factories: dict[str, Callable[[], BaseTool]] = {}
+        self._permission_checker: Any = None
+
+    def set_permission_checker(self, checker: Any) -> None:
+        """
+        设置权限检查器
+
+        Args:
+            checker: PermissionChecker 实例
+        """
+        self._permission_checker = checker
+
+    def get_permission_checker(self) -> Any:
+        """获取权限检查器"""
+        return self._permission_checker
 
     def register(self, tool: BaseTool) -> None:
         """
@@ -402,8 +416,8 @@ class ToolRegistry:
 
     def register_command_tools(self) -> None:
         """注册命令工具"""
-        from pyagentforge.commands.tool import CommandTool, ListCommandsTool
-        from pyagentforge.commands.registry import get_command_registry
+        from pyagentforge.agents.commands.tool import CommandTool, ListCommandsTool
+        from pyagentforge.agents.commands.registry import get_command_registry
 
         registry = get_command_registry()
         command_tool = CommandTool(registry=registry)

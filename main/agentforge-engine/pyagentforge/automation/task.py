@@ -4,11 +4,11 @@ Automation Task - 自动化任务定义
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 
-class TriggerType(str, Enum):
+class TriggerType(StrEnum):
     """触发类型"""
     TIME = "time"       # 定时触发 (Cron)
     EVENT = "event"     # 事件触发
@@ -38,8 +38,8 @@ class AutomationTask:
     trigger_config: dict[str, Any]
     action: str
     enabled: bool = True
-    last_run: Optional[datetime] = None
-    next_run: Optional[datetime] = None
+    last_run: datetime | None = None
+    next_run: datetime | None = None
     run_count: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
 

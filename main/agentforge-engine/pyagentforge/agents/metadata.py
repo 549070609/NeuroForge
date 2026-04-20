@@ -5,11 +5,11 @@ Defines agent types with rich metadata for intelligent delegation.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Literal
+from enum import StrEnum
+from typing import Any, Literal
 
 
-class AgentCategory(str, Enum):
+class AgentCategory(StrEnum):
     """Agent category"""
 
     EXPLORATION = "exploration"  # Read-only code exploration
@@ -20,7 +20,7 @@ class AgentCategory(str, Enum):
     REASONING = "reasoning"  # Deep analysis
 
 
-class AgentCost(str, Enum):
+class AgentCost(StrEnum):
     """Agent cost tier"""
 
     FREE = "free"  # No API calls

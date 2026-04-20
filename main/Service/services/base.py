@@ -93,7 +93,7 @@ class BaseService(ABC):
 
         Default implementation does nothing.
         """
-        pass
+        return None
 
     @property
     def is_initialized(self) -> bool:

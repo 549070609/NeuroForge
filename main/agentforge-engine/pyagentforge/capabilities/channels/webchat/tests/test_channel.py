@@ -2,12 +2,13 @@
 WebChat Channel Tests
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from pyagentforge.capabilities.channels.base import ChannelMessage, ChannelStatus
 from pyagentforge.capabilities.channels.webchat import WebChatChannel
-from pyagentforge.capabilities.channels.base import ChannelStatus, ChannelMessage
 
 
 class TestWebChatChannel:
@@ -81,7 +82,7 @@ class TestWebChatChannel:
         await channel.initialize()
 
         # 创建最大数量的会话
-        for i in range(channel.max_sessions):
+        for _i in range(channel.max_sessions):
             channel.create_session()
 
         # 应该抛出异常

@@ -5,12 +5,13 @@ Channel Base - 通道适配器基类
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Coroutine, Optional
+from enum import StrEnum
+from typing import Any
 
 
-class ChannelStatus(str, Enum):
+class ChannelStatus(StrEnum):
     """
     通道状态枚举
 
@@ -57,8 +58,8 @@ class ChannelMessage:
     sender: str
     channel: str
     metadata: dict[str, Any] = field(default_factory=dict)
-    attachments: Optional[list[dict]] = None
-    reply_to: Optional[str] = None
+    attachments: list[dict] | None = None
+    reply_to: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
@@ -84,8 +85,8 @@ class SendMessageResult:
         error: 错误信息 (失败时)
     """
     success: bool
-    message_id: Optional[str] = None
-    error: Optional[str] = None
+    message_id: str | None = None
+    error: str | None = None
 
 
 # 回调类型
@@ -126,7 +127,7 @@ class BaseChannel(ABC):
         """
         self.config = config
         self._status = ChannelStatus.DISCONNECTED
-        self._message_callback: Optional[MessageCallback] = None
+        self._message_callback: MessageCallback | None = None
 
     @property
     def status(self) -> ChannelStatus:

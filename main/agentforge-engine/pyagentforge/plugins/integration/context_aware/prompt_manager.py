@@ -6,7 +6,6 @@ AGENTS.md 自动加载机制
 
 import re
 from pathlib import Path
-from typing import Any
 
 from pyagentforge.utils.logging import get_logger
 
@@ -178,7 +177,6 @@ class DynamicPromptInjector:
         Returns:
             处理后的提示词
         """
-        import asyncio
 
         def replace_command(match: re.Match) -> str:
             command = match.group(1)

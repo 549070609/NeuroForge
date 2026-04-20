@@ -4,7 +4,6 @@ Read 工具
 读取文件内容
 """
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -141,7 +140,7 @@ class ReadTool(BaseTool):
                 continue
 
         if content is None:
-            return f"Error: Unable to decode file with supported encodings"
+            return "Error: Unable to decode file with supported encodings"
 
         lines = content.splitlines()
 
@@ -190,9 +189,11 @@ class ReadTool(BaseTool):
                 for out in cell.get("outputs", []):
                     if out.get("output_type") == "stream":
                         output.append("".join(out.get("text", [])))
-                    elif out.get("output_type") == "execute_result":
-                        if "text/plain" in out.get("data", {}):
-                            output.append(out["data"]["text/plain"])
+                    elif (
+                        out.get("output_type") == "execute_result"
+                        and "text/plain" in out.get("data", {})
+                    ):
+                        output.append(out["data"]["text/plain"])
 
         return "\n".join(output)
 

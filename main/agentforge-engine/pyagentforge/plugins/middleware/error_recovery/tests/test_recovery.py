@@ -2,13 +2,12 @@
 Tests for Error Recovery
 """
 
-import pytest
-import asyncio
 
-from pyagentforge.core.error_recovery import (
+import pytest
+
+from pyagentforge.plugins.middleware.error_recovery.error_recovery import (
     ErrorClassifier,
     ErrorType,
-    RecoveryNeededError,
     RecoveryStrategy,
     RetryDecision,
     RetryManager,

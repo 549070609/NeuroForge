@@ -2,24 +2,24 @@
 思维链工具测试
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
+import pytest
+
+from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 from pyagentforge.plugins.integration.chain_of_thought.cot_tools import (
+    CreateCoTTool,
+    GetCoTInfoTool,
     LoadCoTTool,
     UpdateCoTTool,
     ValidatePlanTool,
-    GetCoTInfoTool,
-    CreateCoTTool,
 )
-from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 from pyagentforge.plugins.integration.chain_of_thought.models import (
     ChainOfThought,
-    CoTPhase,
     Constraint,
     ConstraintType,
+    CoTPhase,
 )
 
 

@@ -1,4 +1,4 @@
-﻿"""Proxy API routes for workspace/session execution, workflows, and tracing."""
+"""Proxy API routes for workspace/session execution, workflows, and tracing."""
 
 from __future__ import annotations
 
@@ -37,10 +37,10 @@ router = APIRouter(prefix="/proxy", tags=["Proxy"])
 
 def get_proxy_service() -> Any:
     """Get AgentProxyService instance."""
-    from ...core.registry import ServiceRegistry
+    from ...core.registry import PROXY_SERVICE_KEY, ServiceRegistry
 
     registry = ServiceRegistry()
-    service = registry.get("proxy")
+    service = registry.get(PROXY_SERVICE_KEY)
     if service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

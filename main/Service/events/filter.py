@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def match_pattern(event_type: str, pattern: str) -> bool:
@@ -43,10 +43,7 @@ def match_pattern(event_type: str, pattern: str) -> bool:
 
     # Convert wildcard to regex for more complex patterns
     regex_pattern = pattern.replace("*", ".*").replace("?", ".")
-    if re.fullmatch(regex_pattern, event_type):
-        return True
-
-    return False
+    return bool(re.fullmatch(regex_pattern, event_type))
 
 
 def should_emit_event(event_type: str, patterns: Iterable[str]) -> bool:
@@ -79,11 +76,7 @@ def should_emit_event(event_type: str, patterns: Iterable[str]) -> bool:
     negative = [p for p in patterns if p.startswith("!")]
 
     # If no positive patterns, include all by default
-    if not positive:
-        included = True
-    else:
-        # Check if matches any positive pattern
-        included = any(match_pattern(event_type, p) for p in positive)
+    included = True if not positive else any(match_pattern(event_type, p) for p in positive)
 
     # Check if excluded by negative pattern
     if included and negative:

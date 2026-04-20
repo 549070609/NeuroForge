@@ -6,15 +6,13 @@ Handles generic token-limit style errors and context overflow recovery.
 
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.error_recovery import (
-    ErrorType,
+from pyagentforge.plugins.middleware.error_recovery.error_recovery import (
     RecoveryStrategy,
-    RecoveryNeededError,
 )
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 
@@ -125,7 +123,6 @@ class TokenLimitRecovery:
         Returns:
             True if any results were removed
         """
-        from pyagentforge.core.message import Message
 
         messages = context.messages
         removed_count = 0

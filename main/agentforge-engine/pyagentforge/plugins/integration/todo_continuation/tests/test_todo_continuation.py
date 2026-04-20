@@ -2,9 +2,9 @@
 Tests for Todo Continuation Enforcer
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
 
 from pyagentforge.plugins.integration.todo_continuation import TodoContinuationEnforcerPlugin
 

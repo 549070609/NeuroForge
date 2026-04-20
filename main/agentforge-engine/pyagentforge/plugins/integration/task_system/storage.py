@@ -4,10 +4,10 @@ Task Storage Abstraction Layer
 Provides storage backends for task persistence.
 """
 
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
-import json
 
 from pyagentforge.utils.logging import get_logger
 
@@ -136,7 +136,7 @@ class FileStorage(TaskStorage):
             return None
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Import here to avoid circular dependency

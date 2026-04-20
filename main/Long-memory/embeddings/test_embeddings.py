@@ -58,7 +58,7 @@ async def test_batch_processing():
 
     assert len(embeddings) == 10, f"期望 10 个向量，得到 {len(embeddings)}"
 
-    print(f"  ✓ 正确处理 10 条文本")
+    print("  ✓ 正确处理 10 条文本")
     print()
 
     return True
@@ -141,7 +141,7 @@ async def test_local_model():
     assert len(embeddings) == 1, "应该生成 1 个向量"
     assert len(embeddings[0]) == 384, "维度应为 384"
 
-    print(f"  ✓ 本地模型加载成功")
+    print("  ✓ 本地模型加载成功")
     print()
 
     return True

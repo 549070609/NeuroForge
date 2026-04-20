@@ -4,15 +4,13 @@ Tests for PermissionChecker
 Tests for tool permission checking and access control.
 """
 
-import pytest
-from pathlib import Path
 
 from pyagentforge.tools.permission import (
+    ParameterPermissionConfig,
+    ParameterPermissionRule,
     PermissionChecker,
     PermissionConfig,
     PermissionResult,
-    ParameterPermissionRule,
-    ParameterPermissionConfig,
     create_permission_config_from_dict,
 )
 

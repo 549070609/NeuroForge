@@ -4,14 +4,11 @@ AST-Grep 工具插件
 提供 AST 语法树级别的代码搜索和替换能力
 """
 
-import logging
-from typing import List
 
-from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginContext, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
-
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
 from pyagentforge.plugins.tools.ast_grep.binary_manager import BinaryManager
-from pyagentforge.plugins.tools.ast_grep.tools import AstGrepSearchTool, AstGrepReplaceTool
+from pyagentforge.plugins.tools.ast_grep.tools import AstGrepReplaceTool, AstGrepSearchTool
 
 
 class AstGrepPlugin(Plugin):
@@ -61,8 +58,8 @@ class AstGrepPlugin(Plugin):
             )
         else:
             context.logger.warning(
-                f"AST-Grep binary not found. Tools will show install instructions. "
-                f"Set config 'tool.ast-grep.auto_install: true' to auto-install."
+                "AST-Grep binary not found. Tools will show install instructions. "
+                "Set config 'tool.ast-grep.auto_install: true' to auto-install."
             )
 
     async def on_plugin_activate(self) -> None:
@@ -82,7 +79,7 @@ class AstGrepPlugin(Plugin):
 
             self.context.logger.info("AST-Grep tools activated")
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         tools = []
         if self._search_tool:

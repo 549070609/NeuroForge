@@ -4,18 +4,21 @@ Context Lifecycle Plugin
 Monitors context usage and triggers preemptive compaction to prevent token limit errors.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from pyagentforge.config.settings import get_settings
-from pyagentforge.core.context_monitor import ContextMonitor
-from pyagentforge.core.context_usage import CompactionStrategyType, ContextUsage
+from pyagentforge.plugins.middleware.context_lifecycle.context_monitor import ContextMonitor
+from pyagentforge.plugins.middleware.context_lifecycle.context_usage import (
+    CompactionStrategyType,
+    ContextUsage,
+)
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 class SupportsModelName(Protocol):
     model: str

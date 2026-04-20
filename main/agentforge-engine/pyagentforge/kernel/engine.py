@@ -39,6 +39,9 @@ class AgentConfig:
     max_iterations: int = 100
     max_subagent_depth: int = 3
     permission_checker: Any = None
+    readonly: bool = False
+    supports_background: bool = True
+    max_concurrent: int = 3
 
 
 class AgentEngine:
@@ -370,8 +373,8 @@ class AgentEngine:
             适配后的系统提示词
         """
         from pyagentforge.kernel.model_registry import get_model
-        from pyagentforge.prompts.adapter import get_prompt_adapter
-        from pyagentforge.prompts.base import AdaptationContext
+        from pyagentforge.agents.prompts.adapter import get_prompt_adapter
+        from pyagentforge.agents.prompts.base import AdaptationContext
 
         try:
             adapter = get_prompt_adapter()

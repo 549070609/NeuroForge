@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pyagentforge import LLMClient
-from pyagentforge.kernel.message import ProviderResponse, TextBlock
+from pyagentforge.kernel.message import ProviderResponse
 from pyagentforge.kernel.model_registry import ModelConfig, ModelRegistry
 
 
@@ -77,7 +77,10 @@ class TestLLMClient:
         count = await client.count_tokens(model_id="default", messages=messages)
         assert count > 0
 
-    def test_http_client_cache(self) -> None:
+    @pytest.mark.asyncio
+    async def test_http_client_cache(self) -> None:
+        # _get_or_create_client 现按 (running_loop, timeout) 维度缓存，
+        # 必须在 async 上下文中调用。
         client = LLMClient(registry=build_registry())
         client1 = client._get_or_create_client(120)
         client2 = client._get_or_create_client(120)
@@ -93,16 +96,26 @@ class TestLLMClient:
 
     @pytest.mark.asyncio
     async def test_stream_message(self) -> None:
-        client = LLMClient(registry=build_registry("openai-completions"))
-        mock_http = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Hello world", "tool_calls": []}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_http.post = AsyncMock(return_value=mock_response)
-        client._get_or_create_client = MagicMock(return_value=mock_http)
+        # stream_message 现走真实 SSE 通道，通过 httpx.MockTransport 注入伪事件流
+        import json as _json
+        import httpx as _httpx
+
+        sse_body = (
+            f"data: {_json.dumps({'choices': [{'delta': {'content': 'Hello '}, 'finish_reason': None}]})}\n\n"
+            f"data: {_json.dumps({'choices': [{'delta': {'content': 'world'}, 'finish_reason': None}]})}\n\n"
+            f"data: {_json.dumps({'choices': [{'delta': {}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 10, 'completion_tokens': 5}})}\n\n"
+            "data: [DONE]\n\n"
+        ).encode("utf-8")
+
+        def _handler(_req: _httpx.Request) -> _httpx.Response:
+            return _httpx.Response(
+                200, content=sse_body, headers={"content-type": "text/event-stream"}
+            )
+
+        client = LLMClient(
+            registry=build_registry("openai-completions"),
+            transport=_httpx.MockTransport(_handler),
+        )
 
         chunks = []
         async for chunk in client.stream_message(
@@ -111,9 +124,15 @@ class TestLLMClient:
         ):
             chunks.append(chunk)
 
-        assert len(chunks) == 2
-        assert chunks[0]["text"] == "Hello world"
-        assert isinstance(chunks[1], ProviderResponse)
+        # 末尾必为 ProviderResponse
+        assert isinstance(chunks[-1], ProviderResponse)
+        assert chunks[-1].text == "Hello world"
+        assert chunks[-1].usage == {"input_tokens": 10, "output_tokens": 5}
+        # 中间应包含至少 2 个 text_delta
+        from pyagentforge import StreamEvent
+
+        text_deltas = [c for c in chunks[:-1] if isinstance(c, StreamEvent) and c.type == "text_delta"]
+        assert len(text_deltas) == 2
 
 
 class TestLLMClientErrorHandling:

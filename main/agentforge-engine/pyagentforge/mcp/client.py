@@ -6,8 +6,6 @@ MCP Client 实现
 
 from typing import Any
 
-from pydantic import BaseModel
-
 from pyagentforge.mcp.transport import (
     MCPConfig,
     MCPTransport,

@@ -5,8 +5,8 @@ AgentBuilder Tests
 import pytest
 
 from pyagentforge.agents.metadata import AgentCategory, AgentCost
-from pyagentforge.building.builder import AgentBuilder, AgentTemplate
-from pyagentforge.building.schema import AgentSchema
+from pyagentforge.agents.building.builder import AgentBuilder, AgentTemplate
+from pyagentforge.agents.building.schema import AgentSchema
 
 
 class TestAgentBuilder:

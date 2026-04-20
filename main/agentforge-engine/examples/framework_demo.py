@@ -11,25 +11,21 @@ NeuroForge 框架独立测试应用
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pyagentforge.kernel.base_provider import BaseProvider
-from pyagentforge.kernel.checkpoint import FileCheckpointer, MemoryCheckpointer
+from pyagentforge.kernel.checkpoint import MemoryCheckpointer
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.executor import ToolRegistry
-from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
 from pyagentforge.testing import ScriptBuilder, ScriptedProvider
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.workflow import (
     END,
     AgentRole,
-    EngineFactory,
     HandoffManager,
     HandoffPayload,
     StepNode,
@@ -39,7 +35,6 @@ from pyagentforge.workflow import (
     TraceCollector,
     WorkflowGraph,
 )
-
 
 # ─── 测试用工具 ──────────────────────────────────────────
 
@@ -219,7 +214,7 @@ async def demo_handoff():
     target_context = ContextManager(system_prompt="You are a fixer.")
     accepted = manager.accept("fixer", target_context)
 
-    print(f"  Handoff initiated: analyzer → fixer")
+    print("  Handoff initiated: analyzer → fixer")
     print(f"  Accepted: {accepted}")
     print(f"  Target context messages: {len(target_context)}")
     print(f"  Shared state: {payload.shared_state}")
@@ -266,7 +261,7 @@ async def demo_team():
     print(f"  Team: {team.name}")
     print(f"  Goal: {team.goal}")
     print(f"  Process: {team.process.value}")
-    print(f"  Agents:")
+    print("  Agents:")
     for agent in team.agents:
         print(f"    - {agent.name} ({agent.role})")
         print(f"      System prompt preview: {agent.to_system_prompt()[:80]}...")
@@ -288,7 +283,7 @@ async def demo_tracing():
     print("Demo 6: Structured Tracing")
     print("=" * 60)
 
-    from pyagentforge.workflow.tracing import SpanKind, SpanStatus
+    from pyagentforge.workflow.tracing import SpanKind
 
     collector = TraceCollector()
 
@@ -313,7 +308,7 @@ async def demo_tracing():
     print(f"  Trace ID: {collector.trace_id}")
     print(f"  Total spans: {summary['total_spans']}")
     print(f"  Active spans: {summary['active_spans']}")
-    print(f"  By kind:")
+    print("  By kind:")
     for kind, stats in summary["by_kind"].items():
         print(f"    {kind}: count={stats['count']}, total={stats['total_ms']}ms")
 
@@ -446,7 +441,7 @@ async def main():
     passed = 0
     failed = 0
 
-    for name, demo_fn in demos:
+    for _name, demo_fn in demos:
         try:
             await demo_fn()
             passed += 1

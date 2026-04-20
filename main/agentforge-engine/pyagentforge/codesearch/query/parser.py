@@ -11,20 +11,19 @@
 - "(xxx OR yyy) AND zzz" - 分组
 """
 
-import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Callable
 
 from pyagentforge.codesearch.query.nodes import (
-    QueryNode,
-    KindFilter,
-    NameMatch,
     AndExpr,
-    OrExpr,
-    NotExpr,
-    LanguageFilter,
     FileFilter,
+    KindFilter,
+    LanguageFilter,
+    NameMatch,
+    NotExpr,
+    OrExpr,
+    QueryNode,
 )
 from pyagentforge.codesearch.storage.models import SymbolKind
 from pyagentforge.utils.logging import get_logger

@@ -3,6 +3,7 @@ Middleware Pipeline 单元测试
 """
 
 import pytest
+
 from pyagentforge.middleware.base import BaseMiddleware, MiddlewareContext, NextMiddleware
 from pyagentforge.middleware.pipeline import MiddlewarePipeline
 

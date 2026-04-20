@@ -6,13 +6,12 @@ Telemetry Collector - 遥测收集器
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Optional
-import time
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
-class MetricType(str, Enum):
+class MetricType(StrEnum):
     """指标类型"""
     COUNTER = "counter"      # 单调递增计数
     GAUGE = "gauge"          # 可增可减的瞬时值
@@ -25,7 +24,7 @@ class MetricValue:
     name: str
     value: Any
     metric_type: MetricType
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     labels: dict[str, str] = field(default_factory=dict)
 
 
@@ -215,7 +214,7 @@ class TelemetryCollector:
             },
         }
 
-    def get_session_metrics(self, session_key: str) -> Optional[SessionMetrics]:
+    def get_session_metrics(self, session_key: str) -> SessionMetrics | None:
         """获取指定会话的指标"""
         return self._session_metrics.get(session_key)
 

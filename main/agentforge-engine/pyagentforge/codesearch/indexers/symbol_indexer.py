@@ -6,8 +6,8 @@
 
 import asyncio
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from pyagentforge.codesearch.config import CodeSearchConfig
 from pyagentforge.codesearch.parsers.base import ParserRegistry
@@ -166,10 +166,7 @@ class SymbolIndexer:
                 return True
 
             # 检查修改时间（作为后备）
-            if stored_hash.modified_time < stat.st_mtime:
-                return True
-
-            return False
+            return stored_hash.modified_time < stat.st_mtime
 
         except Exception as e:
             logger.debug(f"Error checking file hash: {e}")
@@ -224,7 +221,7 @@ class SymbolIndexer:
 
     def _read_file(self, file_path: Path) -> str:
         """同步读取文件内容"""
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
             return f.read()
 
     async def _compute_file_hash(self, file_path: Path) -> str:

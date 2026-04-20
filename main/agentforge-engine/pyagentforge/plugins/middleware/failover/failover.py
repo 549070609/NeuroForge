@@ -9,9 +9,10 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncIterator, Protocol
+from typing import Any, Protocol
 
 from pyagentforge.utils.logging import get_logger
 

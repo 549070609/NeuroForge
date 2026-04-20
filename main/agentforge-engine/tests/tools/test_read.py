@@ -5,11 +5,11 @@ Tests for file reading functionality.
 """
 
 import json
+
 import pytest
-from pathlib import Path
 
 from pyagentforge.tools.builtin.read import ReadTool
-from pyagentforge.tools.permission import PermissionChecker, PermissionConfig, PermissionResult
+from pyagentforge.tools.permission import PermissionChecker, PermissionConfig
 
 
 class TestReadTool:

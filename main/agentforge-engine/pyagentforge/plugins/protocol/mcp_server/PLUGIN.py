@@ -4,11 +4,9 @@ MCP Server Plugin
 Model Context Protocol (MCP) Server implementation for exposing tools and resources
 """
 
-import logging
-from typing import Any, List, Optional, Callable
+from collections.abc import Callable
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
 
 
 class MCPServerPlugin(Plugin):

@@ -4,8 +4,8 @@ Tests for EditTool
 Tests for file editing functionality.
 """
 
+
 import pytest
-from pathlib import Path
 
 from pyagentforge.tools.builtin.edit import EditTool
 from pyagentforge.tools.permission import PermissionChecker, PermissionConfig
@@ -61,7 +61,7 @@ class TestEditTool:
         content = file_path.read_text()
         assert "New Line 1" in content
         assert "New Line 2" in content
-        assert "Line 1" not in content
+        assert "Line 1\nLine 2" not in content
 
     @pytest.mark.asyncio
     async def test_pattern_matching_exact(self, tmp_path):

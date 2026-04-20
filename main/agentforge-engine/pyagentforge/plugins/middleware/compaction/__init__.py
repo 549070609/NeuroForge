@@ -7,17 +7,17 @@ Compaction Plugin Package
 - 动态配置压缩参数
 """
 
-from pyagentforge.plugins.middleware.compaction.PLUGIN import CompactionPlugin
 from pyagentforge.plugins.middleware.compaction.compaction import (
+    AgentCompactor,
+    CompactionResult,
     CompactionSettings,
     CompactionStrategy,
-    CompactionResult,
     Compactor,
-    AgentCompactor,
     DynamicCompactionConfig,
     MessageSegment,
     create_compactor,
 )
+from pyagentforge.plugins.middleware.compaction.PLUGIN import CompactionPlugin
 
 __all__ = [
     # Plugin

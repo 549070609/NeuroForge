@@ -4,16 +4,17 @@ Background Agents Plugin
 Provides background agent execution functionality.
 """
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.background_manager import BackgroundManager, BackgroundTask, TaskStatus
-from pyagentforge.core.concurrency_manager import ConcurrencyConfig
+from pyagentforge.kernel.background_manager import BackgroundManager, BackgroundTask, TaskStatus
+from pyagentforge.kernel.concurrency_manager import ConcurrencyConfig
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    pass
 
 logger = get_logger(__name__)
 

@@ -4,11 +4,9 @@ Tests for ToolRegistry
 Tests for tool registration, unregistration, and retrieval.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
 
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class MockTool(BaseTool):

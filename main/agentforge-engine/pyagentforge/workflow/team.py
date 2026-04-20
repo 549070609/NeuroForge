@@ -8,8 +8,8 @@ TeamExecutor 按 process 模式编排执行。
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from pyagentforge.utils.logging import get_logger
@@ -18,7 +18,7 @@ from pyagentforge.workflow.graph import END, StepNode, WorkflowGraph
 logger = get_logger(__name__)
 
 
-class TeamProcess(str, Enum):
+class TeamProcess(StrEnum):
     """团队执行流程"""
     SEQUENTIAL = "sequential"
     HIERARCHICAL = "hierarchical"
@@ -210,7 +210,6 @@ class TeamExecutor:
         thread_id: str | None = None,
     ) -> Any:
         """执行团队任务"""
-        from pyagentforge.workflow.executor import WorkflowResult  # noqa: F811
 
         wf = self.build_workflow()
         executor = wf.compile(checkpointer=self.checkpointer)

@@ -10,10 +10,11 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-class SpanKind(str, Enum):
+
+class SpanKind(StrEnum):
     WORKFLOW = "workflow"
     AGENT = "agent"
     LLM_CALL = "llm_call"
@@ -21,7 +22,7 @@ class SpanKind(str, Enum):
     HANDOFF = "handoff"
 
 
-class SpanStatus(str, Enum):
+class SpanStatus(StrEnum):
     OK = "ok"
     ERROR = "error"
     CANCELLED = "cancelled"

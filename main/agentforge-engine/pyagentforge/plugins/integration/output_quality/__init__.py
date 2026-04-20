@@ -5,10 +5,10 @@ Detects excessive comments and intelligently truncates tool output.
 """
 
 from pyagentforge.plugins.integration.output_quality.PLUGIN import (
-    OutputQualityPlugin,
     CommentChecker,
     CommentCheckResult,
     CommentThresholds,
+    OutputQualityPlugin,
     OutputTruncator,
     TruncationConfig,
     TruncationResult,

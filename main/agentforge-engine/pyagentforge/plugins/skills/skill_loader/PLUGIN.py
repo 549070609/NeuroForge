@@ -4,12 +4,11 @@ Skill Loader Plugin
 Provides skills system functionality for loading and managing domain knowledge
 """
 
-import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
+from pyagentforge.tools.base import BaseTool
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
 
 
 class SkillTool(BaseTool):
@@ -59,7 +58,7 @@ class SkillTool(BaseTool):
             return await self.skill_loader.unload_skill(skill_name)
         elif action == "list":
             skills = self.skill_loader.list_skills()
-            return f"Available skills:\n" + "\n".join(f"  - {s}" for s in skills)
+            return "Available skills:\n" + "\n".join(f"  - {s}" for s in skills)
         elif action == "info":
             info = self.skill_loader.get_skill_info(skill_name)
             if info:
@@ -85,7 +84,7 @@ class SkillLoaderPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self._skills_dir: Optional[Path] = None
+        self._skills_dir: Path | None = None
         self._loaded_skills: dict[str, str] = {}
         self._available_skills: dict[str, dict] = {}
 
@@ -144,7 +143,7 @@ class SkillLoaderPlugin(Plugin):
         skill_path = Path(skill_info["path"])
 
         try:
-            with open(skill_path, "r", encoding="utf-8") as f:
+            with open(skill_path, encoding="utf-8") as f:
                 content = f.read()
 
             self._loaded_skills[skill_name] = content
@@ -203,7 +202,7 @@ class SkillLoaderPlugin(Plugin):
         """
         return list(self._loaded_skills.keys())
 
-    def get_skill_info(self, skill_name: str) -> Optional[str]:
+    def get_skill_info(self, skill_name: str) -> str | None:
         """
         Get skill information
 
@@ -218,7 +217,7 @@ class SkillLoaderPlugin(Plugin):
             return f"Path: {info['path']}"
         return None
 
-    def get_loaded_content(self, skill_name: str) -> Optional[str]:
+    def get_loaded_content(self, skill_name: str) -> str | None:
         """
         Get loaded skill content
 

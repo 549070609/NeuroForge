@@ -10,8 +10,8 @@ Middleware Layer - 中间件管道 (Layer 3)
 """
 
 from pyagentforge.middleware.base import (
-    MiddlewareContext,
     BaseMiddleware,
+    MiddlewareContext,
 )
 from pyagentforge.middleware.pipeline import MiddlewarePipeline
 

@@ -5,11 +5,10 @@
 """
 
 from typing import Any, Dict, List, Optional
-import json
 import logging
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType, PluginContext
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
 from .config import ProcessorConfig
 from .processor_engine import ProcessorEngine

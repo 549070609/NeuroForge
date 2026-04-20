@@ -215,8 +215,8 @@ class TokenBudgetManager:
         budget = self.calculate(messages)
 
         status_lines = [
-            f"## Token 预算状态",
-            f"",
+            "## Token 预算状态",
+            "",
             f"- **模型**: {self.model}",
             f"- **上下文限制**: {self.context_limit:,} tokens",
             f"- **已使用**: {budget.used_tokens:,} tokens ({budget.compression_ratio:.1%})",

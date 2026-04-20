@@ -7,13 +7,16 @@ Auto-inject project knowledge into agent context.
 import os
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.knowledge_injector import InjectionResult, KnowledgeInjector
+from pyagentforge.plugins.integration.knowledge_injection.knowledge_injector import (
+    InjectionResult,
+    KnowledgeInjector,
+)
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 

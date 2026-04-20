@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import Mock, MagicMock
 
 from pyagentforge.agents.metadata import AgentCategory, AgentCost
-from pyagentforge.building.factory import AgentFactory, AgentPool, InstanceState
-from pyagentforge.building.schema import AgentSchema, AgentIdentity, ModelConfiguration
+from pyagentforge.agents.building.factory import AgentFactory, AgentPool, InstanceState
+from pyagentforge.agents.building.schema import AgentSchema, AgentIdentity, ModelConfiguration
 from pyagentforge.tools.registry import ToolRegistry
 
 

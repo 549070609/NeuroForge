@@ -2,18 +2,18 @@
 Tests for Background Manager
 """
 
-import pytest
 import asyncio
 
-from pyagentforge.core.background_manager import (
+import pytest
+
+from pyagentforge.kernel.background_manager import (
     BackgroundManager,
     BackgroundTask,
     TaskStatus,
 )
-from pyagentforge.core.concurrency_manager import (
+from pyagentforge.kernel.concurrency_manager import (
     ConcurrencyConfig,
     ConcurrencyManager,
-    ResourceType,
 )
 
 

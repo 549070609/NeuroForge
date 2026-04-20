@@ -13,9 +13,11 @@ from Service.gateway.routes import agents as agents_route
 def test_execute_route_response_fields_and_time_format(monkeypatch):
     class FakeAgentService:
         def get_agent(self, agent_id: str):
+            _ = agent_id
             return object()
 
         async def execute_agent(self, agent_id: str, task: str, context=None, options=None):
+            _ = (task, context, options)
             return {
                 "agent_id": agent_id,
                 "status": "completed",

@@ -5,9 +5,8 @@ gitignore 文件过滤
 """
 
 import fnmatch
-import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from pyagentforge.utils.logging import get_logger
 
@@ -202,7 +201,7 @@ class GitignoreFilter:
         except ValueError:
             return False
 
-        rel_str = str(rel_path).replace("\\", "/")
+        str(rel_path).replace("\\", "/")
         is_dir = path.is_dir()
 
         # 从当前目录向上检查所有相关的 .gitignore
@@ -210,7 +209,7 @@ class GitignoreFilter:
 
         while True:
             try:
-                rel_current = current.relative_to(self.root_path)
+                current.relative_to(self.root_path)
             except ValueError:
                 break
 

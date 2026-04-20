@@ -7,10 +7,9 @@ Provides automatic retry and recovery from API errors.
 from typing import TYPE_CHECKING, Any
 
 from pyagentforge.config.settings import get_settings
-from pyagentforge.core.error_recovery import (
+from pyagentforge.plugins.middleware.error_recovery.error_recovery import (
     ErrorClassifier,
     ErrorType,
-    RecoveryNeededError,
     RetryManager,
     RetryPolicy,
     RetryResult,
@@ -23,7 +22,7 @@ from pyagentforge.plugins.middleware.error_recovery.anthropic_recovery import (
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 

@@ -4,11 +4,9 @@ Tests for Category System
 Tests Category dataclass, TaskComplexity enum, and helper functions.
 """
 
-from typing import Any
 
-import pytest
 
-from pyagentforge.core.category import (
+from pyagentforge.plugins.integration.category_system.category import (
     BUILTIN_CATEGORIES,
     Category,
     TaskComplexity,
@@ -16,7 +14,6 @@ from pyagentforge.core.category import (
     get_category,
     get_sorted_categories,
 )
-
 
 # ============================================================================
 # Test: TaskComplexity Enum

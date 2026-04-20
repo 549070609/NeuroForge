@@ -2,10 +2,12 @@
 Tests for Context Lifecycle Plugin
 """
 
-import pytest
 
-from pyagentforge.core.context_usage import CompactionStrategyType, ContextUsage
-from pyagentforge.core.context_monitor import ContextMonitor
+from pyagentforge.plugins.middleware.context_lifecycle.context_monitor import ContextMonitor
+from pyagentforge.plugins.middleware.context_lifecycle.context_usage import (
+    CompactionStrategyType,
+    ContextUsage,
+)
 
 
 class TestContextUsage:

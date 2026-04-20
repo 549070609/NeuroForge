@@ -11,12 +11,12 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from ...schemas.models import (
     ModelConfigCreate,
-    ModelConfigResponse,
     ModelConfigListResponse,
+    ModelConfigResponse,
     ModelConfigStatsResponse,
     ModelConfigUpdate,
 )
@@ -32,10 +32,10 @@ router = APIRouter(prefix="/models", tags=["Models"])
 
 def get_model_config_service() -> ModelConfigService:
     """获取 ModelConfigService 实例"""
-    from ...core.registry import ServiceRegistry
+    from ...core.registry import MODEL_CONFIG_SERVICE_KEY, ServiceRegistry
 
     registry = ServiceRegistry()
-    service = registry.get("model_config")
+    service = registry.get(MODEL_CONFIG_SERVICE_KEY)
     if service is None:
         # 如果服务未注册，创建一个临时实例
         service = ModelConfigService(registry)
@@ -73,7 +73,7 @@ async def list_models(
     )
 
     # 获取所有提供商
-    providers = list(set(m.provider for m in models))
+    providers = list({m.provider for m in models})
 
     return ModelConfigListResponse(
         models=models,
@@ -135,7 +135,7 @@ async def create_model(request: ModelConfigCreate) -> ModelConfigResponse:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
 
 @router.patch("/{model_id}", response_model=ModelConfigResponse)
@@ -166,11 +166,11 @@ async def update_model(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e),
-            )
+            ) from e
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
 
 @router.delete("/{model_id}")
@@ -195,6 +195,6 @@ async def delete_model(model_id: str) -> dict[str, str]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
 

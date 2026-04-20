@@ -10,7 +10,7 @@ from typing import Any
 
 import aiosqlite
 
-from pyagentforge.codesearch.storage.models import Symbol, SymbolKind, FileHash
+from pyagentforge.codesearch.storage.models import FileHash, Symbol, SymbolKind
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)

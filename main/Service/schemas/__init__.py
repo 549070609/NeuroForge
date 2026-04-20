@@ -2,13 +2,33 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-# === Common Schemas ===
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+from .agents import (
+    AgentExecuteRequest,
+    AgentExecuteResponse,
+    AgentInfoResponse,
+    AgentListResponse,
+    AgentStatsResponse,
+    NamespaceInfo,
+    NamespaceListResponse,
+    PlanCreate,
+    PlanListResponse,
+    PlanResponse,
+    PlanStatsResponse,
+    StepAddRequest,
+    StepCreate,
+    StepResponse,
+    StepUpdateRequest,
+)
 
 
 class HealthResponse(BaseModel):
@@ -16,7 +36,7 @@ class HealthResponse(BaseModel):
 
     status: str = "healthy"
     version: str = "0.1.0"
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
 
 
 class ErrorResponse(BaseModel):
@@ -25,9 +45,6 @@ class ErrorResponse(BaseModel):
     error: str
     code: str | None = None
     details: dict[str, Any] | None = None
-
-
-# === Tool Schemas ===
 
 
 class ToolInfo(BaseModel):
@@ -53,35 +70,12 @@ class ExecuteToolResponse(BaseModel):
     error: str | None = None
 
 
-# === Agent Schemas ===
-# Re-export from agents.py for convenience
-from .agents import (
-    AgentInfoResponse,
-    AgentListResponse,
-    AgentExecuteRequest,
-    AgentExecuteResponse,
-    AgentStatsResponse,
-    NamespaceInfo,
-    NamespaceListResponse,
-    PlanCreate,
-    PlanResponse,
-    PlanListResponse,
-    PlanStatsResponse,
-    StepCreate,
-    StepResponse,
-    StepUpdateRequest,
-    StepAddRequest,
-)
-
 __all__ = [
-    # Common
     "HealthResponse",
     "ErrorResponse",
-    # Tools
     "ToolInfo",
     "ExecuteToolRequest",
     "ExecuteToolResponse",
-    # Agents
     "AgentInfoResponse",
     "AgentListResponse",
     "AgentExecuteRequest",
@@ -89,7 +83,6 @@ __all__ = [
     "AgentStatsResponse",
     "NamespaceInfo",
     "NamespaceListResponse",
-    # Plans
     "PlanCreate",
     "PlanResponse",
     "PlanListResponse",

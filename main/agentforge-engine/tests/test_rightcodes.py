@@ -10,6 +10,7 @@ from pathlib import Path
 
 # 加载 .env 文件
 from dotenv import load_dotenv
+
 env_path = Path(__file__).parent.parent.parent / "main" / ".env"
 load_dotenv(env_path)
 
@@ -62,9 +63,9 @@ async def test_rightcodes_config():
         )
 
         print("\n✅ API 调用成功！")
-        print(f"\n📝 模型响应:")
+        print("\n📝 模型响应:")
         print(f"   {response.text}")
-        print(f"\n📊 使用统计:")
+        print("\n📊 使用统计:")
         print(f"   Input tokens: {response.usage.get('input_tokens', 'N/A')}")
         print(f"   Output tokens: {response.usage.get('output_tokens', 'N/A')}")
         print(f"   Stop reason: {response.stop_reason}")
@@ -89,7 +90,8 @@ async def test_list_available_models():
     for model_id, model in models.items():
         print(f"  • {model_id}")
         print(f"    Name: {model.name}")
-        print(f"    Provider: {model.provider.value}")
+        provider = model.provider.value if hasattr(model.provider, "value") else model.provider
+        print(f"    Provider: {provider}")
         print(f"    API Type: {model.api_type}")
         if model.base_url:
             print(f"    Base URL: {model.base_url}")

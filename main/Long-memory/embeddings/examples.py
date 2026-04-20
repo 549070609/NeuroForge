@@ -1,4 +1,4 @@
-﻿"""Local Embeddings 示例。
+"""Local Embeddings 示例。
 
 本文件仅演示 embeddings 插件自身的调用思路，
 不再包含任何内置厂商 Provider 或 SDK 集成示例。

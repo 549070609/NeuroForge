@@ -77,7 +77,7 @@ class TelemetryMiddleware(BaseMiddleware):
 
             return result
 
-        except Exception as e:
+        except Exception:
             success = False
             raise
 

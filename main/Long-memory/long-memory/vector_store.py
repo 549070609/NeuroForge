@@ -9,11 +9,11 @@ import json
 import logging
 
 try:
-    from .models import MemoryEntry, MemorySearchResult, MemoryStats, MessageType, MemorySource
+    from .models import MemoryEntry, MemorySearchResult, MemoryStats
     from .config import LongMemoryConfig
 except ImportError:
     # 支持独立运行时的导入
-    from models import MemoryEntry, MemorySearchResult, MemoryStats, MessageType, MemorySource
+    from models import MemoryEntry, MemorySearchResult, MemoryStats
     from config import LongMemoryConfig
 
 logger = logging.getLogger(__name__)
@@ -531,3 +531,28 @@ class ChromaVectorStore:
 
         logger.info(f"Cleared {count} memories")
         return count
+
+    def close(self) -> None:
+        """Best-effort cleanup for ChromaDB resources."""
+        self._collection = None
+        client = self._client
+        self._client = None
+
+        if client is None:
+            return
+
+        close = getattr(client, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception as exc:
+                logger.debug(f"Failed to close Chroma client cleanly: {exc}")
+
+        # 清理 ChromaDB 全局系统缓存，释放 PersistentClient 持有的 mmap/sqlite 句柄，
+        # 否则 Windows 下会出现临时目录无法删除的 WinError 32。
+        try:
+            from chromadb.api.client import SharedSystemClient
+
+            SharedSystemClient.clear_system_cache()
+        except Exception as exc:  # pragma: no cover - 兼容旧版 chromadb
+            logger.debug(f"Failed to clear Chroma system cache: {exc}")

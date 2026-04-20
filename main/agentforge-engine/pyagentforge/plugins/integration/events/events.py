@@ -5,18 +5,18 @@
 """
 
 import asyncio
-from collections import defaultdict
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """事件类型"""
 
     # Agent 事件
@@ -60,7 +60,7 @@ class Event:
     type: EventType | str
     data: dict[str, Any]
     source: str | None = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -342,7 +342,7 @@ class EventBus:
             Event 实例
         """
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # 如果已经在异步上下文中，创建任务
             return asyncio.create_task(
                 self.emit(event_type, data, source, metadata)

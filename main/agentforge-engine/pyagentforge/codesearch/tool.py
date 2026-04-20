@@ -136,9 +136,11 @@ class CodeSearchTool(BaseTool):
         search_path = Path(path)
 
         # 权限检查
-        if self.permission_checker:
-            if self.permission_checker.check_path(str(search_path)) == PermissionResult.DENY:
-                return f"Error: Access to path '{path}' is denied"
+        if (
+            self.permission_checker
+            and self.permission_checker.check_path(str(search_path)) == PermissionResult.DENY
+        ):
+            return f"Error: Access to path '{path}' is denied"
 
         # 尝试从缓存获取
         cache_key = f"{query}:{path}:{file_pattern}:{max_results}"
@@ -188,9 +190,11 @@ class CodeSearchTool(BaseTool):
         """处理索引子命令"""
         index_path = Path(path)
 
-        if self.permission_checker:
-            if self.permission_checker.check_path(str(index_path)) == PermissionResult.DENY:
-                return f"Error: Access to path '{path}' is denied"
+        if (
+            self.permission_checker
+            and self.permission_checker.check_path(str(index_path)) == PermissionResult.DENY
+        ):
+            return f"Error: Access to path '{path}' is denied"
 
         if not index_path.exists():
             return f"Error: Path '{path}' does not exist"
@@ -270,7 +274,7 @@ class CodeSearchTool(BaseTool):
         context_lines: int,
     ) -> list[str]:
         """获取代码上下文"""
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
         start = max(0, line_number - context_lines - 1)

@@ -5,7 +5,6 @@ Bash 工具
 """
 
 import asyncio
-import subprocess
 from typing import Any
 
 from pyagentforge.tools.base import BaseTool
@@ -80,7 +79,7 @@ class BashTool(BaseTool):
                     process.communicate(),
                     timeout=timeout_sec,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
                 return f"Error: Command timed out after {timeout_sec} seconds"

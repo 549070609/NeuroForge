@@ -5,8 +5,8 @@
 """
 
 from pyagentforge.tools.base import BaseTool
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.decorators import tool
+from pyagentforge.tools.registry import ToolRegistry
 
 __all__ = [
     "BaseTool",

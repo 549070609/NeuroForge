@@ -5,7 +5,8 @@
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pyagentforge.plugin.base import Plugin, PluginType
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,9 @@ class PluginRegistry:
     """插件注册表"""
 
     def __init__(self):
-        self._plugins: Dict[str, Plugin] = {}
-        self._states: Dict[str, str] = {}
-        self._errors: Dict[str, str] = {}  # plugin_id -> error_message
+        self._plugins: dict[str, Plugin] = {}
+        self._states: dict[str, str] = {}
+        self._errors: dict[str, str] = {}  # plugin_id -> error_message
 
     def register(self, plugin: Plugin) -> None:
         """
@@ -64,29 +65,29 @@ class PluginRegistry:
             self._errors.pop(plugin_id, None)
             logger.info(f"Unregistered plugin: {plugin_id}")
 
-    def get(self, plugin_id: str) -> Optional[Plugin]:
+    def get(self, plugin_id: str) -> Plugin | None:
         """获取插件"""
         return self._plugins.get(plugin_id)
 
-    def get_all(self) -> List[Plugin]:
+    def get_all(self) -> list[Plugin]:
         """获取所有插件"""
         return list(self._plugins.values())
 
-    def get_by_type(self, plugin_type: PluginType) -> List[Plugin]:
+    def get_by_type(self, plugin_type: PluginType) -> list[Plugin]:
         """按类型获取插件"""
         return [
             p for p in self._plugins.values()
             if p.metadata.type == plugin_type
         ]
 
-    def get_activated(self) -> List[Plugin]:
+    def get_activated(self) -> list[Plugin]:
         """获取所有已激活的插件"""
         return [
             p for p in self._plugins.values()
             if self._states.get(p.metadata.id) == PluginState.ACTIVATED
         ]
 
-    def get_state(self, plugin_id: str) -> Optional[str]:
+    def get_state(self, plugin_id: str) -> str | None:
         """获取插件状态"""
         return self._states.get(plugin_id)
 
@@ -102,7 +103,7 @@ class PluginRegistry:
         self._states[plugin_id] = PluginState.ERROR
         logger.error(f"Plugin {plugin_id} error: {error}")
 
-    def get_error(self, plugin_id: str) -> Optional[str]:
+    def get_error(self, plugin_id: str) -> str | None:
         """获取插件错误信息"""
         return self._errors.get(plugin_id)
 
@@ -125,7 +126,7 @@ class PluginRegistry:
         if not isinstance(metadata.type, PluginType):
             raise ValueError(f"Invalid plugin type: {metadata.type}")
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """获取注册表摘要"""
         return {
             "total_plugins": len(self._plugins),

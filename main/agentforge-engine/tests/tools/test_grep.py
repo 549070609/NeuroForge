@@ -4,8 +4,8 @@ Tests for GrepTool
 Tests for file content search functionality.
 """
 
+
 import pytest
-from pathlib import Path
 
 from pyagentforge.tools.builtin.grep import GrepTool
 from pyagentforge.tools.permission import PermissionChecker, PermissionConfig
@@ -245,7 +245,7 @@ class TestGrepToolAdvancedPatterns:
 
         # Should match standalone "hello" but not "helloworld"
         lines = result.split("\n")
-        matches = [l for l in lines if "hello" in l.lower()]
+        [l for l in lines if "hello" in l.lower()]
         # Check that we got results
         assert result
 
@@ -485,7 +485,7 @@ class TestGrepToolIntegration:
         read_tool = ReadTool()
 
         # Find files containing "print"
-        grep_result = await grep_tool.execute(
+        await grep_tool.execute(
             pattern="print",
             path=str(temp_workspace),
             glob="*.py"

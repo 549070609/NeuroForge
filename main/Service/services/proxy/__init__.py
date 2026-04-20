@@ -1,4 +1,4 @@
-﻿"""Proxy services package with lazy exports to avoid eager heavy imports."""
+"""Proxy services package with lazy exports to avoid eager heavy imports."""
 
 from __future__ import annotations
 

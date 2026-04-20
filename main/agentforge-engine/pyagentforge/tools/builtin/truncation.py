@@ -139,7 +139,7 @@ class TruncationTool(BaseTool):
         self,
         content: str,
         max_length: int,
-        preserve_lines: bool,
+        _preserve_lines: bool,
     ) -> str:
         """智能截断 - 保留重要内容"""
         lines = content.split("\n")
@@ -157,7 +157,7 @@ class TruncationTool(BaseTool):
         selected_indices = set()
         current_length = 0
 
-        for idx, line, score in scored_lines:
+        for idx, line, _score in scored_lines:
             if current_length + len(line) > max_length - 100:
                 break
             selected_indices.add(idx)

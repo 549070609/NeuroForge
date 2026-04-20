@@ -147,7 +147,7 @@ class TestTools:
     async def test_memory_list_tool(self, mock_store, config):
         """测试列表工具"""
         from tools import MemoryListTool
-        from models import MemoryStats
+        from models import MemoryEntry, MemoryStats
 
         # 测试统计
         mock_store.get_stats.return_value = MemoryStats(

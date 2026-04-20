@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pyagentforge.agents.metadata import AgentCategory, AgentCost
 from pyagentforge.agents.registry import get_agent_registry
-from pyagentforge.building import (
+from pyagentforge.agents.building import (
     AgentBuilder,
     AgentFactory,
     AgentLoader,
@@ -19,7 +19,7 @@ from pyagentforge.building import (
     AgentTemplate,
 )
 from pyagentforge.tools.registry import ToolRegistry
-from pyagentforge.building.schema import AgentIdentity
+from pyagentforge.agents.building.schema import AgentIdentity
 from unittest.mock import Mock
 
 
@@ -105,25 +105,24 @@ limits:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
-            f.flush()
+            tmp_path = f.name
+        try:
+            # 1. 加载
+            factory = create_test_factory()
+            loader = AgentLoader(factory)
+            loaded = loader.load_from_yaml(tmp_path)
 
-            try:
-                # 1. 加载
-                factory = create_test_factory()
-                loader = AgentLoader(factory)
-                loaded = loader.load_from_yaml(f.name)
+            # 2. 验证加载
+            assert loaded.schema.identity.name == "yaml-integration"
+            assert loaded.schema.category == AgentCategory.EXPLORATION
 
-                # 2. 验证加载
-                assert loaded.schema.identity.name == "yaml-integration"
-                assert loaded.schema.category == AgentCategory.EXPLORATION
+            # 3. 创建实例
+            engine = factory.create_from_schema(loaded.schema)
 
-                # 3. 创建实例
-                engine = factory.create_from_schema(loaded.schema)
-
-                assert engine is not None
-                assert engine.config.name == "yaml-integration"
-            finally:
-                Path(f.name).unlink()
+            assert engine is not None
+            assert engine.config.name == "yaml-integration"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     @pytest.mark.asyncio
     async def test_template_customization_workflow(self):

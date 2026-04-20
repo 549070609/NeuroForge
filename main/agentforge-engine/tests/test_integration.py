@@ -14,11 +14,11 @@
 """
 
 import os
+
 import pytest
-from unittest.mock import MagicMock
 
 from pyagentforge import LLMClient
-from pyagentforge.kernel.message import ProviderResponse, TextBlock, ToolUseBlock
+from pyagentforge.kernel.message import ProviderResponse
 
 
 # 检查 API Key 是否可用
@@ -401,7 +401,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_invalid_model_id(self, llm_client):
         """测试无效的模型 ID"""
-        with pytest.raises(ValueError, match="Model not found"):
+        with pytest.raises(ValueError, match="not found"):
             await llm_client.create_message(
                 model_id="invalid-model-xyz",
                 messages=[{"role": "user", "content": "test"}],

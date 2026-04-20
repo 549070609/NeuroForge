@@ -124,7 +124,7 @@ Result:
 {result}
 """
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return f"Error: Agent '{agent_type}' timed out after {timeout} seconds"
 
         except Exception as e:

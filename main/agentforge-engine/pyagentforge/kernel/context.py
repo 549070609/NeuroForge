@@ -20,6 +20,8 @@ class ContextManager:
         self,
         max_messages: int = 100,
         system_prompt: str | None = None,
+        session_id: str | None = None,
+        enable_memory: bool = True,
     ):
         """
         初始化上下文管理器
@@ -30,6 +32,8 @@ class ContextManager:
         """
         self.max_messages = max_messages
         self.system_prompt = system_prompt
+        self.session_id = session_id
+        self.enable_memory = enable_memory
         self.messages: list[Message] = []
         self._loaded_skills: set[str] = set()
 
@@ -97,12 +101,15 @@ class ContextManager:
         Returns:
             截断的消息数量
         """
-        keep = keep_last or self.max_messages
+        keep = self.max_messages if keep_last is None else keep_last
         if len(self.messages) <= keep:
             return 0
 
         removed = len(self.messages) - keep
-        self.messages = self.messages[-keep:]
+        if keep == 0:
+            self.messages = []
+        else:
+            self.messages = self.messages[-keep:]
         logger.info(f"Truncated messages: removed={removed}, remaining={len(self.messages)}")
         return removed
 

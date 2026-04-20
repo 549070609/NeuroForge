@@ -8,8 +8,8 @@ from pyagentforge.plugins.integration.task_persistence.PLUGIN import (
     TaskPersistencePlugin,
 )
 from pyagentforge.plugins.integration.task_persistence.task_store import (
-    TaskStore,
     StoredTask,
+    TaskStore,
 )
 
 __all__ = [

@@ -9,8 +9,6 @@ import asyncio
 from pyagentforge.mcp import (
     MCPClient,
     MCPClientManager,
-    MCPConfig,
-    TransportType,
 )
 
 
@@ -168,7 +166,7 @@ async def example_tool_wrapper():
         return
 
     # 列出工具并创建包装器
-    tools = await client.list_tools()
+    await client.list_tools()
     wrappers = client.get_all_tool_wrappers()
 
     # 将 MCP 工具注册到本地工具注册表

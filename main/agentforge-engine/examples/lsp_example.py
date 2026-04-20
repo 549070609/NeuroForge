@@ -5,14 +5,13 @@ LSP 使用示例
 """
 
 import asyncio
-from pathlib import Path
 
 from pyagentforge.lsp import (
+    LSP_SERVER_CONFIGS,
     LSPClient,
     LSPManager,
     LSPServerConfig,
     Position,
-    LSP_SERVER_CONFIGS,
 )
 
 

@@ -11,10 +11,10 @@ Channel Adapters - 消息通道适配器
 """
 
 from pyagentforge.capabilities.channels.base import (
-    ChannelStatus,
-    ChannelMessage,
-    SendMessageResult,
     BaseChannel,
+    ChannelMessage,
+    ChannelStatus,
+    SendMessageResult,
 )
 
 __all__ = [

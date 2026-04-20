@@ -5,14 +5,14 @@ LSP 客户端实现
 """
 
 import asyncio
+import contextlib
 import json
 import os
-import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any
 
 from pyagentforge.lsp.protocol import (
-    ClientCapabilities,
     CompletionItem,
     CompletionList,
     Diagnostic,
@@ -21,14 +21,10 @@ from pyagentforge.lsp.protocol import (
     Location,
     LocationLink,
     LSPServerConfig,
-    LSP_SERVER_CONFIGS,
     Position,
     Range,
     ServerCapabilities,
     SymbolInformation,
-    TextDocumentIdentifier,
-    TextDocumentPositionParams,
-    WorkspaceFolder,
 )
 from pyagentforge.utils.logging import get_logger
 
@@ -143,17 +139,15 @@ class LSPClient:
         # 取消读取任务
         if self._reader_task:
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
 
         # 终止进程
         if self._process:
             try:
                 self._process.terminate()
                 await asyncio.wait_for(self._process.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._process.kill()
                 await self._process.wait()
             except Exception:
@@ -177,9 +171,8 @@ class LSPClient:
         if self._initialized:
             return True
 
-        if not self._process:
-            if not await self.start():
-                return False
+        if not self._process and not await self.start():
+            return False
 
         # 构建初始化参数
         root_uri = self.workspace_root.as_uri()
@@ -263,7 +256,7 @@ class LSPClient:
         uri = path.as_uri()
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 text = f.read()
         except Exception as e:
             logger.error(
@@ -606,12 +599,12 @@ class LSPClient:
 
             return await asyncio.wait_for(future, timeout=30)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_requests.pop(request_id, None)
-            raise LSPError(f"Request timed out: {method}")
+            raise LSPError(f"Request timed out: {method}") from None
         except Exception as e:
             self._pending_requests.pop(request_id, None)
-            raise LSPError(f"Request failed: {e}")
+            raise LSPError(f"Request failed: {e}") from e
 
     async def _send_notification(
         self,

@@ -6,25 +6,25 @@ the system meets performance requirements under various load conditions.
 """
 
 import asyncio
+import contextlib
 import time
+from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
-from dataclasses import dataclass, field
 
 import pytest
 
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
+from pyagentforge.kernel.concurrency_manager import ConcurrencyConfig, ConcurrencyManager
 from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.message import (
+    ProviderResponse,
     TextBlock,
     ToolUseBlock,
-    ProviderResponse,
 )
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
-from pyagentforge.core.concurrency_manager import ConcurrencyManager, ConcurrencyConfig
+from pyagentforge.tools.registry import ToolRegistry
 from tests.test_config import PerformanceMetrics, TestConfig
-
 
 # ============================================================================
 # Performance Test Utilities
@@ -79,10 +79,8 @@ async def benchmark_async(
 
     # Warmup iterations
     for _ in range(warmup):
-        try:
+        with contextlib.suppress(Exception):
             await func(**kwargs)
-        except Exception:
-            pass
 
     # Benchmark iterations
     for _ in range(iterations):
@@ -403,7 +401,7 @@ class TestToolExecutionPerformance:
 
         # Tool execution should be very fast
         assert result.avg_time < 0.001, f"Tool avg time < 1ms, got {result.avg_time * 1000:.4f}ms"
-        assert result.ops_per_second > 1000, f"Should handle > 1000 tool calls/sec"
+        assert result.ops_per_second > 1000, "Should handle > 1000 tool calls/sec"
 
 
 # ============================================================================
@@ -463,7 +461,7 @@ class TestStressScenarios:
         # Run in batches to simulate sustained load
         batch_times = []
 
-        for batch in range(10):
+        for _batch in range(10):
             start = time.perf_counter()
 
             for _ in range(10):

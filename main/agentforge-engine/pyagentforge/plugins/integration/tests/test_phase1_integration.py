@@ -7,20 +7,20 @@ Tests the interaction between:
 - Background Manager
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC
+from unittest.mock import AsyncMock
 
+import pytest
+
+from pyagentforge.kernel.background_manager import BackgroundManager
 from pyagentforge.plugins.integration.task_system import (
     TaskManagementPlugin,
-    TaskManager,
     TaskStatus,
-    TaskPriority,
 )
 from pyagentforge.plugins.integration.todo_continuation import (
     TodoContinuationEnforcerPlugin,
 )
-from pyagentforge.core.background_manager import BackgroundManager
 
 
 class TestTodoTaskSystemIntegration:
@@ -44,7 +44,7 @@ class TestTodoTaskSystemIntegration:
 
         # Create a task in TaskSystem
         task_manager = task_plugin.task_manager
-        task = task_manager.create_task(
+        task_manager.create_task(
             title="Test Task",
             description="A task to complete",
         )
@@ -131,13 +131,13 @@ class TestBackgroundManagerIntegration:
             background_manager.set_engine_factory(mock_engine)
 
             # Launch multiple tasks quickly
-            task1 = await background_manager.launch(
+            await background_manager.launch(
                 agent_type="test",
                 prompt="Task 1",
                 session_id="session-1",
             )
 
-            task2 = await background_manager.launch(
+            await background_manager.launch(
                 agent_type="test",
                 prompt="Task 2",
                 session_id="session-1",
@@ -160,7 +160,7 @@ class TestBackgroundManagerIntegration:
     @pytest.mark.asyncio
     async def test_format_batch_notification(self, background_manager):
         """Test batch notification formatting"""
-        from pyagentforge.core.background_manager import BackgroundTask, TaskStatus
+        from pyagentforge.kernel.background_manager import BackgroundTask, TaskStatus
 
         tasks = [
             BackgroundTask(
@@ -194,10 +194,11 @@ class TestBackgroundManagerIntegration:
 
         try:
             # Create a mock stale task
-            from datetime import datetime, timedelta, timezone
-            from pyagentforge.core.background_manager import BackgroundTask, TaskStatus
+            from datetime import datetime, timedelta
 
-            old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+            from pyagentforge.kernel.background_manager import BackgroundTask, TaskStatus
+
+            old_time = datetime.now(UTC) - timedelta(hours=2)
 
             stale_task = BackgroundTask(
                 id="stale-1",
@@ -257,7 +258,7 @@ class TestEndToEnd:
 
             bg_manager.set_engine_factory(mock_engine)
 
-            bg_task = await bg_manager.launch(
+            await bg_manager.launch(
                 agent_type="coder",
                 prompt="Implement the feature",
                 session_id="session-1",

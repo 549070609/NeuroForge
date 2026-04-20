@@ -2,20 +2,21 @@
 插件配置系统
 """
 
-import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+import yaml
 
 
 @dataclass
 class PluginConfig:
     """插件配置"""
     preset: str = "minimal"  # minimal, standard, full
-    enabled: List[str] = field(default_factory=list)
-    disabled: List[str] = field(default_factory=list)
-    plugin_dirs: List[str] = field(default_factory=lambda: ["plugins"])
-    config: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    enabled: list[str] = field(default_factory=list)
+    disabled: list[str] = field(default_factory=list)
+    plugin_dirs: list[str] = field(default_factory=lambda: ["plugins"])
+    config: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # 自动发现配置
     auto_discover: bool = True                    # 是否启用自动发现
@@ -44,7 +45,7 @@ class PluginConfig:
         )
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PluginConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "PluginConfig":
         """从字典创建配置"""
         return cls(
             preset=data.get("preset", "minimal"),
@@ -57,7 +58,7 @@ class PluginConfig:
             auto_discover_dir=data.get("auto_discover_dir", ".agent/plugins"),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "preset": self.preset,
@@ -70,7 +71,7 @@ class PluginConfig:
             "auto_discover_dir": self.auto_discover_dir,
         }
 
-    def get_effective_plugins(self) -> List[str]:
+    def get_effective_plugins(self) -> list[str]:
         """获取最终启用的插件列表"""
         from pyagentforge.plugin.manager import PluginManager
 
@@ -82,7 +83,7 @@ class PluginConfig:
         effective = (preset_plugins | set(self.enabled)) - set(self.disabled)
         return list(effective)
 
-    def get_plugin_config(self, plugin_id: str) -> Dict[str, Any]:
+    def get_plugin_config(self, plugin_id: str) -> dict[str, Any]:
         """获取特定插件的配置"""
         return self.config.get(plugin_id, {})
 

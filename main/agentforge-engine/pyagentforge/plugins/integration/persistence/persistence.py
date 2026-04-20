@@ -5,11 +5,11 @@
 """
 
 import json
-import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -195,7 +195,7 @@ class SessionPersistence:
         if not self.messages_file.exists():
             return
 
-        with open(self.messages_file, "r", encoding="utf-8") as f:
+        with open(self.messages_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -214,7 +214,7 @@ class SessionPersistence:
             return 0
 
         count = 0
-        with open(self.messages_file, "r", encoding="utf-8") as f:
+        with open(self.messages_file, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     count += 1

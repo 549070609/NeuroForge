@@ -5,7 +5,6 @@ Provides AST-based code analysis for Python.
 """
 
 import ast
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -204,7 +203,6 @@ class PythonASTAnalyzer:
                 decorators.append(ast.unparse(decorator) if hasattr(ast, "unparse") else str(decorator.attr))
 
         # Determine if method (inside a class)
-        is_method = False
         # This requires context from parent traversal
 
         return DefinitionInfo(

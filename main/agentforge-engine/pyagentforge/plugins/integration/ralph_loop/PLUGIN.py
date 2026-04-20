@@ -6,14 +6,14 @@ Auto-continuation plugin that keeps the agent working until task completion.
 
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.ralph_loop import CompletionChecker, LoopStatus
+from pyagentforge.plugins.integration.ralph_loop.ralph_loop import CompletionChecker
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.plugins.integration.ralph_loop.engine import RalphLoopEngine
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 

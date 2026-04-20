@@ -4,25 +4,20 @@ Tests for CategoryRegistry
 Tests task classification, category management, and classifier integration.
 """
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from pyagentforge.core.category import (
+from pyagentforge.plugins.integration.category_system.category import (
     BUILTIN_CATEGORIES,
     Category,
     TaskComplexity,
-    get_categories_by_complexity,
-    get_category,
-    get_sorted_categories,
 )
-from pyagentforge.core.category_registry import (
+from pyagentforge.plugins.integration.category_system.category_registry import (
     CategoryRegistry,
     ClassificationResult,
     get_category_registry,
 )
-
 
 # ============================================================================
 # Fixtures
@@ -206,8 +201,7 @@ def test_classify_context_aware(registry):
     registry.enable_context_aware(True)
 
     # Without context - might not match
-    result1 = registry.classify("find the information")
-    result1_category = result1.category.name if result1.category else None
+    registry.classify("find the information")
 
     # With context containing additional keywords
     result2 = registry.classify(
@@ -725,8 +719,8 @@ def test_word_boundary_matching(registry):
     # "code" keyword should match "code" but not "codebase" or "encode"
     # This tests the regex pattern \bkeyword\b
     result1 = registry.classify("write some code")
-    result2 = registry.classify("check the codebase")
-    result3 = registry.classify("encode the data")
+    registry.classify("check the codebase")
+    registry.classify("encode the data")
 
     # "code" should definitely match
     assert "code" in result1.matched_keywords

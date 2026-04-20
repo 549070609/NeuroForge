@@ -5,15 +5,14 @@ WebChat Channel - Web 聊天通道实现
 对外 REST/WebSocket 入口由 `main/Service` 网关统一承载。
 """
 
-from typing import Any, Optional
-from datetime import datetime
 import uuid
-import asyncio
+from datetime import datetime
+from typing import Any
 
 from pyagentforge.capabilities.channels.base import (
     BaseChannel,
-    ChannelStatus,
     ChannelMessage,
+    ChannelStatus,
     SendMessageResult,
 )
 from pyagentforge.utils.logging import get_logger
@@ -169,7 +168,6 @@ class WebChatChannel(BaseChannel):
                 }
 
                 # 发送 JSON 消息
-                import json
                 await ws.send_json(message)
 
                 logger.debug(
@@ -227,7 +225,7 @@ class WebChatChannel(BaseChannel):
 
     # === WebChat 特有方法 ===
 
-    def create_session(self, session_id: Optional[str] = None) -> str:
+    def create_session(self, session_id: str | None = None) -> str:
         """
         创建新会话
 
@@ -304,7 +302,7 @@ class WebChatChannel(BaseChannel):
         self,
         session_id: str,
         content: str,
-        sender: Optional[str] = None
+        sender: str | None = None
     ) -> None:
         """
         接收来自客户端的消息

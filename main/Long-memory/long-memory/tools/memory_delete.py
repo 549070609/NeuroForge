@@ -2,11 +2,15 @@
 记忆删除工具
 """
 
-from typing import Any, Dict, List, Optional
-from pyagentforge.kernel.base_tool import BaseTool
+from typing import List, Optional
+from pyagentforge.tools.base import BaseTool
 
-from ..vector_store import ChromaVectorStore
-from ..config import LongMemoryConfig
+try:
+    from ..vector_store import ChromaVectorStore
+    from ..config import LongMemoryConfig
+except ImportError:
+    from vector_store import ChromaVectorStore
+    from config import LongMemoryConfig
 
 
 class MemoryDeleteTool(BaseTool):
@@ -43,7 +47,7 @@ class MemoryDeleteTool(BaseTool):
             "confirm": {
                 "type": "boolean",
                 "description": "确认删除，必须为 true",
-                "default": false
+                "default": False
             }
         },
         "required": ["confirm"]

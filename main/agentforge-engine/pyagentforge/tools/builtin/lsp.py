@@ -6,7 +6,7 @@ LSP 工具
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.tools.permission import PermissionChecker, PermissionResult
@@ -14,27 +14,30 @@ from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+if TYPE_CHECKING:
+    from pyagentforge.lsp.manager import LSPManager
+
 
 class LSPTool(BaseTool):
-    """LSP 工具 - 语言服务协议"""
+    """"""
 
     name = "lsp"
-    description = """语言服务协议工具。
+    description = """璇█鏈嶅姟鍗忚宸ュ叿銆?
 
-提供代码智能功能:
-- goto_definition: 跳转到定义
-- find_references: 查找引用
-- rename: 重命名符号
-- hover: 获取类型信息
-- completion: 代码补全
-- document_symbols: 文档符号列表
-- workspace_symbols: 工作区符号搜索
-- format: 格式化文档
-- diagnostics: 获取诊断信息
+鎻愪緵浠ｇ爜鏅鸿兘鍔熻兘:
+- goto_definition: 璺宠浆鍒板畾涔?
+- find_references: 鏌ユ壘寮曠敤
+- rename: 閲嶅懡鍚嶇鍙?
+- hover: 鑾峰彇绫诲瀷淇伅
+- completion: 浠ｇ爜琛ュ叏
+- document_symbols: 鏂囨。绗﹀彿鍒楄〃
+- workspace_symbols: 宸ヤ綔鍖虹鍙锋悳绱?
+- format: 鏍煎紡鍖栨枃妗?
+- diagnostics: 鑾峰彇璇婃柇淇伅
 
-支持多种语言: Python, TypeScript, Go, Rust, C++, Java, C#, Ruby, PHP, Lua, JSON, YAML 等
+鏀寔澶氱璇█: Python, TypeScript, Go, Rust, C++, Java, C#, Ruby, PHP, Lua, JSON, YAML 绛?
 
-注意: 需要安装对应的 LSP 服务器:
+娉ㄦ剰: 闇瑕佸畨瑁呭搴旂殑 LSP 鏈嶅姟鍣?
 - Python: pip install python-lsp-server
 - TypeScript: npm install -g typescript-language-server
 - Go: go install golang.org/x/tools/gopls@latest
@@ -56,31 +59,31 @@ class LSPTool(BaseTool):
                     "format",
                     "diagnostics",
                 ],
-                "description": "要执行的操作",
+                "description": "瑕佹墽琛岀殑鎿嶄綔",
             },
             "file_path": {
                 "type": "string",
-                "description": "文件路径",
+                "description": "鏂囦欢璺緞",
             },
             "line": {
                 "type": "integer",
-                "description": "行号 (1-indexed)",
+                "description": "琛屽彿 (1-indexed)",
             },
             "column": {
                 "type": "integer",
-                "description": "列号 (1-indexed)",
+                "description": "鍒楀彿 (1-indexed)",
             },
             "new_name": {
                 "type": "string",
-                "description": "新名称 (用于 rename 操作)",
+                "description": "鏂板悕绉?(鐢ㄤ簬 rename 鎿嶄綔)",
             },
             "query": {
                 "type": "string",
-                "description": "搜索查询 (用于 workspace_symbols)",
+                "description": "鎼滅储鏌ヨ (鐢ㄤ簬 workspace_symbols)",
             },
             "language": {
                 "type": "string",
-                "description": "语言类型 (自动检测如果未指定)",
+                "description": "璇█绫诲瀷 (鑷姩妫娴嬪鏋滄湭鎸囧畾)",
             },
         },
         "required": ["action", "file_path"],
@@ -88,7 +91,7 @@ class LSPTool(BaseTool):
     timeout = 60
     risk_level = "low"
 
-    # 类变量：共享 LSP 管理器
+    # 绫诲彉閲忥細鍏变韩 LSP 绠＄悊鍣?
     _lsp_manager = None
     _manager_lock = asyncio.Lock()
 
@@ -110,11 +113,11 @@ class LSPTool(BaseTool):
             return LSPTool._lsp_manager
 
     def _detect_language(self, file_path: str) -> str | None:
-        """根据文件扩展名检测语言"""
+        """"""
         from pyagentforge.lsp.protocol import LSP_SERVER_CONFIGS
 
         ext = Path(file_path).suffix.lower()
-        for lang, config in LSP_SERVER_CONFIGS.items():
+        for _lang, config in LSP_SERVER_CONFIGS.items():
             if ext in config.extensions:
                 return config.language
         return None
@@ -129,7 +132,7 @@ class LSPTool(BaseTool):
         query: str | None = None,
         language: str | None = None,
     ) -> str:
-        """执行 LSP 操作"""
+        """"""
         logger.info(
             "Executing LSP action",
             extra_data={"action": action, "file_path": file_path},
@@ -137,16 +140,18 @@ class LSPTool(BaseTool):
 
         path = Path(file_path)
 
-        # 检查权限
-        if self.permission_checker:
-            if self.permission_checker.check_path(str(path)) == PermissionResult.DENY:
-                return f"Error: Access to path '{file_path}' is denied"
+        #
+        if (
+            self.permission_checker
+            and self.permission_checker.check_path(str(path)) == PermissionResult.DENY
+        ):
+            return f"Error: Access to path '{file_path}' is denied"
 
-        # 检查文件存在（除了 workspace_symbols）
+        #
         if action != "workspace_symbols" and not path.exists():
             return f"Error: File '{file_path}' does not exist"
 
-        # 检测语言
+        #
         if not language:
             language = self._detect_language(file_path)
             if not language and action != "workspace_symbols":
@@ -198,7 +203,7 @@ class LSPTool(BaseTool):
         if line is None:
             return "Error: line number required"
 
-        # LSP 使用 0-indexed
+        # LSP 浣跨敤 0-indexed
         locations = await manager.goto_definition(
             str(path),
             line - 1,
@@ -213,7 +218,7 @@ class LSPTool(BaseTool):
             if hasattr(loc, 'uri'):
                 uri = loc.uri
                 range_info = loc.range
-                start_line = range_info.start.line + 1  # 转换为 1-indexed
+                start_line = range_info.start.line + 1  # 杞崲涓?1-indexed
                 start_col = range_info.start.character + 1
                 output.append(f"  {uri}:{start_line}:{start_col}")
             else:
@@ -228,7 +233,7 @@ class LSPTool(BaseTool):
         line: int | None,
         column: int | None,
     ) -> str:
-        """查找引用"""
+        """鏌ユ壘寮曠敤"""
         if line is None:
             return "Error: line number required"
 
@@ -251,7 +256,7 @@ class LSPTool(BaseTool):
             else:
                 output.append(f"  {loc}")
 
-        # 限制输出
+        # 闄愬埗杈撳嚭
         if len(output) > 50:
             output = output[:50]
             output.append(f"  ... and {len(locations) - 49} more")
@@ -265,7 +270,7 @@ class LSPTool(BaseTool):
         line: int | None,
         column: int | None,
     ) -> str:
-        """获取悬停信息"""
+        """"""
         if line is None:
             return "Error: line number required"
 
@@ -278,7 +283,7 @@ class LSPTool(BaseTool):
         if not hover:
             return "No hover information available"
 
-        # 解析悬停内容
+        #
         content = hover.contents
         if isinstance(content, str):
             return content
@@ -296,7 +301,7 @@ class LSPTool(BaseTool):
         line: int | None,
         column: int | None,
     ) -> str:
-        """代码补全"""
+        """浠ｇ爜琛ュ叏"""
         if line is None or column is None:
             return "Error: line and column required for completion"
 
@@ -310,7 +315,7 @@ class LSPTool(BaseTool):
             return "No completions available"
 
         output = ["Completions:", "-" * 40]
-        for item in items[:50]:  # 限制数量
+        for item in items[:50]:  # 闄愬埗鏁伴噺
             label = item.label
             kind = item.kind.name if item.kind else "Unknown"
             detail = f" - {item.detail}" if item.detail else ""
@@ -326,7 +331,7 @@ class LSPTool(BaseTool):
         manager: Any,
         path: Path,
     ) -> str:
-        """获取文档符号"""
+        """鑾峰彇鏂囨。绗﹀彿"""
         symbols = await manager.document_symbols(str(path))
 
         if not symbols:
@@ -340,7 +345,7 @@ class LSPTool(BaseTool):
             prefix = "  " * indent
             output.append(f"{prefix}{kind:12} line {line:4}: {symbol.name}")
 
-            # 递归处理子符号
+            #
             if hasattr(symbol, 'children') and symbol.children:
                 for child in symbol.children:
                     format_symbol(child, indent + 1)
@@ -356,7 +361,7 @@ class LSPTool(BaseTool):
         query: str | None,
         language: str | None,
     ) -> str:
-        """工作区符号搜索"""
+        """搜索工作区符号"""
         if not query:
             return "Error: query is required for workspace_symbols action"
 
@@ -402,7 +407,7 @@ class LSPTool(BaseTool):
         if not workspace_edit:
             return "Rename not available or no changes needed"
 
-        # 解析工作区编辑
+        # 瑙ｆ瀽宸ヤ綔鍖虹紪杈?
         changes = workspace_edit.get("changes", {})
         if not changes:
             return "No changes to apply"
@@ -460,10 +465,10 @@ class LSPTool(BaseTool):
         path: Path,
     ) -> str:
         """获取诊断信息"""
-        # 确保文件已打开
+        #
         await manager.open_file(str(path))
 
-        # 等待诊断（LSP 是异步的）
+        #
         await asyncio.sleep(1)
 
         output = [f"Diagnostics for {path.name}:", "-" * 40]
@@ -473,3 +478,4 @@ class LSPTool(BaseTool):
         output.append("set_diagnostics_handler() method.")
 
         return "\n".join(output)
+

@@ -4,7 +4,6 @@ Events Plugin
 提供事件总线功能
 """
 
-import logging
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 
 

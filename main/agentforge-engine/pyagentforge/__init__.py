@@ -16,101 +16,33 @@ __author__ = "PyAgentForge Team"
 from pyagentforge.client import LLMClient
 
 # ============================================================================
-# Kernel exports (v2.0 - 新架构)
-# ============================================================================
-from pyagentforge.kernel import (
-    AgentEngine,
-    ContextManager,
-    ToolExecutor,
-    ToolRegistry,
-    Message,
-    TextBlock,
-    ToolUseBlock,
-    ToolResultBlock,
-    ThinkingBlock,
-    ProviderResponse,
-    BaseTool,
-)
-
-# ============================================================================
-# AgentConfig — 直接从 kernel.engine 导出（Service 层高频使用）
-# ============================================================================
-from pyagentforge.kernel.engine import AgentConfig
-
-# ============================================================================
-# 工具注册工具函数
-# ============================================================================
-from pyagentforge.kernel.core_tools import (
-    register_core_tools,
-    BashTool,
-    ReadTool,
-    WriteTool,
-    EditTool,
-    GlobTool,
-    GrepTool,
-)
-
-# ============================================================================
-# 内置工具类（全量导出，Service 层按需使用）
-# ============================================================================
-from pyagentforge.tools.builtin import (
-    LsTool,
-    LSPTool,
-    QuestionTool,
-    ConfirmTool,
-    CodeSearchTool,
-    ApplyPatchTool,
-    DiffTool,
-    PlanTool,
-    PlanEnterTool,
-    PlanExitTool,
-    TruncationTool,
-    ContextCompactTool,
-    InvalidTool,
-    ToolSuggestionTool,
-    ExternalDirectoryTool,
-    WorkspaceTool,
-    WebFetchTool,
-    WebSearchTool,
-    TodoWriteTool,
-    TodoReadTool,
-    MultiEditTool,
-    BatchTool,
-    TaskTool,
-)
-
-# ============================================================================
-# Plugin system exports (v2.0 - 新架构)
-# ============================================================================
-from pyagentforge.plugin import (
-    Plugin,
-    PluginMetadata,
-    PluginContext,
-    PluginType,
-    PluginManager,
-    HookType,
-)
-
-# ============================================================================
 # Configuration (v2.0 - 新架构)
 # ============================================================================
 from pyagentforge.config.plugin_config import PluginConfig
 
 # ============================================================================
-# 模型注册（ModelRegistry, ModelConfig）
+# 配置管理
 # ============================================================================
-from pyagentforge.kernel.model_registry import (
-    ModelRegistry,
-    ModelConfig,
-    get_registry,
-    register_model,
-    get_model,
-)
+from pyagentforge.config.settings import get_settings as get_engine_settings
+from pyagentforge.kernel.background_manager import BackgroundManager
+from pyagentforge.kernel.concurrency_manager import ConcurrencyConfig, ConcurrencyManager
 
 # ============================================================================
-# 权限检查（PermissionChecker — Service 层 permission_bridge 使用）
+# Kernel exports (v2.0 - 新架构)
 # ============================================================================
-from pyagentforge.kernel.executor import PermissionChecker
+from pyagentforge.kernel import (
+    AgentEngine,
+    BaseTool,
+    ContextManager,
+    Message,
+    ProviderResponse,
+    TextBlock,
+    ThinkingBlock,
+    ToolExecutor,
+    ToolRegistry,
+    ToolResultBlock,
+    ToolUseBlock,
+)
 
 # ============================================================================
 # Checkpoint 系统
@@ -123,24 +55,110 @@ from pyagentforge.kernel.checkpoint import (
 )
 
 # ============================================================================
-# Workflow 编排系统
+# AgentConfig — 直接从 kernel.engine 导出（Service 层高频使用）
 # ============================================================================
+from pyagentforge.kernel.engine import AgentConfig
+
+# ============================================================================
+# 权限检查（PermissionChecker — Service 层 permission_bridge 使用）
+# ============================================================================
+from pyagentforge.kernel.executor import PermissionChecker
+
+# ============================================================================
+# 模型注册（ModelRegistry, ModelConfig）
+# ============================================================================
+from pyagentforge.kernel.hooks import (
+    HookContext,
+    RequestInterceptor,
+    RequestPayload,
+    ResponseTransformer,
+    StreamTransformer,
+    clear_all_hooks,
+    match_any,
+    match_api_type,
+    match_model_prefix,
+    match_provider,
+    register_request_interceptor,
+    register_response_transformer,
+    register_stream_transformer,
+)
+from pyagentforge.kernel.model_registry import (
+    ModelConfig,
+    ModelRegistry,
+    get_model,
+    get_registry,
+    register_model,
+)
+from pyagentforge.protocols import (
+    BaseProtocolAdapter,
+    ProtocolAdapterRegistry,
+    StreamEvent,
+    get_protocol_adapter,
+    register_protocol_adapter,
+)
+
+# ============================================================================
+# Plugin system exports (v2.0 - 新架构)
+# ============================================================================
+from pyagentforge.plugin import (
+    HookType,
+    Plugin,
+    PluginContext,
+    PluginManager,
+    PluginMetadata,
+    PluginType,
+)
+
+# ============================================================================
+# 内置工具类（全量导出，Service 层按需使用）
+# ============================================================================
+from pyagentforge.tools.builtin import (
+    ApplyPatchTool,
+    BashTool,
+    BatchTool,
+    CodeSearchTool,
+    ConfirmTool,
+    ContextCompactTool,
+    DiffTool,
+    EditTool,
+    ExternalDirectoryTool,
+    GlobTool,
+    GrepTool,
+    InvalidTool,
+    LSPTool,
+    LsTool,
+    MultiEditTool,
+    PlanEnterTool,
+    PlanExitTool,
+    PlanTool,
+    QuestionTool,
+    ReadTool,
+    TaskTool,
+    TodoReadTool,
+    TodoWriteTool,
+    ToolSuggestionTool,
+    TruncationTool,
+    WebFetchTool,
+    WebSearchTool,
+    WorkspaceTool,
+    WriteTool,
+    register_core_tools,
+)
 from pyagentforge.workflow import (
-    WorkflowGraph,
-    WorkflowExecutor,
-    WorkflowResult,
-    StepNode,
-    StepTrace,
-    EngineFactory,
     END as WORKFLOW_END,
 )
 
 # ============================================================================
-# 配置管理
+# Workflow 编排系统
 # ============================================================================
-from pyagentforge.config.settings import get_settings as get_engine_settings
-from pyagentforge.core.background_manager import BackgroundManager
-from pyagentforge.core.concurrency_manager import ConcurrencyConfig, ConcurrencyManager
+from pyagentforge.workflow import (
+    EngineFactory,
+    StepNode,
+    StepTrace,
+    WorkflowExecutor,
+    WorkflowGraph,
+    WorkflowResult,
+)
 
 __all__ = [
     # Version
@@ -207,6 +225,26 @@ __all__ = [
     "get_registry",
     "register_model",
     "get_model",
+    # Hooks (LLM 请求/响应/流式扩展点)
+    "HookContext",
+    "RequestPayload",
+    "RequestInterceptor",
+    "ResponseTransformer",
+    "StreamTransformer",
+    "register_request_interceptor",
+    "register_response_transformer",
+    "register_stream_transformer",
+    "clear_all_hooks",
+    "match_any",
+    "match_api_type",
+    "match_model_prefix",
+    "match_provider",
+    # Protocol adapter registry
+    "BaseProtocolAdapter",
+    "ProtocolAdapterRegistry",
+    "StreamEvent",
+    "register_protocol_adapter",
+    "get_protocol_adapter",
     # 权限检查
     "PermissionChecker",
     # 配置

@@ -2,7 +2,7 @@
 Task Management System Plugin
 """
 
-from .PLUGIN import TaskManagementPlugin, TaskManager, Task, TaskStatus, TaskPriority
+from .PLUGIN import Task, TaskManagementPlugin, TaskManager, TaskPriority, TaskStatus
 
 __all__ = [
     "TaskManagementPlugin",

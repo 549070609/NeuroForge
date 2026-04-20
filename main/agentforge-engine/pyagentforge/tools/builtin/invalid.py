@@ -132,7 +132,7 @@ class ToolSuggestionTool(BaseTool):
             output.append(f"  Matched: '{matched_keyword}'")
 
         if len(suggestions) > 1:
-            output.append(f"\nMultiple tools may be applicable. Choose based on your specific needs.")
+            output.append("\nMultiple tools may be applicable. Choose based on your specific needs.")
 
         return "\n".join(output)
 

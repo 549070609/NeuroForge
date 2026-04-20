@@ -4,14 +4,14 @@
 提供结构化的思考过程指导 Agent 解决问题。
 """
 
-from .PLUGIN import ChainOfThoughtPlugin
 from .cot_manager import ChainOfThoughtManager
 from .models import (
     ChainOfThought,
-    CoTPhase,
     ConstraintType,
     ConstraintViolation,
+    CoTPhase,
 )
+from .PLUGIN import ChainOfThoughtPlugin
 
 __all__ = [
     "ChainOfThoughtPlugin",

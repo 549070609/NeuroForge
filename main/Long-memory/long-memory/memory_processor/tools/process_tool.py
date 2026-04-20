@@ -4,8 +4,7 @@
 处理指定记忆 ID 的加工
 """
 
-from typing import Optional
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
 from ..processor_engine import ProcessorEngine
 

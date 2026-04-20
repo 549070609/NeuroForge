@@ -3,7 +3,7 @@
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 import sys
 import os
 
@@ -193,7 +193,7 @@ class TestProcessResult:
 
     def test_to_dict_success(self):
         """测试成功结果转换"""
-        from long_memory.models import MemoryEntry
+        from models import MemoryEntry
 
         original = MemoryEntry(
             id="mem_test123",
@@ -265,7 +265,7 @@ class TestProcessorEngine:
     @pytest.mark.asyncio
     async def test_process_memory(self, engine, mock_store):
         """测试单条记忆加工"""
-        from long_memory.models import MemoryEntry
+        from models import MemoryEntry
 
         entry = MemoryEntry(
             id="mem_test",
@@ -295,7 +295,7 @@ class TestProcessorEngine:
     @pytest.mark.asyncio
     async def test_reprocess_unprocessed(self, engine, mock_store):
         """测试批量重加工"""
-        from long_memory.models import MemoryEntry
+        from models import MemoryEntry
 
         entries = [
             MemoryEntry(id=f"mem_{i}", content=f"测试内容 {i}", topic="", tags=[], summary="")

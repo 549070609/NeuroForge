@@ -6,21 +6,21 @@ and system integration from start to finish.
 """
 
 import asyncio
-import pytest
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from pathlib import Path
 
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
+import pytest
+
 from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.message import (
+    ProviderResponse,
     TextBlock,
     ToolUseBlock,
-    ProviderResponse,
 )
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
-
+from pyagentforge.tools.registry import ToolRegistry
 
 # ============================================================================
 # Mock Components for E2E Tests

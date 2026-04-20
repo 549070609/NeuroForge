@@ -5,10 +5,11 @@ Automation Scheduler - 自动化调度器
 import asyncio
 import hashlib
 import hmac
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
-from pyagentforge.automation.task import TriggerType, AutomationTask
+from pyagentforge.automation.task import AutomationTask, TriggerType
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -83,7 +84,7 @@ class AutomationManager:
         task_id: str,
         cron_expr: str,
         action: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         **kwargs: Any
     ) -> AutomationTask:
         """
@@ -131,7 +132,7 @@ class AutomationManager:
         self,
         path: str,
         handler: Callable,
-        secret: Optional[str] = None
+        secret: str | None = None
     ) -> None:
         """
         添加 Webhook 处理器
@@ -155,8 +156,8 @@ class AutomationManager:
         task_id: str,
         event_type: str,
         action: str,
-        name: Optional[str] = None,
-        condition: Optional[Callable[[dict], bool]] = None,
+        name: str | None = None,
+        condition: Callable[[dict], bool] | None = None,
         **kwargs: Any
     ) -> AutomationTask:
         """
@@ -271,7 +272,7 @@ class AutomationManager:
         """列出所有任务"""
         return list(self._tasks.values())
 
-    def get_task(self, task_id: str) -> Optional[AutomationTask]:
+    def get_task(self, task_id: str) -> AutomationTask | None:
         """获取指定任务"""
         return self._tasks.get(task_id)
 
@@ -294,9 +295,9 @@ class AutomationManager:
             logger.info(f"Executing task: {task_id}")
 
             if self.engine:
-                result = await self.engine.run(task.action)
+                await self.engine.run(task.action)
             else:
-                result = None
+                pass
 
             task.last_run = datetime.now()
             task.run_count += 1

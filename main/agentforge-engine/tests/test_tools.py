@@ -4,10 +4,10 @@
 
 import pytest
 
-from pyagentforge.tools.permission import PermissionChecker, PermissionConfig, PermissionResult
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.builtin.bash import BashTool
 from pyagentforge.tools.builtin.read import ReadTool
+from pyagentforge.tools.permission import PermissionChecker, PermissionConfig, PermissionResult
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class TestToolRegistry:
@@ -114,4 +114,13 @@ class TestBashTool:
         tool = BashTool()
         result = await tool.execute(command="nonexistent_command_12345")
 
-        assert "Error" in result or "not found" in result.lower()
+        lowered = result.lower()
+        # 非零退出码或 stderr 标记都属于失败信号；在非英文 Windows 控制台下，
+        # 本地化错误信息可能因编码丢失而无法匹配 "not found"/"not recognized"。
+        assert (
+            "error" in lowered
+            or "not found" in lowered
+            or "not recognized" in lowered
+            or "[stderr]" in lowered
+            or "exit code: 1" in lowered
+        )

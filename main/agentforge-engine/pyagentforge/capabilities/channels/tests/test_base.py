@@ -3,11 +3,12 @@ Channel Base 单元测试
 """
 
 import pytest
+
 from pyagentforge.capabilities.channels.base import (
-    ChannelStatus,
-    ChannelMessage,
-    SendMessageResult,
     BaseChannel,
+    ChannelMessage,
+    ChannelStatus,
+    SendMessageResult,
 )
 
 

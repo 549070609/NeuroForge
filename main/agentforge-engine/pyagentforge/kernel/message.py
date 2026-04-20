@@ -1,10 +1,10 @@
 """
 消息类型定义
 
-定义 Agent 通信所需的消息格式
+定义 Agent 通信所需的消息格式。
 """
 
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -43,9 +43,7 @@ class ToolResultBlock(BaseModel):
 
 
 # 消息内容可以是文本或内容块列表
-MessageContent = Union[
-    str, list[Union[TextBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock]]
-]
+MessageContent = str | list[TextBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock]
 
 
 class Message(BaseModel):
@@ -128,11 +126,21 @@ class Message(BaseModel):
 
 
 class ProviderResponse(BaseModel):
-    """LLM 提供商响应"""
+    """LLM 提供商响应
 
-    content: list[Union[TextBlock, ToolUseBlock, ThinkingBlock]]
+    通用字段 ``reasoning`` 与 ``extra`` 为上游插件（ResponseTransformer）预留：
+    - ``reasoning``：承载模型显式暴露的推理链文本（如 Anthropic extended thinking、
+      OpenAI o1 reasoning 摘要、或由插件从 content 中拆分出的独立 reasoning 段落）。
+      kernel 自身永远不写入该字段，只透传。
+    - ``extra``：插件/调用方需要跨层传递的任意元数据（例如原始 raw content、
+      厂商专属的 finish detail、reasoning_details 列表等）。key 命名由插件约定。
+    """
+
+    content: list[TextBlock | ToolUseBlock | ThinkingBlock]
     stop_reason: str  # end_turn, tool_use, max_tokens
     usage: dict[str, int] = Field(default_factory=dict)
+    reasoning: str | None = Field(default=None, description="可选的模型推理文本（由插件填充）")
+    extra: dict[str, Any] = Field(default_factory=dict, description="插件/调用方自定义元数据")
 
     @property
     def text(self) -> str:

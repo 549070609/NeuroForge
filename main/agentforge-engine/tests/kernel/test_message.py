@@ -4,8 +4,6 @@ Tests for Message dataclass and related types
 Comprehensive tests for Message, TextBlock, ToolUseBlock, ToolResultBlock, and ProviderResponse.
 """
 
-import pytest
-from typing import Any
 
 from pyagentforge.kernel.message import (
     Message,

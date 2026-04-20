@@ -8,9 +8,9 @@ import tempfile
 from pathlib import Path
 
 from pyagentforge.agents.metadata import AgentCategory, AgentCost
-from pyagentforge.building.loader import AgentLoader, AgentLoadError, LoadState
-from pyagentforge.building.schema import AgentSchema, AgentIdentity, ModelConfiguration
-from pyagentforge.building.factory import AgentFactory
+from pyagentforge.agents.building.loader import AgentLoader, AgentLoadError, LoadState
+from pyagentforge.agents.building.schema import AgentSchema, AgentIdentity, ModelConfiguration
+from pyagentforge.agents.building.factory import AgentFactory
 from pyagentforge.tools.registry import ToolRegistry
 from unittest.mock import Mock
 
@@ -71,19 +71,18 @@ behavior:
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
-            f.flush()
+            tmp_path = f.name
+        try:
+            loaded = loader.load_from_yaml(tmp_path)
 
-            try:
-                loaded = loader.load_from_yaml(f.name)
-
-                assert loaded.state == LoadState.LOADED
-                assert loaded.schema.identity.name == "yaml-agent"
-                assert loaded.schema.identity.version == "1.0.0"
-                assert "test" in loaded.schema.identity.tags
-                assert loaded.schema.category == AgentCategory.CODING
-                assert loaded.schema.model.temperature == 0.8
-            finally:
-                Path(f.name).unlink()
+            assert loaded.state == LoadState.LOADED
+            assert loaded.schema.identity.name == "yaml-agent"
+            assert loaded.schema.identity.version == "1.0.0"
+            assert "test" in loaded.schema.identity.tags
+            assert loaded.schema.category == AgentCategory.CODING
+            assert loaded.schema.model.temperature == 0.8
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_yaml_not_found(self):
         """测试加载不存在的 YAML"""
@@ -122,17 +121,16 @@ class TestAgentLoaderJSON:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(json_content, f)
-            f.flush()
+            tmp_path = f.name
+        try:
+            loaded = loader.load_from_json(tmp_path)
 
-            try:
-                loaded = loader.load_from_json(f.name)
-
-                assert loaded.state == LoadState.LOADED
-                assert loaded.schema.identity.name == "json-agent"
-                assert loaded.schema.category == AgentCategory.REVIEW
-                assert loaded.schema.cost == AgentCost.CHEAP
-            finally:
-                Path(f.name).unlink()
+            assert loaded.state == LoadState.LOADED
+            assert loaded.schema.identity.name == "json-agent"
+            assert loaded.schema.category == AgentCategory.REVIEW
+            assert loaded.schema.cost == AgentCost.CHEAP
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_json_not_found(self):
         """测试加载不存在的 JSON"""
@@ -150,7 +148,7 @@ class TestAgentLoaderPython:
         loader = create_test_loader()
 
         python_code = '''
-from pyagentforge.building.schema import (
+from pyagentforge.agents.building.schema import (
     AgentSchema,
     AgentIdentity,
     ModelConfiguration,
@@ -170,22 +168,21 @@ AGENT_SCHEMA = AgentSchema(
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(python_code)
-            f.flush()
+            tmp_path = f.name
+        try:
+            loaded = loader.load_from_python(tmp_path)
 
-            try:
-                loaded = loader.load_from_python(f.name)
-
-                assert loaded.state == LoadState.LOADED
-                assert loaded.schema.identity.name == "python-agent"
-            finally:
-                Path(f.name).unlink()
+            assert loaded.state == LoadState.LOADED
+            assert loaded.schema.identity.name == "python-agent"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_from_python_with_create_function(self):
         """测试从 Python 加载（create_schema 函数）"""
         loader = create_test_loader()
 
         python_code = '''
-from pyagentforge.building.schema import (
+from pyagentforge.agents.building.schema import (
     AgentSchema,
     AgentIdentity,
 )
@@ -200,16 +197,15 @@ def create_schema() -> AgentSchema:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(python_code)
-            f.flush()
+            tmp_path = f.name
+        try:
+            loaded = loader.load_from_python(tmp_path)
 
-            try:
-                loaded = loader.load_from_python(f.name)
-
-                assert loaded.state == LoadState.LOADED
-                assert loaded.schema.identity.name == "function-agent"
-                assert loaded.schema.category == AgentCategory.PLANNING
-            finally:
-                Path(f.name).unlink()
+            assert loaded.state == LoadState.LOADED
+            assert loaded.schema.identity.name == "function-agent"
+            assert loaded.schema.category == AgentCategory.PLANNING
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_python_no_schema(self):
         """测试加载没有 Schema 的 Python"""
@@ -222,13 +218,12 @@ print("This file has no agent schema")
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(python_code)
-            f.flush()
-
-            try:
-                with pytest.raises(AgentLoadError, match="No AGENT_SCHEMA"):
-                    loader.load_from_python(f.name)
-            finally:
-                Path(f.name).unlink()
+            tmp_path = f.name
+        try:
+            with pytest.raises(AgentLoadError, match="No AGENT_SCHEMA"):
+                loader.load_from_python(tmp_path)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 class TestAgentLoaderAutoDetect:
@@ -240,13 +235,12 @@ class TestAgentLoaderAutoDetect:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("identity:\n  name: auto-yaml\n")
-            f.flush()
-
-            try:
-                loaded = loader.load(f.name)
-                assert loaded.schema.identity.name == "auto-yaml"
-            finally:
-                Path(f.name).unlink()
+            tmp_path = f.name
+        try:
+            loaded = loader.load(tmp_path)
+            assert loaded.schema.identity.name == "auto-yaml"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_json_auto(self):
         """测试自动检测 JSON"""
@@ -254,13 +248,12 @@ class TestAgentLoaderAutoDetect:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"identity": {"name": "auto-json"}}, f)
-            f.flush()
-
-            try:
-                loaded = loader.load(f.name)
-                assert loaded.schema.identity.name == "auto-json"
-            finally:
-                Path(f.name).unlink()
+            tmp_path = f.name
+        try:
+            loaded = loader.load(tmp_path)
+            assert loaded.schema.identity.name == "auto-json"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_python_auto(self):
         """测试自动检测 Python"""
@@ -268,16 +261,15 @@ class TestAgentLoaderAutoDetect:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(
-                "from pyagentforge.building import AgentSchema, AgentIdentity\n"
+                "from pyagentforge.agents.building import AgentSchema, AgentIdentity\n"
                 "AGENT_SCHEMA = AgentSchema(identity=AgentIdentity(name='auto-python'))\n"
             )
-            f.flush()
-
-            try:
-                loaded = loader.load(f.name)
-                assert loaded.schema.identity.name == "auto-python"
-            finally:
-                Path(f.name).unlink()
+            tmp_path = f.name
+        try:
+            loaded = loader.load(tmp_path)
+            assert loaded.schema.identity.name == "auto-python"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_load_unsupported_format(self):
         """测试不支持的格式"""
@@ -285,13 +277,12 @@ class TestAgentLoaderAutoDetect:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("some content")
-            f.flush()
-
-            try:
-                with pytest.raises(AgentLoadError, match="Unsupported"):
-                    loader.load(f.name)
-            finally:
-                Path(f.name).unlink()
+            tmp_path = f.name
+        try:
+            with pytest.raises(AgentLoadError, match="Unsupported"):
+                loader.load(tmp_path)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 class TestAgentLoaderDirectory:
@@ -328,18 +319,17 @@ class TestAgentLoaderUnload:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("identity:\n  name: unload-test\ncategory: coding\n")
-            f.flush()
+            tmp_path = f.name
+        try:
+            loader.load(tmp_path)
+            assert loader.get_loaded("unload-test") is not None
 
-            try:
-                loader.load(f.name)
-                assert loader.get_loaded("unload-test") is not None
+            result = loader.unload("unload-test")
 
-                result = loader.unload("unload-test")
-
-                assert result
-                assert loader.get_loaded("unload-test") is None
-            finally:
-                Path(f.name).unlink()
+            assert result
+            assert loader.get_loaded("unload-test") is None
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_unload_non_existent(self):
         """测试卸载不存在的 Agent"""
@@ -359,23 +349,21 @@ class TestAgentLoaderReload:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("identity:\n  name: reload-test\n  description: Original\n")
-            f.flush()
+            tmp_path = f.name
+        try:
+            loaded1 = loader.load(tmp_path)
+            assert loaded1.schema.identity.description == "Original"
 
-            try:
-                loaded1 = loader.load(f.name)
-                assert loaded1.schema.identity.description == "Original"
+            # 修改文件
+            Path(tmp_path).write_text(
+                "identity:\n  name: reload-test\n  description: Modified\n"
+            )
 
-                # 修改文件
-                f.seek(0)
-                f.truncate()
-                f.write("identity:\n  name: reload-test\n  description: Modified\n")
-                f.flush()
+            loaded2 = loader.reload("reload-test")
 
-                loaded2 = loader.reload("reload-test")
-
-                assert loaded2.schema.identity.description == "Modified"
-            finally:
-                Path(f.name).unlink()
+            assert loaded2.schema.identity.description == "Modified"
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 class TestAgentLoaderState:
@@ -389,17 +377,16 @@ class TestAgentLoaderState:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("identity:\n  name: state-test\ncategory: coding\n")
-            f.flush()
+            tmp_path = f.name
+        try:
+            loader.load(tmp_path)
 
-            try:
-                loader.load(f.name)
+            loaded = loader.list_loaded()
 
-                loaded = loader.list_loaded()
-
-                assert len(loaded) == 1
-                assert "state-test" in loaded
-            finally:
-                Path(f.name).unlink()
+            assert len(loaded) == 1
+            assert "state-test" in loaded
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     def test_get_state(self):
         """测试获取状态"""
@@ -407,16 +394,15 @@ class TestAgentLoaderState:
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("identity:\n  name: state-test2\ncategory: coding\n")
-            f.flush()
+            tmp_path = f.name
+        try:
+            loader.load(tmp_path)
 
-            try:
-                loader.load(f.name)
+            state = loader.get_state("state-test2")
 
-                state = loader.get_state("state-test2")
-
-                assert state == LoadState.LOADED
-            finally:
-                Path(f.name).unlink()
+            assert state == LoadState.LOADED
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

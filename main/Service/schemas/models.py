@@ -1,4 +1,4 @@
-﻿"""
+"""
 Model Config Schemas - API 请求和响应模型
 
 定义模型配置相关的 API 数据结构。
@@ -7,16 +7,15 @@ Model Config Schemas - API 请求和响应模型
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ==================== Enums ====================
 
 
-class ApiType(str, Enum):
+class ApiType(StrEnum):
     """API 类型"""
 
     ANTHROPIC_MESSAGES = "anthropic-messages"

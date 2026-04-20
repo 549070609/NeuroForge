@@ -17,6 +17,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Canonical service keys shared across routes/tests/app.
+AGENT_SERVICE_KEY = "agent"
+PROXY_SERVICE_KEY = "proxy"
+MODEL_CONFIG_SERVICE_KEY = "model_config"
+
 
 class ServiceRegistry:
     """

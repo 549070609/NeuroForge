@@ -5,7 +5,8 @@
 """
 
 import inspect
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -66,16 +67,16 @@ def generate_schema_from_func(func: Callable) -> dict[str, Any]:
         param_type = "string"
         param_desc = ""
 
-        if param.annotation != inspect.Parameter.empty:
-            if param.annotation == int:
+        if param.annotation is not inspect.Parameter.empty:
+            if param.annotation is int:
                 param_type = "integer"
-            elif param.annotation == float:
+            elif param.annotation is float:
                 param_type = "number"
-            elif param.annotation == bool:
+            elif param.annotation is bool:
                 param_type = "boolean"
-            elif param.annotation == list:
+            elif param.annotation is list:
                 param_type = "array"
-            elif param.annotation == dict:
+            elif param.annotation is dict:
                 param_type = "object"
 
         properties[param_name] = {
@@ -83,7 +84,7 @@ def generate_schema_from_func(func: Callable) -> dict[str, Any]:
             "description": param_desc,
         }
 
-        if param.default == inspect.Parameter.empty:
+        if param.default is inspect.Parameter.empty:
             required.append(param_name)
 
     return {

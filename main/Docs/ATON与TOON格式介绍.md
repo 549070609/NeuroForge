@@ -338,7 +338,7 @@ events[4]{id,level,message,source}:
 
 ## 在 NeuroForge 中的使用
 
-主动感知插件（`main/perception`）使用 ATON 和 TOON 作为日志上报的标准格式：
+主动感知插件（`pyagentforge.plugins.integration.perception`）使用 ATON 和 TOON 作为日志上报的标准格式：
 
 ```
 上报方（服务 / Agent）

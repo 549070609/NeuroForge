@@ -173,9 +173,9 @@ class TaskReporter:
 
         # Markdown format
         lines = [
-            f"# Task Progress Report",
-            f"",
-            f"## Overview",
+            "# Task Progress Report",
+            "",
+            "## Overview",
             f"- **Task ID**: {report.task.id}",
             f"- **Title**: {report.task.title}",
             f"- **Status**: {report.task.status.value}",
@@ -183,7 +183,7 @@ class TaskReporter:
             f"- **Priority**: {report.task.priority.value}",
             f"- **Type**: {report.task.task_type.value}",
             f"- **Complexity**: {report.task.complexity.value}",
-            f"",
+            "",
         ]
 
         if report.subtasks_progress:

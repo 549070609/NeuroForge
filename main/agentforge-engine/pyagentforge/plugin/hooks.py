@@ -4,16 +4,17 @@
 定义和管理插件钩子，支持优先级和链式处理。
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Dict, List, Tuple, Union
-import logging
 import asyncio
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum, StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class HookType(str, Enum):
+class HookType(StrEnum):
     """钩子类型"""
 
     # 生命周期钩子
@@ -57,7 +58,7 @@ class HookType(str, Enum):
     ON_SUBAGENT_SPAWN = "on_subagent_spawn"
 
 
-class HookResult(str, Enum):
+class HookResult(StrEnum):
     """
     钩子执行结果
 
@@ -71,7 +72,7 @@ class HookResult(str, Enum):
     MODIFY = "modify"
 
 
-class HookDecision(str, Enum):
+class HookDecision(StrEnum):
     """
     v4.0: 钩子决策系统
 
@@ -118,7 +119,7 @@ class HookEntry:
 class HookChainResult:
     """钩子链执行结果"""
 
-    results: List[Any] = field(default_factory=list)
+    results: list[Any] = field(default_factory=list)
     stopped: bool = False
     stopped_by: str = ""  # 停止的插件 ID
     last_modified_data: Any = None
@@ -137,13 +138,11 @@ class HookRegistry:
 
     def __init__(self):
         # hook_type -> [HookEntry, ...]
-        self._hooks: Dict[HookType, List[HookEntry]] = {
+        self._hooks: dict[HookType, list[HookEntry]] = {
             hook_type: [] for hook_type in HookType
         }
         # 缓存排序后的钩子
-        self._sorted_cache: Dict[HookType, bool] = {
-            hook_type: False for hook_type in HookType
-        }
+        self._sorted_cache: dict[HookType, bool] = dict.fromkeys(HookType, False)
 
     def register(
         self,
@@ -226,7 +225,7 @@ class HookRegistry:
         hook_type: HookType,
         *args,
         **kwargs,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """
         触发钩子事件（标准模式）
 
@@ -359,7 +358,7 @@ class HookRegistry:
         hook_type: HookType,
         *args,
         **kwargs,
-    ) -> Tuple[bool, Any]:
+    ) -> tuple[bool, Any]:
         """
         触发钩子事件（首次处理模式）
 
@@ -409,7 +408,7 @@ class HookRegistry:
 
         return False, None
 
-    def get_hooks(self, hook_type: HookType) -> List[HookEntry]:
+    def get_hooks(self, hook_type: HookType) -> list[HookEntry]:
         """获取特定类型的所有钩子（已排序）"""
         self._ensure_sorted(hook_type)
         return self._hooks.get(hook_type, [])

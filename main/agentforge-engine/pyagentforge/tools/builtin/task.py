@@ -4,19 +4,17 @@ Task 工具
 生成子代理执行聚焦任务，支持并行执行
 """
 
-import asyncio
 from typing import Any
 
 from pyagentforge.agents.config import AgentConfig
-from pyagentforge.agents.types import AGENT_TYPES, get_agent_type_config
-from pyagentforge.config.settings import get_settings
+from pyagentforge.agents.types import get_agent_type_config
+from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentEngine
 from pyagentforge.plugins.integration.parallel_executor.executor import (
     ParallelSubagentExecutor,
     SubagentStatus,
 )
-from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.utils.logging import get_logger
@@ -136,7 +134,7 @@ class TaskTool(BaseTool):
         description: str,
         prompt: str,
         subagent_type: str = "explore",
-        model: str | None = None,
+        _model: str | None = None,
     ) -> str:
         """执行单个子代理任务"""
         logger.info(

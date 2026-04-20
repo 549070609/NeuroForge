@@ -4,8 +4,6 @@ Thinking Plugin
 支持不同深度的推理模式，适配各模型的 extended thinking 能力
 """
 
-import logging
-from typing import Any, List, Optional
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 
@@ -35,7 +33,6 @@ class ThinkingPlugin(Plugin):
         await super().on_plugin_load(context)
         from pyagentforge.plugins.middleware.thinking.thinking import (
             ThinkingLevel,
-            create_thinking_config,
         )
 
         config = context.config or {}
@@ -47,7 +44,7 @@ class ThinkingPlugin(Plugin):
         await super().on_plugin_activate()
         self.context.logger.info(f"Thinking plugin activated: level={self._thinking_level}")
 
-    async def on_before_llm_call(self, messages: list) -> Optional[list]:
+    async def on_before_llm_call(self, messages: list) -> list | None:
         """LLM调用前注入思考配置"""
         # 思考配置在 create_message 时作为 kwargs 传递
         # 这里可以修改 messages 或返回额外的 kwargs

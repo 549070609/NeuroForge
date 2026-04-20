@@ -11,9 +11,6 @@ if TYPE_CHECKING:
 
 def get_app_registry() -> "ServiceRegistry":
     """Get registry from FastAPI app state."""
-    from fastapi import Request
-    from starlette.concurrency import run_in_threadpool
-
     # This will be set during request handling
     # For now, return the singleton
     from ...core import ServiceRegistry

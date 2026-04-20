@@ -6,8 +6,8 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict, List
+from datetime import datetime, timezone
 import uuid
 import json
 
@@ -49,7 +49,7 @@ class MemoryEntry:
         if not self.id:
             self.id = f"mem_{uuid.uuid4().hex[:12]}"
         if not self.timestamp:
-            self.timestamp = datetime.utcnow().isoformat()
+            self.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         # 确保 message_type 和 source 是枚举类型
         if isinstance(self.message_type, str):
             self.message_type = MessageType(self.message_type)

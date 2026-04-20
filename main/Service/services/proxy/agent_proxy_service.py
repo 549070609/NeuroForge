@@ -1,14 +1,19 @@
-﻿"""Agent proxy service for workspace/session execution and workflow orchestration."""
+"""Agent proxy service for workspace/session execution and workflow orchestration."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+
+
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 from pyagentforge import FileCheckpointer
 from pyagentforge.workflow import (
@@ -596,7 +601,7 @@ class AgentProxyService(BaseService):
             if approval.status != "approved":
                 status = "awaiting_approval"
 
-        workflow_id = f"wf-{datetime.utcnow().strftime('%Y%m%d')}-{uuid_hex(8)}"
+        workflow_id = f"wf-{_utcnow().strftime('%Y%m%d')}-{uuid_hex(8)}"
         now = utc_now_iso()
         payload = {
             "id": workflow_id,
@@ -1336,7 +1341,7 @@ class AgentProxyService(BaseService):
 
 
 def utc_now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return _utcnow().isoformat() + "Z"
 
 
 def uuid_hex(length: int) -> str:

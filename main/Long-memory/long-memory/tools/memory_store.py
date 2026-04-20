@@ -2,12 +2,17 @@
 记忆存储工具
 """
 
-from typing import Any, Dict, List, Optional
-from pyagentforge.kernel.base_tool import BaseTool
+from typing import List, Optional
+from pyagentforge.tools.base import BaseTool
 
-from ..models import MemoryEntry, MessageType, MemorySource
-from ..vector_store import ChromaVectorStore
-from ..config import LongMemoryConfig
+try:
+    from ..models import MemoryEntry, MemorySource, MessageType
+    from ..vector_store import ChromaVectorStore
+    from ..config import LongMemoryConfig
+except ImportError:
+    from models import MemoryEntry, MemorySource, MessageType
+    from vector_store import ChromaVectorStore
+    from config import LongMemoryConfig
 
 
 class MemoryStoreTool(BaseTool):

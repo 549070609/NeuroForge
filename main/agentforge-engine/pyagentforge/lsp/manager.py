@@ -4,16 +4,16 @@ LSP 管理器
 管理多个 LSP 客户端实例
 """
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+from pyagentforge.lsp.client import LSPClient
 from pyagentforge.lsp.protocol import (
+    LSP_SERVER_CONFIGS,
     Diagnostic,
     LSPServerConfig,
-    LSP_SERVER_CONFIGS,
 )
-from pyagentforge.lsp.client import LSPClient, LSPError
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -133,7 +133,7 @@ class LSPManager:
         """检测文件语言"""
         ext = Path(file_path).suffix.lower()
 
-        for language, config in LSP_SERVER_CONFIGS.items():
+        for _language, config in LSP_SERVER_CONFIGS.items():
             if ext in config.extensions:
                 return config.language
 

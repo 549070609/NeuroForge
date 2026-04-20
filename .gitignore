@@ -22,5 +22,17 @@ build/
 .venv
 venv/
 
+# Tooling caches and reports (never commit)
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+mypy_*.txt
+ruff_*.json
+ruff_*.txt
+.coverage
+.coverage.*
+htmlcov/
+*.bak
+
 # Misc
 nulAGENTS.md

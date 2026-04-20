@@ -4,26 +4,27 @@
 测试版本管理、组合、导入导出等高级功能。
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import json
+import tempfile
+from pathlib import Path
+
+import pytest
 
 from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
-from pyagentforge.plugins.integration.chain_of_thought.models import (
-    ChainOfThought,
-    CoTPhase,
-    Constraint,
-    ConstraintType,
-)
 from pyagentforge.plugins.integration.chain_of_thought.cot_tools import (
-    VersionCoTTool,
+    CloneCoTTool,
     CombineCoTTool,
+    DeleteCoTTool,
     ExportCoTTool,
     ImportCoTTool,
     ListAllCoTTool,
-    DeleteCoTTool,
-    CloneCoTTool,
+    VersionCoTTool,
+)
+from pyagentforge.plugins.integration.chain_of_thought.models import (
+    ChainOfThought,
+    Constraint,
+    ConstraintType,
+    CoTPhase,
 )
 
 

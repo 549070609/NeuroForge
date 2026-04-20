@@ -5,16 +5,14 @@ MCP 传输层实现
 """
 
 import asyncio
+import contextlib
 import json
 import os
-import sys
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, AsyncIterator
-
-from pydantic import BaseModel
+from typing import Any
 
 from pyagentforge.utils.logging import get_logger
 
@@ -87,8 +85,10 @@ class HTTPTransport(MCPTransport):
         try:
             import httpx
             self._client = httpx.AsyncClient(timeout=config.timeout)
-        except ImportError:
-            raise ImportError("httpx is required for HTTP transport. Install it with: pip install httpx")
+        except ImportError as e:
+            raise ImportError(
+                "httpx is required for HTTP transport. Install it with: pip install httpx"
+            ) from e
 
     async def connect(self) -> bool:
         """建立连接"""
@@ -196,16 +196,14 @@ class StdioTransport(MCPTransport):
         """终止子进程"""
         if self._reader_task:
             self._reader_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reader_task
-            except asyncio.CancelledError:
-                pass
 
         if self._process:
             try:
                 self._process.terminate()
                 await asyncio.wait_for(self._process.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._process.kill()
                 await self._process.wait()
             except Exception:
@@ -258,12 +256,12 @@ class StdioTransport(MCPTransport):
             # 等待响应（带超时）
             return await asyncio.wait_for(future, timeout=60)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_responses.pop(request_id, None)
-            raise RuntimeError(f"stdio request timed out: {method}")
+            raise RuntimeError(f"stdio request timed out: {method}") from None
         except Exception as e:
             self._pending_responses.pop(request_id, None)
-            raise RuntimeError(f"stdio request failed: {e}")
+            raise RuntimeError(f"stdio request failed: {e}") from e
 
     async def _read_responses(self) -> None:
         """持续读取子进程的响应"""

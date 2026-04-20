@@ -2,8 +2,9 @@
 Telemetry Integration Tests - Phase 3
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from pyagentforge.middleware.telemetry.collector import TelemetryCollector
 
@@ -246,7 +247,7 @@ class TestTelemetryMetrics:
     def test_error_rate_calculation(self, collector_with_data):
         """测试错误率计算"""
         # 添加一些失败请求
-        for i in range(10):
+        for _i in range(10):
             collector_with_data.track_request(
                 "error_session",
                 100.0,

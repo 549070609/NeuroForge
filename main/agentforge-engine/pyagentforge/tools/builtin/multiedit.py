@@ -111,7 +111,7 @@ class MultiEditTool(BaseTool):
                 content = f.read()
 
             if old_string not in content:
-                return f"Error: old_string not found"
+                return "Error: old_string not found"
 
             count = content.count(old_string)
             if count > 1 and not replace_all:

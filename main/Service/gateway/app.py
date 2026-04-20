@@ -11,14 +11,22 @@ Creates and configures the FastAPI application with:
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, AsyncGenerator
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import configure_logging, get_settings
-from ..core import ServiceRegistry
+from ..core import (
+    AGENT_SERVICE_KEY,
+    MODEL_CONFIG_SERVICE_KEY,
+    PROXY_SERVICE_KEY,
+    ServiceRegistry,
+)
+from .middleware import AuthMiddleware, ErrorHandlerMiddleware, RateLimitMiddleware
 
 if TYPE_CHECKING:
     from ..config.settings import ServiceSettings
@@ -47,13 +55,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from ..services.proxy.agent_proxy_service import AgentProxyService
 
     agent_service = AgentService(registry)
-    registry.register("agent", agent_service)
+    registry.register(AGENT_SERVICE_KEY, agent_service)
 
     proxy_service = AgentProxyService(registry)
-    registry.register("proxy", proxy_service)
+    registry.register(PROXY_SERVICE_KEY, proxy_service)
 
     model_config_service = ModelConfigService(registry)
-    registry.register("model_config", model_config_service)
+    registry.register(MODEL_CONFIG_SERVICE_KEY, model_config_service)
 
     # Initialize all services
     try:
@@ -63,8 +71,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"Failed to initialize services: {e}")
         raise
 
-    # Store registry in app state
+    # Store registry + uptime marker in app state
     app.state.registry = registry
+    app.state._start_time = time.time()
 
     yield
 
@@ -99,7 +108,9 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
         debug=settings.debug,
     )
 
-    # Configure CORS
+    # === Middleware stack (executed in reverse order of registration) ===
+    # CORS is outermost so that preflight works even when downstream middleware
+    # rejects a request.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -107,8 +118,14 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(AuthMiddleware, settings=settings)
+    app.add_middleware(RateLimitMiddleware, settings=settings)
+    # ErrorHandler is innermost so it catches exceptions from routes/services.
+    app.add_middleware(ErrorHandlerMiddleware)
 
-    # Register routes
+    # === Register routes ===
+    # All API routes are mounted under /api/v1. Health/root stay at the origin
+    # so that probes and dashboards can reach them without the version prefix.
     from .routes import agents, health, models, proxy, tools
 
     app.include_router(health.router, tags=["Health"])

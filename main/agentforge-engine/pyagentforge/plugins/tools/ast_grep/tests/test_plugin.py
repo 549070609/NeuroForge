@@ -2,15 +2,19 @@
 AST-Grep 插件测试
 """
 
-import pytest
 import asyncio
 
+import pytest
+
+from pyagentforge.plugins.tools.ast_grep import LANG_EXTENSIONS
 from pyagentforge.plugins.tools.ast_grep.binary_manager import BinaryManager
 from pyagentforge.plugins.tools.ast_grep.constants import CLI_LANGUAGES
-from pyagentforge.plugins.tools.ast_grep.tools import AstGrepSearchTool, AstGrepReplaceTool
-from pyagentforge.plugins.tools.ast_grep.result_formatter import format_search_result, get_empty_result_hint
+from pyagentforge.plugins.tools.ast_grep.result_formatter import (
+    format_search_result,
+    get_empty_result_hint,
+)
+from pyagentforge.plugins.tools.ast_grep.tools import AstGrepReplaceTool, AstGrepSearchTool
 from pyagentforge.plugins.tools.ast_grep.types import SgMatch, SgResult
-from pyagentforge.plugins.tools.ast_grep import LANG_EXTENSIONS
 
 
 class TestBinaryManager:

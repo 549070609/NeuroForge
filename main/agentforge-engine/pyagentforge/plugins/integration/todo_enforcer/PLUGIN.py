@@ -6,13 +6,13 @@ Enforces incomplete todos across agent iterations.
 
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.todo_tracker import Todo, TodoPriority, TodoStatus, TodoTracker
+from pyagentforge.plugins.integration.todo_enforcer.todo_tracker import Todo, TodoTracker
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 

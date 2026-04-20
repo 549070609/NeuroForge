@@ -11,17 +11,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
 from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.message import (
+    ProviderResponse,
     TextBlock,
     ToolUseBlock,
-    ProviderResponse,
 )
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
-from tests.test_config import generate_large_text, calculate_expected_tokens
-
+from pyagentforge.tools.registry import ToolRegistry
+from tests.test_config import calculate_expected_tokens, generate_large_text
 
 # ============================================================================
 # Mock Provider for Boundary Testing
@@ -523,7 +522,7 @@ class TestIterationBoundaries:
             config=AgentConfig(max_iterations=1),
         )
 
-        result = await engine.run("Test")
+        await engine.run("Test")
 
         assert infinite_loop_provider.call_count == 1
 

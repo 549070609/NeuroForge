@@ -1,9 +1,26 @@
-﻿{
+{
   "$schema": "./llm_config_schema.json",
-  "default_model": "demo-model",
+  "default_model": "glm-5.1",
   "max_tokens": 4096,
   "temperature": 1.0,
   "models": {
+    "glm-5.1": {
+      "id": "glm-5.1",
+      "name": "GLM 5.1",
+      "provider": "zhipu",
+      "api_type": "anthropic-messages",
+      "model_name": "glm-5.1",
+      "base_url": "https://open.bigmodel.cn/api/anthropic/v1",
+      "api_key": "8da577d11e204c698642bceaa164f434.1uX0WfqmB6Cgn4qM",
+      "headers": {},
+      "timeout": 120,
+      "supports_vision": false,
+      "supports_tools": true,
+      "supports_streaming": true,
+      "context_window": 128000,
+      "max_output_tokens": 4096,
+      "extra": {}
+    },
     "demo-model": {
       "id": "demo-model",
       "name": "Demo Model",

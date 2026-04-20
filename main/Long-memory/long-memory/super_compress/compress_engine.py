@@ -10,8 +10,12 @@ from typing import Any, Optional
 
 import logging
 
-from .budget_manager import TokenBudgetManager
-from .summary_generator import SummaryGenerator, SummaryStrategy
+try:
+    from .budget_manager import TokenBudgetManager
+    from .summary_generator import SummaryGenerator, SummaryStrategy
+except ImportError:
+    from budget_manager import TokenBudgetManager
+    from summary_generator import SummaryGenerator, SummaryStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -264,13 +268,6 @@ class CompressEngine:
         """
         if not self.long_memory:
             raise ValueError("Long memory plugin not available")
-
-        # 构建元数据
-        metadata = {
-            "message_count": len(original_messages),
-            "key_points": key_points,
-            "compression_time": datetime.now(timezone.utc).isoformat(),
-        }
 
         # 存储为摘要记忆
         memory_id = await self.long_memory.store_summary(

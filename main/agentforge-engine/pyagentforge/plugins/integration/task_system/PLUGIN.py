@@ -1,4 +1,4 @@
-"""
+﻿"""
 Task Management System Plugin
 
 v4.0: 任务管理系统
@@ -8,11 +8,11 @@ v4.0: 任务管理系统
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
-from pyagentforge.plugin.base import BasePlugin
+from pyagentforge.plugin.base import Plugin as BasePlugin
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.utils.logging import get_logger
@@ -20,7 +20,7 @@ from pyagentforge.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """任务状态"""
 
     PENDING = "pending"
@@ -29,7 +29,7 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TaskPriority(str, Enum):
+class TaskPriority(StrEnum):
     """任务优先级"""
 
     LOW = "low"
@@ -38,7 +38,7 @@ class TaskPriority(str, Enum):
     URGENT = "urgent"
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     """任务类型"""
 
     EXPLORATION = "exploration"
@@ -51,7 +51,7 @@ class TaskType(str, Enum):
     RESEARCH = "research"
 
 
-class TaskComplexity(str, Enum):
+class TaskComplexity(StrEnum):
     """任务复杂度"""
 
     TRIVIAL = "trivial"  # < 30 min
@@ -82,8 +82,8 @@ class Task:
     background_task_id: str | None = None
     blockedBy: list[str] = field(default_factory=list)  # 依赖任务
     blocks: list[str] = field(default_factory=list)  # 被依赖任务
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -134,8 +134,8 @@ class Task:
             background_task_id=data.get("background_task_id"),
             blockedBy=data.get("blockedBy", []),
             blocks=data.get("blocks", []),
-            created_at=data.get("created_at", datetime.now(timezone.utc).isoformat()),
-            updated_at=data.get("updated_at", datetime.now(timezone.utc).isoformat()),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
             completed_at=data.get("completed_at"),
             metadata=data.get("metadata", {}),
         )
@@ -344,7 +344,7 @@ class TaskManager:
 
         old_progress = task.progress
         task.progress = max(0.0, min(1.0, progress))
-        task.progress_updated_at = datetime.now(timezone.utc).isoformat()
+        task.progress_updated_at = datetime.now(UTC).isoformat()
         task.updated_at = task.progress_updated_at
 
         # 持久化
@@ -409,7 +409,7 @@ class TaskManager:
         # 更新父任务（避免无限递归）
         if abs(parent.progress - avg_progress) > 0.001:
             parent.progress = avg_progress
-            parent.progress_updated_at = datetime.now(timezone.utc).isoformat()
+            parent.progress_updated_at = datetime.now(UTC).isoformat()
 
             if self._storage:
                 self._storage.save(parent)
@@ -495,7 +495,7 @@ class TaskManager:
             return
 
         # 同步状态
-        from pyagentforge.core.background_manager import TaskStatus as BGTaskStatus
+        from pyagentforge.kernel.background_manager import TaskStatus as BGTaskStatus
 
         status_mapping = {
             BGTaskStatus.PENDING: TaskStatus.PENDING,
@@ -508,7 +508,7 @@ class TaskManager:
         new_status = status_mapping.get(bg_task.status)
         if new_status and task.status != new_status:
             task.status = new_status
-            task.updated_at = datetime.now(timezone.utc).isoformat()
+            task.updated_at = datetime.now(UTC).isoformat()
 
             if new_status == TaskStatus.COMPLETED:
                 task.completed_at = bg_task.completed_at
@@ -588,7 +588,7 @@ class TaskManager:
             task.status = status
 
             if status == TaskStatus.COMPLETED:
-                task.completed_at = datetime.now(timezone.utc).isoformat()
+                task.completed_at = datetime.now(UTC).isoformat()
                 if task.progress < 1.0:
                     task.progress = 1.0
 
@@ -597,9 +597,9 @@ class TaskManager:
 
         if progress is not None:
             task.progress = max(0.0, min(1.0, progress))
-            task.progress_updated_at = datetime.now(timezone.utc).isoformat()
+            task.progress_updated_at = datetime.now(UTC).isoformat()
 
-        task.updated_at = datetime.now(timezone.utc).isoformat()
+        task.updated_at = datetime.now(UTC).isoformat()
 
         # 持久化
         if self._storage:

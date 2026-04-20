@@ -2,9 +2,8 @@
 核心引擎测试
 """
 
-import pytest
 
-from pyagentforge.core.context import ContextManager
+from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.message import (
     Message,
     ProviderResponse,

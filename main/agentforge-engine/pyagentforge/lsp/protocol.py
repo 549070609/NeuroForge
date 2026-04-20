@@ -5,11 +5,10 @@ LSP (Language Server Protocol) 协议类型定义
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Literal
+from enum import Enum, StrEnum
+from typing import Any
 
 from pydantic import BaseModel
-
 
 # ============ 基础类型 ============
 
@@ -230,7 +229,7 @@ class Diagnostic:
 # ============ 悬停类型 ============
 
 
-class MarkupKind(str, Enum):
+class MarkupKind(StrEnum):
     """标记类型"""
     PlainText = "plaintext"
     Markdown = "markdown"

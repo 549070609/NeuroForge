@@ -4,10 +4,9 @@
 提供手动压缩和状态查看工具
 """
 
-from typing import Any, Optional
 import logging
 
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
 from ..compress_engine import CompressEngine
 from ..budget_manager import TokenBudgetManager

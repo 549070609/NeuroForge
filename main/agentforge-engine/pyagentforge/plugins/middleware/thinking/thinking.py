@@ -4,13 +4,13 @@
 支持不同深度的推理模式，适配不同协议下的 reasoning / thinking 能力
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
 
 
-class ThinkingLevel(str, Enum):
+class ThinkingLevel(StrEnum):
     """思考级别枚举"""
 
     OFF = "off"  # 关闭扩展思考
@@ -198,10 +198,7 @@ def supports_thinking(model_id: str) -> bool:
         是否支持思考
     """
     model_lower = model_id.lower()
-    for pattern in THINKING_CAPABLE_MODELS:
-        if pattern in model_lower:
-            return True
-    return False
+    return any(pattern in model_lower for pattern in THINKING_CAPABLE_MODELS)
 
 
 def get_thinking_provider(model_id: str) -> str | None:

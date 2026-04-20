@@ -4,10 +4,10 @@ Middleware Pipeline - 中间件管道
 管理中间件的注册和链式执行。
 """
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from pyagentforge.middleware.base import BaseMiddleware, MiddlewareContext, NextMiddleware
-
 
 # 最终处理器类型
 FinalHandler = Callable[[MiddlewareContext], Awaitable[Any]]

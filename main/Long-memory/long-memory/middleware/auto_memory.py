@@ -6,7 +6,6 @@
 
 from typing import Any, Optional
 import logging
-import re
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType, PluginContext
 

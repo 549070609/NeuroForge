@@ -8,7 +8,6 @@ Workspace Manager - 工作区域管理器
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -279,7 +278,7 @@ class WorkspaceManager:
                 root.mkdir(parents=True, exist_ok=True)
                 self._logger.info(f"Created workspace directory: {root}")
             except Exception as e:
-                raise ValueError(f"Failed to create workspace directory: {e}")
+                raise ValueError(f"Failed to create workspace directory: {e}") from e
 
         # 创建上下文
         context = WorkspaceContext(workspace_id=workspace_id, config=config)

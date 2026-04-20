@@ -5,7 +5,6 @@ Validates that ThinkingBlock is properly integrated into MessageContent,
 ProviderResponse, and Message.to_api_format().
 """
 
-import pytest
 
 from pyagentforge.kernel.message import (
     Message,

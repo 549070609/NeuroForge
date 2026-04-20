@@ -6,15 +6,10 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyagentforge.plugins.integration.super_compress import (
-    TokenBudgetManager,
-    SummaryGenerator,
-)
-from pyagentforge.plugins.integration.super_compress.summary_generator import (
-    SummaryStrategy,
-)
+from budget_manager import TokenBudgetManager
+from summary_generator import SummaryGenerator, SummaryStrategy
 
 
 def create_test_messages(count: int = 100) -> list:
@@ -97,7 +92,7 @@ async def test_summary_generator():
         print(f"  - 摘要 tokens: {result.summary_tokens}")
         print(f"  - 压缩比: {result.compression_ratio:.2%}")
         print(f"  - 关键点数量: {len(result.key_points)}")
-        print(f"\n  摘要内容 (前 300 字符):")
+        print("\n  摘要内容 (前 300 字符):")
         print(f"  {result.content[:300]}...")
 
 
@@ -107,7 +102,7 @@ async def test_compression_workflow():
     print("测试完整压缩流程")
     print("=" * 50)
 
-    from pyagentforge.plugins.integration.super_compress import CompressEngine
+    from compress_engine import CompressEngine
 
     # 创建组件
     budget_manager = TokenBudgetManager(
@@ -147,7 +142,7 @@ async def test_compression_workflow():
 
     # 显示压缩预览
     preview = compress_engine.get_compress_preview(messages)
-    print(f"\n压缩预览:")
+    print("\n压缩预览:")
     print(f"  - 需要压缩: {preview['should_compress']}")
     print(f"  - 待压缩消息: {preview['split']['to_compress']}")
     print(f"  - 保留消息: {preview['split']['to_keep']}")

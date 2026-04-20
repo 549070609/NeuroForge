@@ -6,12 +6,15 @@
 - exact (精准): 关键词/文本精确匹配
 """
 
-from typing import Any, Dict, List, Literal, Optional
-import json
-from pyagentforge.kernel.base_tool import BaseTool
+from typing import Literal, Optional
+from pyagentforge.tools.base import BaseTool
 
-from ..vector_store import ChromaVectorStore
-from ..config import LongMemoryConfig
+try:
+    from ..vector_store import ChromaVectorStore
+    from ..config import LongMemoryConfig
+except ImportError:
+    from vector_store import ChromaVectorStore
+    from config import LongMemoryConfig
 
 
 class MemorySearchTool(BaseTool):

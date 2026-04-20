@@ -11,18 +11,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from pyagentforge.plugins.integration.task_system.PLUGIN import (
+    TaskComplexity,
     TaskManager,
-    TaskStatus,
     TaskPriority,
     TaskType,
-    TaskComplexity,
-)
-from pyagentforge.plugins.integration.task_system.storage import (
-    InMemoryStorage,
-    FileStorage,
-    create_storage,
 )
 from pyagentforge.plugins.integration.task_system.reporter import TaskReporter
+from pyagentforge.plugins.integration.task_system.storage import (
+    InMemoryStorage,
+    create_storage,
+)
 
 
 def test_phase1_data_model():
@@ -73,7 +71,7 @@ def test_phase1_data_model():
             title="Too Deep",
             description="Should fail",
         )
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         assert "Maximum nesting depth" in str(e)
         print("✓ Max nesting depth enforced (3 levels)")

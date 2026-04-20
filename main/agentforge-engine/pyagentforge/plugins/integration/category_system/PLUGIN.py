@@ -6,8 +6,8 @@ Task classification and category-based configuration.
 
 from typing import TYPE_CHECKING, Any
 
-from pyagentforge.core.category import Category, TaskComplexity
-from pyagentforge.core.category_registry import (
+from pyagentforge.plugins.integration.category_system.category import Category, TaskComplexity
+from pyagentforge.plugins.integration.category_system.category_registry import (
     CategoryRegistry,
     ClassificationResult,
     get_category_registry,
@@ -17,7 +17,7 @@ from pyagentforge.plugin.hooks import HookType
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 

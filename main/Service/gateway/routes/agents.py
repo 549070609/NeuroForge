@@ -11,9 +11,9 @@ Agent API Routes - Agent 相关的 REST API 端点
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from ...schemas.agents import (
     AgentExecuteRequest,
@@ -44,10 +44,10 @@ plan_router = APIRouter(prefix="/plans", tags=["Plans"])
 
 def get_agent_service() -> AgentService:
     """获取 AgentService 实例"""
-    from ...core.registry import ServiceRegistry
+    from ...core.registry import AGENT_SERVICE_KEY, ServiceRegistry
 
     registry = ServiceRegistry()
-    service = registry.get("agent")
+    service = registry.get(AGENT_SERVICE_KEY)
     if service is None:
         # 如果服务未注册，创建一个临时实例
         service = AgentService(registry)
@@ -143,7 +143,10 @@ async def execute_agent(
         options=request.options,
     )
 
-    from datetime import datetime
+    from datetime import datetime, timezone
+
+    def _utcnow():
+        return datetime.now(timezone.utc).replace(tzinfo=None)
 
     return AgentExecuteResponse(
         agent_id=agent_id,
@@ -153,7 +156,7 @@ async def execute_agent(
         error=result.get("error"),
         started_at=datetime.fromisoformat(result["started_at"].rstrip("Z"))
         if result.get("started_at")
-        else datetime.utcnow(),
+        else _utcnow(),
         completed_at=datetime.fromisoformat(result["completed_at"].rstrip("Z"))
         if result.get("completed_at")
         else None,

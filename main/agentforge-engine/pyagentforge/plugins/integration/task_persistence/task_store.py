@@ -5,9 +5,8 @@ Persistent storage for tasks.
 """
 
 import json
-import os
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +27,8 @@ class StoredTask:
     blocked_by: list[str] = field(default_factory=list)
     blocks: list[str] = field(default_factory=list)
     result: str | None = None
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -136,7 +135,7 @@ class TaskStore:
             return None
 
         try:
-            with open(task_path, "r", encoding="utf-8") as f:
+            with open(task_path, encoding="utf-8") as f:
                 content = f.read()
 
             return StoredTask.from_json(content)
@@ -185,7 +184,7 @@ class TaskStore:
         try:
             for task_file in self.storage_path.glob("*.json"):
                 try:
-                    with open(task_file, "r", encoding="utf-8") as f:
+                    with open(task_file, encoding="utf-8") as f:
                         task = StoredTask.from_json(f.read())
                     tasks.append(task)
                 except Exception as e:
@@ -234,7 +233,7 @@ class TaskStore:
         self._ensure_initialized()
 
         deleted = 0
-        cutoff = datetime.now(timezone.utc)
+        cutoff = datetime.now(UTC)
 
         # Load all completed tasks
         for task in self.get_completed_tasks():
@@ -245,9 +244,8 @@ class TaskStore:
                 completed_date = datetime.fromisoformat(task.completed_at.replace("Z", "+00:00"))
                 age_days = (cutoff - completed_date).days
 
-                if age_days > days_old:
-                    if self.delete_task(task.id):
-                        deleted += 1
+                if age_days > days_old and self.delete_task(task.id):
+                    deleted += 1
 
             except Exception as e:
                 logger.warning(f"Failed to check age of task {task.id}: {e}")

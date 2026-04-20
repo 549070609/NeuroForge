@@ -5,7 +5,6 @@ MCP Server 实现
 """
 
 import json
-from abc import ABC, abstractmethod
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -118,7 +117,7 @@ class MCPServer:
                 },
             )
 
-    async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
+    async def _handle_initialize(self, _params: dict[str, Any]) -> dict[str, Any]:
         """处理初始化请求"""
         self._initialized = True
 
@@ -176,9 +175,10 @@ class MCPServer:
 
     def get_sse_endpoint(self):
         """获取 SSE 端点处理器"""
+        import asyncio
+
         from fastapi import Request
         from fastapi.responses import StreamingResponse
-        import asyncio
 
         async def sse_handler(request: Request) -> StreamingResponse:
             async def event_generator():

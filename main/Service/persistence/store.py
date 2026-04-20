@@ -173,7 +173,7 @@ class MemoryStore(StateStore):
                     )
 
             version = 1 if current is None else current.version + 1
-            expires_at = (now_ts + ttl) if ttl else None
+            expires_at = (now_ts + ttl) if ttl is not None else None
             record = StoreRecord(
                 namespace=namespace,
                 key=key,
@@ -449,7 +449,7 @@ class SQLiteStateStore(StateStore):
                         )
 
                 new_version = 1 if current_row is None else int(current_row["version"]) + 1
-                expires_at = (now_ts + ttl) if ttl else None
+                expires_at = (now_ts + ttl) if ttl is not None else None
                 payload = json.dumps(value, ensure_ascii=False)
 
                 await self._conn.execute(

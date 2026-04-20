@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
+from ...core import PROXY_SERVICE_KEY
 from ...schemas import HealthResponse
 
 router = APIRouter()
@@ -57,7 +58,7 @@ async def list_active_agents(request: Request) -> dict[str, Any]:
     active: list[dict[str, Any]] = []
 
     if registry:
-        proxy_svc = getattr(registry, "_services", {}).get("agent_proxy")
+        proxy_svc = getattr(registry, "_services", {}).get(PROXY_SERVICE_KEY)
         if proxy_svc and hasattr(proxy_svc, "_executors"):
             for session_id, executor in proxy_svc._executors.items():
                 engine = getattr(executor, "_engine", None)

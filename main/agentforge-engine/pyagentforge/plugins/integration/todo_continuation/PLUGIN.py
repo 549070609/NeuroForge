@@ -1,4 +1,4 @@
-"""
+﻿"""
 Todo Continuation Enforcer Plugin
 
 v4.0: 自动续接未完成的 Todo 任务
@@ -13,8 +13,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyagentforge.plugin.base import BasePlugin
-from pyagentforge.plugin.hooks import HookType, HookDecision
+from pyagentforge.plugin.base import Plugin as BasePlugin
+from pyagentforge.plugin.hooks import HookDecision, HookType
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -160,10 +160,7 @@ class TodoContinuationEnforcerPlugin(BasePlugin):
         remaining_tokens = context.get("remaining_tokens")
         max_tokens = context.get("max_tokens", 200000)
 
-        if remaining_tokens is not None and remaining_tokens < max_tokens * 0.05:
-            return True
-
-        return False
+        return bool(remaining_tokens is not None and remaining_tokens < max_tokens * 0.05)
 
     def _is_waiting_for_user(self, context: dict[str, Any]) -> bool:
         """检查是否在等待用户输入"""
@@ -183,11 +180,7 @@ class TodoContinuationEnforcerPlugin(BasePlugin):
             r"您希望",
         ]
 
-        for pattern in wait_patterns:
-            if re.search(pattern, last_response):
-                return True
-
-        return False
+        return any(re.search(pattern, last_response) for pattern in wait_patterns)
 
     def _has_running_background_tasks(
         self,

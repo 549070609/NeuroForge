@@ -7,12 +7,17 @@ Agent Service - Agent 管理服务
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from contextlib import suppress
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 from ..core.registry import ServiceRegistry
-from ..services.base import BaseService
 from ..schemas.agents import (
     AgentInfoResponse,
     AgentListResponse,
@@ -20,13 +25,14 @@ from ..schemas.agents import (
     NamespaceInfo,
     NamespaceListResponse,
     PlanCreate,
-    PlanResponse,
     PlanListResponse,
+    PlanResponse,
     PlanStatsResponse,
+    StepAddRequest,
     StepResponse,
     StepUpdateRequest,
-    StepAddRequest,
 )
+from ..services.base import BaseService
 
 # 延迟导入，避免循环依赖
 # from Agent.core import AgentDirectory, AgentInfo, PlanFileManager, PlanFile, PlanStep
@@ -293,10 +299,8 @@ class AgentService(BaseService):
 
         status_enum = None
         if status:
-            try:
+            with suppress(ValueError):
                 status_enum = PlanStatus(status)
-            except ValueError:
-                pass
 
         plans = self._plan_manager.list_plans(namespace=namespace, status=status_enum)
 
@@ -329,10 +333,8 @@ class AgentService(BaseService):
 
         status_enum = None
         if request.status:
-            try:
+            with suppress(ValueError):
                 status_enum = StepStatus(request.status)
-            except ValueError:
-                pass
 
         plan = self._plan_manager.update_step(
             plan_id=plan_id,
@@ -417,11 +419,11 @@ class AgentService(BaseService):
         options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute agent via real AgentExecutor runtime path."""
-        started_at = datetime.utcnow()
+        started_at = _utcnow()
         options = options or {}
 
         def _error_response(error: str) -> dict[str, Any]:
-            completed_at = datetime.utcnow()
+            completed_at = _utcnow()
             return {
                 "agent_id": agent_id,
                 "status": "error",
@@ -482,7 +484,7 @@ class AgentService(BaseService):
                 config_overrides=options,
             )
             result = await executor.execute(prompt=task, context=context)
-            completed_at = datetime.utcnow()
+            completed_at = _utcnow()
             return {
                 "agent_id": agent_id,
                 "status": "completed" if result.success else "error",

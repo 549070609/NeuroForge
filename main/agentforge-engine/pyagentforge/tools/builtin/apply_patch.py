@@ -4,7 +4,7 @@ ApplyPatch 工具
 应用 Git 补丁
 """
 
-import subprocess
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class ApplyPatchTool(BaseTool):
-    """ApplyPatch 工具 - 应用补丁"""
+    """ApplyPatch 宸ュ叿 - 应用补丁"""
 
     name = "apply_patch"
     description = """应用 Git 格式的补丁。
@@ -111,7 +111,7 @@ class ApplyPatchTool(BaseTool):
         # 解析补丁影响的文件
         affected_files = self._parse_affected_files(patch)
 
-        # 检查权限
+        #
         if self.permission_checker:
             from pyagentforge.tools.permission import PermissionResult
 
@@ -119,13 +119,13 @@ class ApplyPatchTool(BaseTool):
                 if self.permission_checker.check_path(f) == PermissionResult.DENY:
                     return f"Error: Cannot modify '{f}' - access denied"
 
-        # 使用 git apply 或 patch 命令
+        # 使用 git apply 鎴?patch 鍛戒护
         try:
-            # 优先使用 git apply
+            # 浼樺厛使用 git apply
             result = await self._git_apply(patch, check, reverse, strip)
 
             if "not a git repository" in result.lower():
-                # 回退到 patch 命令
+                #
                 result = await self._patch_command(patch, check, reverse, strip)
 
             return result
@@ -153,7 +153,7 @@ class ApplyPatchTool(BaseTool):
             cmd.append("--reverse")
         cmd.extend(["-p", str(strip)])
 
-        # 使用 stdin 传递补丁
+        #
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
@@ -167,7 +167,7 @@ class ApplyPatchTool(BaseTool):
         if process.returncode == 0:
             if check:
                 return "Patch would apply successfully (dry run)"
-            return f"Patch applied successfully\nAffected files:\n" + "\n".join(
+            return "Patch applied successfully\nAffected files:\n" + "\n".join(
                 f"  - {f}" for f in self._parse_affected_files(patch)
             )
         else:
@@ -220,11 +220,8 @@ class ApplyPatchTool(BaseTool):
         return list(set(files))
 
 
-import asyncio  # 确保导入
-
-
 class DiffTool(BaseTool):
-    """Diff 工具 - 生成差异"""
+    """"""
 
     name = "diff"
     description = """生成文件或目录的差异。
@@ -262,7 +259,7 @@ class DiffTool(BaseTool):
         file2: str,
         context_lines: int = 3,
     ) -> str:
-        """生成差异"""
+        """"""
         path1 = Path(file1)
         path2 = Path(file2)
 
@@ -297,3 +294,5 @@ class DiffTool(BaseTool):
 
         except Exception as e:
             return f"Error generating diff: {str(e)}"
+
+

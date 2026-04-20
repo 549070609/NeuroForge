@@ -1,7 +1,7 @@
 """
 MateAgent 工具基类
 
-扩展 pyagentforge.kernel.base_tool.BaseTool，添加:
+扩展 pyagentforge.tools.base.BaseTool，添加:
 - category: 工具分类
 - requires_confirmation: 是否需要确认
 - 延迟获取 AgentDirectory 和 TemplateLoader

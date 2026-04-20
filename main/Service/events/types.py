@@ -17,11 +17,11 @@ Example SSE Event:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """SSE event types."""
 
     # Connection events

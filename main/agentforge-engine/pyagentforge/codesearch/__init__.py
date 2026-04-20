@@ -4,9 +4,6 @@ CodeSearch 模块
 增强版代码搜索, 支持 AST 解析、增量索引、高级查询语法
 """
 
-from pathlib import Path
-from typing import TYPE_CHECKING
-
 from pyagentforge.codesearch.config import CodeSearchConfig
 from pyagentforge.codesearch.indexers.symbol_indexer import SymbolIndexer
 from pyagentforge.codesearch.parsers.base import BaseParser, ParserRegistry
@@ -15,11 +12,8 @@ from pyagentforge.codesearch.parsers.regex_parser import RegexParser
 from pyagentforge.codesearch.query.executor import QueryExecutor
 from pyagentforge.codesearch.query.parser import QueryParser
 from pyagentforge.codesearch.storage.database import CodeSearchDatabase
-from pyagentforge.codesearch.storage.models import Symbol, SymbolKind, FileHash
+from pyagentforge.codesearch.storage.models import FileHash, Symbol, SymbolKind
 from pyagentforge.codesearch.tool import CodeSearchTool, create_codesearch_tool
-
-if TYPE_CHECKING:
-    from pyagentforge.tools.permission import PermissionChecker
 
 __all__ = [
     # 核心类

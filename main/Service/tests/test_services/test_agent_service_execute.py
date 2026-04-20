@@ -108,7 +108,7 @@ async def test_execute_agent_success_with_options_override(tmp_path: Path, monke
 async def test_execute_agent_not_found_returns_error(tmp_path: Path):
     registry = ServiceRegistry()
     service = AgentService(registry)
-    service.get_agent = lambda agent_id: None
+    service.get_agent = lambda _agent_id: None
 
     result = await service.execute_agent(agent_id="missing", task="task")
 
@@ -129,9 +129,11 @@ async def test_execute_agent_executor_exception_returns_error(tmp_path: Path, mo
             self.workspace_context = workspace_context
 
         async def initialize(self, agent_definition, system_prompt, config_overrides):
+            _ = (agent_definition, system_prompt, config_overrides)
             raise RuntimeError("executor failed")
 
         async def execute(self, prompt, context):
+            _ = (prompt, context)
             return _Result(success=True, output="unused")
 
     from Service.services.proxy import agent_executor as executor_module

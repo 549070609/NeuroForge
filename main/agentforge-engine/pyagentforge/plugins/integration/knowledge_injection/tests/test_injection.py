@@ -4,12 +4,10 @@ Tests for Knowledge Injector
 
 import os
 import tempfile
-import pytest
 
-from pyagentforge.core.knowledge_injector import (
+from pyagentforge.plugins.integration.knowledge_injection.knowledge_injector import (
     InjectionResult,
     KnowledgeInjector,
-    KnowledgeSource,
 )
 
 

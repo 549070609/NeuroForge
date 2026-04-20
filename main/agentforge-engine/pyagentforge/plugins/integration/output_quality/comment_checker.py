@@ -6,7 +6,6 @@ Detects excessive comments in code output.
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 from pyagentforge.utils.logging import get_logger
 
@@ -153,7 +152,7 @@ class CommentChecker:
         in_multiline_comment = False
         issues: list[str] = []
 
-        for i, line in enumerate(lines, 1):
+        for _i, line in enumerate(lines, 1):
             stripped = line.strip()
 
             # Skip empty lines

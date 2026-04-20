@@ -26,10 +26,10 @@ async def test_plugin_discovery():
     from pyagentforge.plugin.dependencies import DependencyResolver
 
     registry = PluginRegistry()
-    resolver = DependencyResolver()
+    resolver = DependencyResolver(registry)
     loader = PluginLoader(registry, resolver)
 
-    plugin_dirs = [str(Path(__file__).parent.parent)]
+    plugin_dirs = [str(Path(__file__).parent)]
     discovered = loader.discover(plugin_dirs)
 
     print(f"  发现的插件目录: {discovered}")
@@ -51,10 +51,10 @@ async def test_plugin_loading():
     from pyagentforge.plugin.dependencies import DependencyResolver
 
     registry = PluginRegistry()
-    resolver = DependencyResolver()
+    resolver = DependencyResolver(registry)
     loader = PluginLoader(registry, resolver)
 
-    plugin_path = str(Path(__file__).parent.parent)
+    plugin_path = str(Path(__file__).parent)
     plugin = loader.load(plugin_path)
 
     print(f"  插件 ID: {plugin.metadata.id}")
@@ -81,10 +81,10 @@ async def test_plugin_tools():
     from pyagentforge.plugin.base import PluginContext
 
     registry = PluginRegistry()
-    resolver = DependencyResolver()
+    resolver = DependencyResolver(registry)
     loader = PluginLoader(registry, resolver)
 
-    plugin_path = str(Path(__file__).parent.parent)
+    plugin_path = str(Path(__file__).parent)
     plugin = loader.load(plugin_path)
 
     # 模拟上下文
@@ -140,10 +140,10 @@ async def test_tool_execution():
     from pyagentforge.plugin.base import PluginContext
 
     registry = PluginRegistry()
-    resolver = DependencyResolver()
+    resolver = DependencyResolver(registry)
     loader = PluginLoader(registry, resolver)
 
-    plugin_path = str(Path(__file__).parent.parent)
+    plugin_path = str(Path(__file__).parent)
     plugin = loader.load(plugin_path)
 
     # 模拟上下文

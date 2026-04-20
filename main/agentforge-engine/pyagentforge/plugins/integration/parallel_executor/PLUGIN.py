@@ -5,16 +5,16 @@ Provides parallel subagent execution functionality
 """
 
 import asyncio
-import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 
 
-class SubagentStatus(str, Enum):
+class SubagentStatus(StrEnum):
     """Subagent task status"""
     PENDING = "pending"
     RUNNING = "running"
@@ -31,10 +31,10 @@ class SubagentTask:
     prompt: str
     agent_type: str = "explore"
     status: SubagentStatus = SubagentStatus.PENDING
-    result: Optional[str] = None
-    error: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    result: str | None = None
+    error: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
     duration_ms: int = 0
 
 
@@ -43,8 +43,8 @@ class SubagentResult:
     """Subagent execution result"""
     task_id: str
     status: SubagentStatus
-    result: Optional[str] = None
-    error: Optional[str] = None
+    result: str | None = None
+    error: str | None = None
     duration_ms: int = 0
 
 
@@ -66,7 +66,7 @@ class ParallelExecutorPlugin(Plugin):
         super().__init__()
         self._tasks: dict[str, SubagentTask] = {}
         self._max_concurrent: int = 3
-        self._executor_callback: Optional[Callable] = None
+        self._executor_callback: Callable | None = None
 
     async def on_plugin_activate(self) -> None:
         """Activate plugin"""
@@ -93,7 +93,7 @@ class ParallelExecutorPlugin(Plugin):
     async def execute_parallel(
         self,
         tasks: list[dict[str, Any]],
-        max_concurrent: Optional[int] = None,
+        max_concurrent: int | None = None,
     ) -> list[SubagentResult]:
         """
         Execute multiple subagent tasks in parallel
@@ -167,9 +167,9 @@ class ParallelExecutorPlugin(Plugin):
             Execution result
         """
         task.status = SubagentStatus.RUNNING
-        task.started_at = datetime.now(timezone.utc).isoformat()
+        task.started_at = datetime.now(UTC).isoformat()
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             self.context.logger.info(
@@ -190,9 +190,9 @@ class ParallelExecutorPlugin(Plugin):
 
             task.status = SubagentStatus.COMPLETED
             task.result = result
-            task.completed_at = datetime.now(timezone.utc).isoformat()
+            task.completed_at = datetime.now(UTC).isoformat()
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            duration = (datetime.now(UTC) - start_time).total_seconds() * 1000
             task.duration_ms = int(duration)
 
             self.context.logger.info(
@@ -213,9 +213,9 @@ class ParallelExecutorPlugin(Plugin):
         except Exception as e:
             task.status = SubagentStatus.FAILED
             task.error = str(e)
-            task.completed_at = datetime.now(timezone.utc).isoformat()
+            task.completed_at = datetime.now(UTC).isoformat()
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            duration = (datetime.now(UTC) - start_time).total_seconds() * 1000
             task.duration_ms = int(duration)
 
             self.context.logger.error(
@@ -233,7 +233,7 @@ class ParallelExecutorPlugin(Plugin):
                 duration_ms=task.duration_ms,
             )
 
-    def get_task_status(self, task_id: str) -> Optional[SubagentTask]:
+    def get_task_status(self, task_id: str) -> SubagentTask | None:
         """
         Get task status by ID
 

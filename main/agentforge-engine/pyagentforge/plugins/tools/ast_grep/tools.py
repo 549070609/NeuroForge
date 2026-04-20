@@ -5,14 +5,20 @@ AST-Grep 工具实现
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
-from pyagentforge.kernel.base_tool import BaseTool
-
+from pyagentforge.tools.base import BaseTool
 from pyagentforge.plugins.tools.ast_grep.binary_manager import BinaryManager
 from pyagentforge.plugins.tools.ast_grep.cli import run_sg
-from pyagentforge.plugins.tools.ast_grep.constants import CLI_LANGUAGES, DEFAULT_TIMEOUT_MS, DEFAULT_MAX_MATCHES
-from pyagentforge.plugins.tools.ast_grep.result_formatter import format_search_result, format_replace_result, get_empty_result_hint
+from pyagentforge.plugins.tools.ast_grep.constants import (
+    CLI_LANGUAGES,
+    DEFAULT_TIMEOUT_MS,
+)
+from pyagentforge.plugins.tools.ast_grep.result_formatter import (
+    format_replace_result,
+    format_search_result,
+    get_empty_result_hint,
+)
 
 
 class AstGrepSearchTool(BaseTool):
@@ -60,7 +66,7 @@ class AstGrepSearchTool(BaseTool):
     def __init__(
         self,
         binary_manager: BinaryManager,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         """
         初始化搜索工具
@@ -174,7 +180,7 @@ class AstGrepReplaceTool(BaseTool):
     def __init__(
         self,
         binary_manager: BinaryManager,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         """
         初始化替换工具

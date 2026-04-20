@@ -113,11 +113,7 @@ class CodeSearchConfig:
                 return False
 
         # 检查包含模式
-        for pattern in self.include_patterns:
-            if fnmatch.fnmatch(file_path.name, pattern):
-                return True
-
-        return False
+        return any(fnmatch.fnmatch(file_path.name, pattern) for pattern in self.include_patterns)
 
     def matches_language(self, file_path: Path) -> str | None:
         """获取文件对应的语言"""

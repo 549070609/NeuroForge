@@ -2,14 +2,14 @@
 Webhook Channel Tests
 """
 
-import pytest
-import hmac
 import hashlib
+import hmac
 import json
-from unittest.mock import MagicMock
 
-from pyagentforge.capabilities.channels.webhook import WebhookChannel
+import pytest
+
 from pyagentforge.capabilities.channels.base import ChannelStatus
+from pyagentforge.capabilities.channels.webhook import WebhookChannel
 
 
 class TestWebhookChannel:

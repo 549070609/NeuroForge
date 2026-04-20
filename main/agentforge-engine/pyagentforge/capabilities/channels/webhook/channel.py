@@ -4,16 +4,16 @@ Webhook Channel - Webhook 接收通道
 提供通用的 Webhook 接收能力，支持 HMAC 签名验证。
 """
 
-from typing import Any, Optional, Callable
-from datetime import datetime
 import hashlib
 import hmac
 import json
+from collections.abc import Callable
+from typing import Any
 
 from pyagentforge.capabilities.channels.base import (
     BaseChannel,
-    ChannelStatus,
     ChannelMessage,
+    ChannelStatus,
     SendMessageResult,
 )
 from pyagentforge.utils.logging import get_logger
@@ -114,9 +114,9 @@ class WebhookChannel(BaseChannel):
 
     async def send_message(
         self,
-        to: str,
-        content: str,
-        **kwargs: Any
+        _to: str,
+        _content: str,
+        **_kwargs: Any
     ) -> SendMessageResult:
         """
         发送消息 (Webhook 通道不支持主动发送)
@@ -152,7 +152,7 @@ class WebhookChannel(BaseChannel):
         self,
         path: str,
         handler: WebhookHandler,
-        secret: Optional[str] = None,
+        secret: str | None = None,
         auto_create_session: bool = True,
     ) -> None:
         """
@@ -182,7 +182,7 @@ class WebhookChannel(BaseChannel):
         }
 
         logger.info(
-            f"Registered webhook handler",
+            "Registered webhook handler",
             extra_data={
                 "path": path,
                 "has_secret": secret is not None,
@@ -256,7 +256,7 @@ class WebhookChannel(BaseChannel):
                 result = handler(payload, headers)
 
             logger.debug(
-                f"Webhook handled successfully",
+                "Webhook handled successfully",
                 extra_data={"path": path}
             )
 
@@ -268,7 +268,7 @@ class WebhookChannel(BaseChannel):
 
         except Exception as e:
             logger.error(
-                f"Webhook handler error",
+                "Webhook handler error",
                 extra_data={"path": path, "error": str(e)}
             )
             raise

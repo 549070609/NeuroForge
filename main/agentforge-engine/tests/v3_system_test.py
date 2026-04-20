@@ -11,35 +11,31 @@ PyAgentForge v3.0 系统集成测试
 3. 边界测试 - 验证异常处理
 """
 
-import pytest
 import asyncio
-import os
 import time
-from datetime import datetime
+
+import pytest
+
+from pyagentforge.automation.scheduler import AutomationManager
+from pyagentforge.capabilities.channels.base import (
+    BaseChannel,
+    ChannelMessage,
+    ChannelStatus,
+    SendMessageResult,
+)
+from pyagentforge.config.env_parser import (
+    resolve_config,
+    resolve_env_vars,
+)
 
 # Phase 1 导入
-from pyagentforge.foundation.session.session_key import SessionKey
-from pyagentforge.foundation.config.env_parser import (
-    resolve_env_vars,
-    resolve_config,
-    has_env_vars,
-    get_referenced_vars,
-)
-from pyagentforge.capabilities.channels.base import (
-    ChannelStatus,
-    ChannelMessage,
-    SendMessageResult,
-    BaseChannel,
-)
+from pyagentforge.plugins.integration.persistence.session_key import SessionKey
 
 # Phase 2 导入
 from pyagentforge.middleware.base import BaseMiddleware, MiddlewareContext
 from pyagentforge.middleware.pipeline import MiddlewarePipeline
 from pyagentforge.middleware.telemetry.collector import TelemetryCollector
 from pyagentforge.middleware.telemetry.telemetry import TelemetryMiddleware
-from pyagentforge.automation.task import TriggerType, AutomationTask
-from pyagentforge.automation.scheduler import AutomationManager
-
 
 # ============================================================
 # Phase 1: Session Key 体系
@@ -652,7 +648,7 @@ class TestPerformance:
                 return await next(ctx)
 
         pipeline = MiddlewarePipeline()
-        for i in range(10):
+        for _i in range(10):
             pipeline.add(NoOpMiddleware())
 
         ctx = MiddlewareContext(

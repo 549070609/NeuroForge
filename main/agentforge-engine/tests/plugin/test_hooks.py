@@ -5,22 +5,20 @@ Comprehensive tests for the hook registration, emission, and chaining system.
 """
 
 import asyncio
-from typing import Any, List, Tuple
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from pyagentforge.plugin.hooks import (
-    HookRegistry,
-    HookType,
-    HookResult,
-    HookDecision,
-    HookPriority,
-    HookEntry,
     HookChainResult,
+    HookDecision,
+    HookEntry,
+    HookPriority,
+    HookRegistry,
+    HookResult,
+    HookType,
     create_hook_registry,
 )
-
 
 # ============================================================================
 # Mock Plugin Class
@@ -186,7 +184,8 @@ class TestHookRegistryEmitSingle:
     async def test_emit_to_single_hook(self, hook_registry, mock_plugin):
         """Test emitting to a single hook."""
         call_args = []
-        callback = lambda msg: call_args.append(msg)
+        def callback(msg):
+            return call_args.append(msg)
 
         hook_registry.register(
             HookType.ON_BEFORE_LLM_CALL,
@@ -194,7 +193,7 @@ class TestHookRegistryEmitSingle:
             callback
         )
 
-        results = await hook_registry.emit(HookType.ON_BEFORE_LLM_CALL, "test_message")
+        await hook_registry.emit(HookType.ON_BEFORE_LLM_CALL, "test_message")
 
         assert len(call_args) == 1
         assert call_args[0] == "test_message"
@@ -215,7 +214,7 @@ class TestHookRegistryEmitSingle:
             callback
         )
 
-        results = await hook_registry.emit(
+        await hook_registry.emit(
             HookType.ON_BEFORE_LLM_CALL,
             "arg1", "arg2",
             key1="value1",
@@ -758,7 +757,7 @@ class TestHookRegistryContextPassing:
 
         hook_registry.register(HookType.ON_BEFORE_LLM_CALL, mock_plugin, context_hook)
 
-        results = await hook_registry.emit(
+        await hook_registry.emit(
             HookType.ON_BEFORE_LLM_CALL,
             "message",
             extra="context"

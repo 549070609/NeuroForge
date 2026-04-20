@@ -6,19 +6,19 @@ PyAgentForge Plugin System
 
 from pyagentforge.plugin.base import (
     Plugin,
-    PluginMetadata,
     PluginContext,
+    PluginMetadata,
     PluginType,
 )
-from pyagentforge.plugin.hooks import HookType, HookRegistry
-from pyagentforge.plugin.registry import PluginRegistry, PluginState
 from pyagentforge.plugin.dependencies import (
-    DependencyResolver,
     CircularDependencyError,
     DependencyMissingError,
+    DependencyResolver,
 )
+from pyagentforge.plugin.hooks import HookRegistry, HookType
 from pyagentforge.plugin.loader import PluginLoader, PluginLoadError
 from pyagentforge.plugin.manager import PluginManager
+from pyagentforge.plugin.registry import PluginRegistry, PluginState
 
 __all__ = [
     # Base classes

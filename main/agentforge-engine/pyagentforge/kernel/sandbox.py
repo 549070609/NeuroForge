@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import sys
 import tempfile
@@ -99,7 +100,7 @@ class SandboxExecutor:
                     proc.communicate(),
                     timeout=self.config.timeout_seconds,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.communicate()
                 elapsed = int((time.monotonic() - start) * 1000)
@@ -124,10 +125,8 @@ class SandboxExecutor:
             )
 
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 Path(script_path).unlink(missing_ok=True)
-            except Exception:
-                pass
 
     @staticmethod
     def _generate_runner_script(tool_name: str, tool_input: dict[str, Any]) -> str:

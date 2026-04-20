@@ -8,23 +8,24 @@
 - 统计信息
 """
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+import pytest
 
 from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
-from pyagentforge.plugins.integration.chain_of_thought.models import (
-    ChainOfThought,
-    CoTPhase,
-    Constraint,
-    ConstraintType,
-    ConstraintViolation,
-)
 from pyagentforge.plugins.integration.chain_of_thought.cot_tools import (
     AnalyzeCoTTool,
     ImproveCoTTool,
     ReflectCoTTool,
     StatsCoTTool,
+)
+from pyagentforge.plugins.integration.chain_of_thought.models import (
+    ChainOfThought,
+    Constraint,
+    ConstraintType,
+    ConstraintViolation,
+    CoTPhase,
 )
 
 

@@ -5,11 +5,12 @@
 支持多种压缩策略和动态配置
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from pyagentforge.kernel.message import Message, TextBlock, ThinkingBlock, ToolUseBlock
 from pyagentforge.utils.logging import get_logger
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class CompactionStrategy(str, Enum):
+class CompactionStrategy(StrEnum):
     """压缩策略"""
     SIMPLE = "simple"  # 简单 LLM 摘要
     AGENT = "agent"    # Agent 智能压缩
@@ -537,7 +538,7 @@ class AgentCompactor(Compactor):
         """
         # 分析最近的几条消息，判断是否需要特殊处理
         recent_count = self.settings.agent_analyze_recent
-        recent_messages = messages[-recent_count:] if len(messages) > recent_count else messages
+        messages[-recent_count:] if len(messages) > recent_count else messages
 
         analysis = {
             "total_messages": len(messages),
@@ -552,9 +553,8 @@ class AgentCompactor(Compactor):
                 for block in msg.content:
                     if isinstance(block, ToolUseBlock):
                         analysis["has_tool_calls"] = True
-                    elif isinstance(block, TextBlock):
-                        if "```" in block.text:
-                            analysis["has_code_blocks"] = True
+                    elif isinstance(block, TextBlock) and "```" in block.text:
+                        analysis["has_code_blocks"] = True
 
         return analysis
 

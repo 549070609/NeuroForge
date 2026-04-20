@@ -76,7 +76,7 @@ class PersistentEventBus(EventBus):
         if not self._log_path.exists():
             return 0
         try:
-            with open(self._log_path, "r", encoding="utf-8") as f:
+            with open(self._log_path, encoding="utf-8") as f:
                 return sum(1 for _ in f)
         except Exception:
             return 0
@@ -99,7 +99,7 @@ class PersistentEventBus(EventBus):
         if not self._log_path.exists():
             return events
 
-        with open(self._log_path, "r", encoding="utf-8") as f:
+        with open(self._log_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:

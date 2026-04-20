@@ -6,20 +6,15 @@ loading, activation, deactivation, and hook/tool management.
 """
 
 import asyncio
-import logging
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from pyagentforge.tools.base import BaseTool
 from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
-from pyagentforge.plugin.hooks import HookRegistry, HookType, HookPriority
+from pyagentforge.plugin.hooks import HookPriority, HookType
 from pyagentforge.plugin.manager import PluginManager
-from pyagentforge.plugin.registry import PluginRegistry, PluginState
-from pyagentforge.plugin.dependencies import DependencyResolver, DependencyMissingError, CircularDependencyError
-from pyagentforge.plugin.loader import PluginLoader
-from pyagentforge.kernel.base_tool import BaseTool
-
+from pyagentforge.plugin.registry import PluginState
 
 # ============================================================================
 # Mock Plugin Classes
@@ -54,9 +49,9 @@ class MockPlugin(Plugin):
         name: str = "Test Plugin",
         version: str = "1.0.0",
         plugin_type: PluginType = PluginType.TOOL,
-        dependencies: List[str] | None = None,
-        optional_dependencies: List[str] | None = None,
-        conflicts: List[str] | None = None,
+        dependencies: list[str] | None = None,
+        optional_dependencies: list[str] | None = None,
+        conflicts: list[str] | None = None,
         priority: int = 0,
         provides_tools: bool = False,
     ):
@@ -73,7 +68,7 @@ class MockPlugin(Plugin):
             priority=priority,
         )
         self._provides_tools = provides_tools
-        self._hooks_called: List[str] = []
+        self._hooks_called: list[str] = []
         self._on_load_called = False
         self._on_activate_called = False
         self._on_deactivate_called = False
@@ -101,7 +96,7 @@ class MockPlugin(Plugin):
         self._hooks_called.append("on_before_llm_call")
         return None
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """Return tools if configured to do so."""
         if self._provides_tools:
             return [MockTool()]
@@ -233,6 +228,7 @@ class TestPluginManagerInitialize:
 
         config = {
             "auto_discover": True,
+            "auto_enable_all": True,
             "auto_discover_dir": ".agent/plugins",
             "enabled": [],
             "plugin_dirs": [],
@@ -524,7 +520,7 @@ class TestPluginManagerEmitHook:
         await plugin_manager.activate_plugin("plugin.one")
         await plugin_manager.activate_plugin("plugin.two")
 
-        results = await plugin_manager.emit_hook("on_before_llm_call", [])
+        await plugin_manager.emit_hook("on_before_llm_call", [])
 
         assert "on_before_llm_call" in plugin1._hooks_called
         assert "on_before_llm_call" in plugin2._hooks_called
@@ -589,8 +585,8 @@ class TestPluginManagerPresetLoading:
         preset_plugins = plugin_manager._get_preset_plugins("standard")
 
         assert "tools.code_tools" in preset_plugins
-        assert "tools.file_tools" in preset_plugins
         assert "middleware.compaction" in preset_plugins
+        assert "integration.events" in preset_plugins
 
     def test_preset_loading_full(self, plugin_manager):
         """Test full preset returns all expected plugins."""
@@ -599,7 +595,7 @@ class TestPluginManagerPresetLoading:
         assert "interface.rest_api" not in preset_plugins
         assert "tools.code_tools" in preset_plugins
         assert "middleware.thinking" in preset_plugins
-        assert len(preset_plugins) > 10  # Full preset should have many plugins
+        assert len(preset_plugins) >= 10  # Full preset should have many plugins
 
     def test_preset_loading_unknown(self, plugin_manager):
         """Test unknown preset returns empty set."""
@@ -629,7 +625,7 @@ class TestPluginManagerPresetLoading:
         effective = plugin_manager._get_effective_plugins(config)
 
         assert "tools.code_tools" not in effective
-        assert "tools.file_tools" in effective  # Other standard plugins should be there
+        assert "middleware.compaction" in effective  # Other standard plugins should be there
 
 
 # ============================================================================
@@ -692,7 +688,6 @@ class TestPluginManagerPriority:
         )
 
         # Emit the hook
-        import asyncio
         asyncio.run(plugin_manager.hooks.emit(HookType.ON_BEFORE_LLM_CALL, []))
 
         assert call_order == ["high", "low"]
@@ -788,7 +783,7 @@ class TestPluginManagerErrorHandling:
         )
 
         # Emit should not raise
-        results = await plugin_manager.hooks.emit(HookType.ON_BEFORE_LLM_CALL, [])
+        await plugin_manager.hooks.emit(HookType.ON_BEFORE_LLM_CALL, [])
 
         # Both hooks should have been attempted
         assert "failing" in call_order

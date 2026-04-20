@@ -4,14 +4,16 @@
 支持按标签、主题、时间的组合过滤召回记忆
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
-import json
-import re
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
-from ..vector_store import ChromaVectorStore
-from ..config import LongMemoryConfig
+try:
+    from ..vector_store import ChromaVectorStore
+    from ..config import LongMemoryConfig
+except ImportError:
+    from vector_store import ChromaVectorStore
+    from config import LongMemoryConfig
 
 
 class MemoryListTool(BaseTool):
@@ -237,7 +239,7 @@ class MemoryListTool(BaseTool):
                                 continue
 
                     filtered_entries.append(entry)
-                except Exception as e:
+                except Exception:
                     continue
 
         # 应用 offset 和 limit

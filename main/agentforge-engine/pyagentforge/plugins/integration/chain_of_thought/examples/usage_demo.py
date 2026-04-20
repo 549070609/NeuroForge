@@ -5,18 +5,19 @@
 """
 
 import asyncio
-from pathlib import Path
 
 # 模拟环境设置
 import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 from pyagentforge.plugins.integration.chain_of_thought.models import (
     ChainOfThought,
-    CoTPhase,
     Constraint,
     ConstraintType,
+    CoTPhase,
 )
 
 

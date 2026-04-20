@@ -4,25 +4,22 @@ Tests for AgentEngine class
 Comprehensive tests for the core Agent execution engine.
 """
 
-import asyncio
 import uuid
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentConfig, AgentEngine
-from pyagentforge.kernel.executor import ToolExecutor, PermissionChecker, PermissionResult
 from pyagentforge.kernel.message import (
-    Message,
     ProviderResponse,
     TextBlock,
     ToolUseBlock,
 )
-from pyagentforge.kernel.base_provider import BaseProvider
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class MockProvider(BaseProvider):

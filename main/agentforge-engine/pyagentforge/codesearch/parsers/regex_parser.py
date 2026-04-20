@@ -92,7 +92,7 @@ class RegexParser(BaseParser):
             return []
 
         file_hash = hashlib.md5(content.encode()).hexdigest()
-        lines = content.split("\n")
+        content.split("\n")
         symbols: list[Symbol] = []
 
         patterns = self.LANGUAGE_PATTERNS[language]

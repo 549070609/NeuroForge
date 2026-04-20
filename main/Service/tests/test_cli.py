@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 """
 Service Layer 测试 CLI
 
@@ -23,16 +23,16 @@ Service Layer 测试 CLI
     /quit                    - 退出
 """
 
-import sys
-import os
-import json
-import asyncio
-import logging
 import argparse
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Any
+import asyncio
+import json
+import logging
+import os
+import sys
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SERVICE_DIR = SCRIPT_DIR.parent
@@ -43,7 +43,8 @@ for p in paths_to_add:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
+
 load_dotenv(MAIN_DIR.parent / ".env")
 
 model_api_key = os.environ.get("TEST_LLM_API_KEY", os.environ.get("GLM_API_KEY", ""))
@@ -110,7 +111,7 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging(debug: bool = False, log_file: Optional[str] = None):
+def setup_logging(debug: bool = False, log_file: str | None = None):
     """配置日志系统"""
     level = logging.DEBUG if debug else logging.INFO
 
@@ -188,7 +189,7 @@ class AGentTestClient:
         self.registry = None
         self.agent_service = None
         self.sessions: dict[str, SessionInfo] = {}
-        self.current_session: Optional[str] = None
+        self.current_session: str | None = None
         self._initialized = False
 
     async def initialize(self) -> bool:
@@ -200,7 +201,7 @@ class AGentTestClient:
             self.logger.info("导入 Service 层模块...")
             print("[DEBUG] 导入 Service 层模块...")
             from Service.config import ServiceSettings
-            from Service.core import ServiceRegistry
+            from Service.core import AGENT_SERVICE_KEY, ServiceRegistry
             from Service.services.agent_service import AgentService
             print("[DEBUG] 导入完成")
 
@@ -221,7 +222,7 @@ class AGentTestClient:
             # 4. 创建并注册服务
             self.logger.info("创建 AgentService...")
             self.agent_service = AgentService(self.registry)
-            self.registry.register("agent", self.agent_service)
+            self.registry.register(AGENT_SERVICE_KEY, self.agent_service)
             self.logger.debug("AgentService 已注册到 registry")
 
             # 5. 初始化所有服务
@@ -253,9 +254,9 @@ class AGentTestClient:
     async def create_session(
         self,
         model: str = "claude-sonnet-4",
-        tools: Optional[list[str]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> Optional[str]:
+        tools: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> str | None:
         """创建 Agent 会话"""
         print_header("创建 Agent 会话")
 
@@ -328,7 +329,7 @@ class AGentTestClient:
         session_id = await self.create_session()
         return session_id is not None
 
-    async def execute(self, prompt: str, session_id: Optional[str] = None) -> Optional[str]:
+    async def execute(self, prompt: str, session_id: str | None = None) -> str | None:
         """同步执行"""
         print_header("执行同步请求")
 
@@ -384,7 +385,7 @@ class AGentTestClient:
             self.logger.debug(traceback.format_exc())
             return None
 
-    async def stream(self, prompt: str, session_id: Optional[str] = None):
+    async def stream(self, prompt: str, session_id: str | None = None):
         """流式执行"""
         print_header("执行流式请求")
 
@@ -426,7 +427,7 @@ class AGentTestClient:
 
                     try:
                         data_json = json.loads(data)
-                    except:
+                    except Exception:
                         data_json = data
 
                     if event_type == "connected":
@@ -445,7 +446,7 @@ class AGentTestClient:
 
                     elif event_type == "complete":
                         elapsed = (datetime.now() - start_time).total_seconds()
-                        self.logger.info(f"✓ 流式完成")
+                        self.logger.info("✓ 流式完成")
                         self.logger.info(f"事件数: {event_count}, 耗时: {elapsed:.2f}s")
                         if data_json.get("duration_ms"):
                             self.logger.info(f"服务端耗时: {data_json['duration_ms']:.0f}ms")
@@ -464,7 +465,7 @@ class AGentTestClient:
             import traceback
             self.logger.debug(traceback.format_exc())
 
-    async def reset(self, session_id: Optional[str] = None) -> bool:
+    async def reset(self, session_id: str | None = None) -> bool:
         """重置会话"""
         print_header("重置会话")
 
@@ -487,7 +488,7 @@ class AGentTestClient:
             self.logger.error(f"✗ 重置失败: {e}")
             return False
 
-    async def destroy(self, session_id: Optional[str] = None) -> bool:
+    async def destroy(self, session_id: str | None = None) -> bool:
         """销毁会话"""
         print_header("销毁会话")
 
@@ -513,7 +514,7 @@ class AGentTestClient:
             self.logger.error(f"✗ 销毁失败: {e}")
             return False
 
-    async def get_status(self, session_id: Optional[str] = None):
+    async def get_status(self, session_id: str | None = None):
         """获取会话状态"""
         print_header("获取会话状态")
 
@@ -540,7 +541,7 @@ class AGentTestClient:
         except Exception as e:
             self.logger.error(f"✗ 获取状态失败: {e}")
 
-    async def get_capabilities(self, session_id: Optional[str] = None):
+    async def get_capabilities(self, session_id: str | None = None):
         """获取会话能力"""
         print_header("获取会话能力")
 
@@ -746,7 +747,7 @@ async def batch_mode(client: AGentTestClient, batch_file: str, logger: logging.L
     logger.info(f"加载批处理文件: {batch_file}")
 
     try:
-        with open(batch_file, 'r', encoding='utf-8') as f:
+        with open(batch_file, encoding='utf-8') as f:
             batch = json.load(f)
 
         for step in batch:
@@ -820,5 +821,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\n已取消")
- 
+
 

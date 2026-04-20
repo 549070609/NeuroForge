@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-04-20
+
+### 💥 Breaking Changes — Hard Cutover
+
+Removed every historical compatibility entry point. The SDK surface is now
+restricted to `kernel`, `plugin(s)`, `tools/builtin`, `agents`, `config`,
+`workflow`, `client`, and `foundation`.
+
+The agent-description stack (`building`, `prompts`, `skills`, `commands`) was
+merged into `pyagentforge.agents.*` so that everything describing *what an
+agent is* lives in one place. Top-level `pyagentforge.building`,
+`pyagentforge.prompts`, `pyagentforge.skills` and `pyagentforge.commands`
+packages no longer exist — import from `pyagentforge.agents.building`,
+`pyagentforge.agents.prompts`, `pyagentforge.agents.skills` and
+`pyagentforge.agents.commands` instead.
+
+Deleted top-level packages:
+
+- `pyagentforge.foundation` — empty "base layer" declaration.
+  - `foundation.config.env_parser` → `pyagentforge.config.env_parser`
+    (also re-exported from `pyagentforge.config`)
+  - `foundation.session.session_key` →
+    `pyagentforge.plugins.integration.persistence.session_key`
+    (also re-exported as `from pyagentforge.plugins.integration.persistence import SessionKey`)
+- `pyagentforge.engine` — empty reserved namespace.
+- `pyagentforge.providers` / `pyagentforge.adapters` — unused after v4.0 LLM
+  client unification.
+- `pyagentforge.compat` (incl. `compat.v2`) — v2 import shims.
+- `pyagentforge.api` — REST API has moved to `main/Service`.
+- `pyagentforge.models` — ORM models had no in-tree consumer.
+- `pyagentforge.core` — split into `kernel/`, `plugins/integration/*`, and
+  `plugins/middleware/*` per responsibility (see relocation table below).
+
+Deleted duplicate files:
+
+- `pyagentforge.kernel.base_tool` — use `pyagentforge.tools.base.BaseTool`.
+- `pyagentforge.kernel.core_tools` — the six canonical tools now live under
+  `pyagentforge.tools.builtin` together with `register_core_tools`.
+- `pyagentforge.plugins.tools.file_tools` / `plugins.tools.interact_tools` /
+  `plugins.tools.web_tools` — these wrapper plugins merely duplicated tools
+  already provided by `pyagentforge.tools.builtin` (`LsTool`, `TruncationTool`,
+  `QuestionTool`, `ConfirmTool`, `BatchTool`, `WebFetchTool`, `WebSearchTool`).
+  `plugins/tools/` now only hosts genuinely pluggable/optional tooling
+  (`ast_grep`, `python_ast`, `background_tools`, `call_agent`). The `standard`
+  and `full` presets no longer list these plugin IDs.
+- `pyagentforge.core.engine|message|executor|context` — canonical
+  implementations are `pyagentforge.kernel.engine|message|executor|context`.
+- `pyagentforge.core.events|model_registry|thinking|parallel|failover|persistence|context_aware|compaction`
+  — shim re-exports removed; import from canonical locations directly.
+
+### 🔁 Migration
+
+```python
+# Before                                               # After
+from pyagentforge.kernel.base_tool import ...          from pyagentforge.tools.base import ...
+from pyagentforge.kernel.core_tools import ...         from pyagentforge.tools.builtin import ...
+from pyagentforge.core.message import ...              from pyagentforge.kernel.message import ...
+from pyagentforge.core.executor import ...             from pyagentforge.kernel.executor import ...
+from pyagentforge.core.engine import ...               from pyagentforge.kernel.engine import ...
+from pyagentforge.core.context import ContextManager   from pyagentforge.kernel.context import ContextManager
+from pyagentforge.core.background_manager import ...   from pyagentforge.kernel.background_manager import ...
+from pyagentforge.core.concurrency_manager import ...  from pyagentforge.kernel.concurrency_manager import ...
+from pyagentforge.core.cleanup import ...              from pyagentforge.kernel.cleanup import ...
+from pyagentforge.core.category import ...             from pyagentforge.plugins.integration.category_system.category import ...
+from pyagentforge.core.category_registry import ...    from pyagentforge.plugins.integration.category_system.category_registry import ...
+from pyagentforge.core.llm_classifier import ...       from pyagentforge.plugins.integration.classifiers.llm_classifier import ...
+from pyagentforge.core.semantic_classifier import ...  from pyagentforge.plugins.integration.classifiers.semantic_classifier import ...
+from pyagentforge.core.knowledge_injector import ...   from pyagentforge.plugins.integration.knowledge_injection.knowledge_injector import ...
+from pyagentforge.core.ralph_loop import ...           from pyagentforge.plugins.integration.ralph_loop.ralph_loop import ...
+from pyagentforge.core.todo_tracker import ...         from pyagentforge.plugins.integration.todo_enforcer.todo_tracker import ...
+from pyagentforge.core.context_monitor import ...      from pyagentforge.plugins.middleware.context_lifecycle.context_monitor import ...
+from pyagentforge.core.context_usage import ...        from pyagentforge.plugins.middleware.context_lifecycle.context_usage import ...
+from pyagentforge.core.error_recovery import ...       from pyagentforge.plugins.middleware.error_recovery.error_recovery import ...
+from pyagentforge.core.compaction import Compactor     from pyagentforge.plugins.middleware.compaction.compaction import Compactor
+from pyagentforge.compat.v2 import EventBus            from pyagentforge.plugins.integration.events.events import EventBus
+from pyagentforge.api import create_app                # Removed — use Service/gateway
+```
+
+### 🧭 Workspace Reorganization (P2.4 / P2.5)
+
+- `main/perception/` 已并入 SDK，新位置：
+  `pyagentforge.plugins.integration.perception.*`（原脚本式 `sys.path` 注入改为标准相对导入）。
+- `main/Agent/`、`main/Long-memory/long-memory/`、`main/Long-memory/embeddings/`
+  均补齐了 `pyproject.toml`；历史的 `setup.py` / `pytest.ini` 已删除，相关配置
+  合并进各子包的 `pyproject.toml`。
+- 仓库根新增 `pyproject.toml`：统一 `testpaths` / `pythonpath` / `importmode`，
+  支持在仓库根一条命令 `pytest` 跑完 SDK、Service、Agent、Long-memory 全部用例。
+- `pyagentforge.plugins.integration.todo_continuation` / `task_system` 的
+  `from pyagentforge.plugin.base import BasePlugin` 修正为
+  `from pyagentforge.plugin.base import Plugin as BasePlugin`（`Plugin` 才是
+  规范类名，`BasePlugin` 仅作向后兼容别名）。
+
 ## [3.0.0] - 2026-02-17
 
 ### 💥 Breaking Changes

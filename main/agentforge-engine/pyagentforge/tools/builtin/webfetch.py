@@ -80,6 +80,7 @@ class WebFetchTool(BaseTool):
         # 检查主机权限
         if self.permission_checker:
             from urllib.parse import urlparse
+
             from pyagentforge.tools.permission import PermissionResult
 
             host = urlparse(url).netloc

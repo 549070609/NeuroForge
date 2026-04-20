@@ -4,11 +4,11 @@ Output Quality Plugin
 Detects excessive comments and intelligently truncates tool output.
 """
 
-from typing import Any, List, Tuple
+from typing import Any
 
-from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginContext, PluginType
+from pyagentforge.tools.base import BaseTool
+from pyagentforge.plugin.base import Plugin, PluginContext, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookDecision
-from pyagentforge.kernel.base_tool import BaseTool
 from pyagentforge.plugins.integration.output_quality.comment_checker import (
     CommentChecker,
     CommentCheckResult,
@@ -119,7 +119,7 @@ class OutputQualityPlugin(Plugin):
         if self.context:
             self.context.logger.info("Output Quality plugin activated")
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         return []
 
@@ -128,7 +128,7 @@ class OutputQualityPlugin(Plugin):
         tool_name: str,
         result: str,
         context: dict[str, Any],
-    ) -> Tuple[HookDecision, str]:
+    ) -> tuple[HookDecision, str]:
         """
         工具执行后的钩子
 

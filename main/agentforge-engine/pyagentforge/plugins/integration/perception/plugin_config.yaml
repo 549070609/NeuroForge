@@ -1,0 +1,50 @@
+# 主动感知器插件配置示例
+#
+# 在 Service/Engine 的 plugin_config 中引用，或合并到主配置
+
+preset: standard
+
+enabled:
+  - integration.perception
+
+# 该插件已随 SDK 一起打包（pyagentforge.plugins.integration.perception），
+# 通常无需显式声明 plugin_dirs；若在插件加载器中按路径发现，请指向当前目录：
+plugin_dirs:
+  - "."
+
+config:
+  integration.perception:
+    enabled: true
+    log_path: "./logs"
+    cron_expr: "*/5 * * * *"   # 每 5 分钟轮询（可选）
+    filter_rules:
+      level: ["error", "warn"]
+      error_triggers: "find_user"
+      warn_triggers: "find_user"
+    # Epic 4: 决策执行路径配置
+    execute_actions:          # decision=execute 时执行
+      default:
+        type: shell
+        cmd: "echo [Perception] Alert triggered"
+      # webhook:
+      #   type: http
+      #   url: "https://example.com/webhook"
+      #   method: POST
+      #   timeout: 30          # 请求超时（秒），默认 30
+      #   body: { "source": "perception", "reason": "{{reason}}" }
+    call_agent:               # decision=call_agent 时委派
+      target_agent: main
+      prompt_template: "Handle this perception alert.\n\nReason: {reason}\n\nData: {data}"
+    # Epic 6: 触发与调度
+    event_triggers:           # Story 6.2: EventBus 事件触发
+      - event_type: "log.written"
+        condition_field: "source"
+        condition_value: "aton"
+      # - event_type: "system.alert"
+    webhook:                  # Story 6.3: Webhook 触发
+      path: "/perception/webhook"
+      # ⚠️  安全警告：secret: null 表示禁用 HMAC-SHA256 签名校验，
+      # 任何人均可无需认证地触发感知决策。
+      # 生产环境中务必设置为随机强密钥字符串，例如：
+      #   secret: "your-strong-random-secret-here"
+      secret: null

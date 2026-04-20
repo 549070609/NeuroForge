@@ -4,8 +4,7 @@ Context Aware Plugin
 Provides context-aware prompt enhancement functionality
 """
 
-import logging
-from typing import Any, Optional
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 
@@ -46,7 +45,7 @@ class ContextAwarePlugin(Plugin):
 
         self.context.logger.info("Context aware plugin initialized")
 
-    async def on_before_llm_call(self, messages: list) -> Optional[list]:
+    async def on_before_llm_call(self, messages: list) -> list | None:
         """
         Enhance messages with context-aware information
 
@@ -118,7 +117,7 @@ class ContextAwarePlugin(Plugin):
         """
         self._context_hints[key] = value
 
-    def get_context_hint(self, key: str) -> Optional[str]:
+    def get_context_hint(self, key: str) -> str | None:
         """
         Get a context hint
 

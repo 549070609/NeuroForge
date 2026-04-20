@@ -4,18 +4,18 @@ Ralph Loop Engine
 Core engine for auto-continuation logic.
 """
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from pyagentforge.core.ralph_loop import (
+from pyagentforge.plugins.integration.ralph_loop.ralph_loop import (
     CompletionChecker,
     LoopStatus,
     RalphLoopState,
-    TodoItem,
 )
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
 
 logger = get_logger(__name__)
 
@@ -280,7 +280,7 @@ Let's continue and complete all remaining tasks.""",
             state.is_recovering = True
             self._notify_state_change(state)
             logger.info(
-                f"Ralph loop marked as recovering",
+                "Ralph loop marked as recovering",
                 extra_data={"session_id": session_id},
             )
 

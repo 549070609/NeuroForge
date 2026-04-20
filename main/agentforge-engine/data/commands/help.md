@@ -3,7 +3,7 @@ name: help
 description: 显示帮助信息和可用命令列表
 alias:
   - h
-  - ?
+  - "?"
   - commands
 category: basic
 tools:

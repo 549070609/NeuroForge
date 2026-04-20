@@ -5,9 +5,6 @@ preset: standard
 enabled:
   # Providers
   - providers.anthropic
-  # Tools
-  - tools.file_tools
-  - tools.interact_tools
   # Middleware
   - middleware.compaction
   - middleware.thinking

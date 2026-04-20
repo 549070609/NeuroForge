@@ -6,11 +6,15 @@ Agent Schemas - API 请求和响应模型
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime (timezone stripped for backward compat)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # ==================== Agent Schemas ====================
 
@@ -74,7 +78,7 @@ class AgentExecuteResponse(BaseModel):
     result: str | None = Field(default=None, description="执行结果")
     plan_id: str | None = Field(default=None, description="生成的计划 ID (如果是 Plan Agent)")
     error: str | None = Field(default=None, description="错误信息")
-    started_at: datetime = Field(default_factory=datetime.utcnow, description="开始时间")
+    started_at: datetime = Field(default_factory=_utcnow, description="开始时间")
     completed_at: datetime | None = Field(default=None, description="完成时间")
 
 

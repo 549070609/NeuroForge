@@ -5,7 +5,7 @@ AgentSchema Tests
 import pytest
 
 from pyagentforge.agents.metadata import AgentCategory, AgentCost, AgentMetadata
-from pyagentforge.building.schema import (
+from pyagentforge.agents.building.schema import (
     AgentIdentity,
     AgentSchema,
     BehaviorDefinition,

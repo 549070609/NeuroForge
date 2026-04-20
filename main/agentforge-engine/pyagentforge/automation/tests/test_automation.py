@@ -2,11 +2,11 @@
 Automation 单元测试
 """
 
-import pytest
-from datetime import datetime
 
-from pyagentforge.automation.task import TriggerType, AutomationTask
+import pytest
+
 from pyagentforge.automation.scheduler import AutomationManager
+from pyagentforge.automation.task import AutomationTask, TriggerType
 
 
 class TestTriggerType:

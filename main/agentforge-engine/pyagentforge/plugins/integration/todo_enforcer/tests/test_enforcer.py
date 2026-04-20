@@ -2,9 +2,8 @@
 Tests for Todo Enforcer
 """
 
-import pytest
 
-from pyagentforge.core.todo_tracker import (
+from pyagentforge.plugins.integration.todo_enforcer.todo_tracker import (
     Todo,
     TodoPriority,
     TodoStatus,

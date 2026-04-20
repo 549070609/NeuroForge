@@ -2,7 +2,6 @@
 CodeSearch 模块测试
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
 
@@ -12,11 +11,8 @@ from pyagentforge.codesearch import (
     CodeSearchConfig,
     CodeSearchDatabase,
     PythonParser,
-    RegexParser,
-    ParserRegistry,
-    SymbolIndexer,
     QueryParser,
-    QueryExecutor,
+    RegexParser,
     create_codesearch_tool,
 )
 from pyagentforge.codesearch.storage.models import SymbolKind
@@ -173,8 +169,8 @@ class TestDatabase:
     @pytest.mark.asyncio
     async def test_store_and_search_symbols(self, db: CodeSearchDatabase):
         """测试存储和搜索符号"""
+
         from pyagentforge.codesearch.storage.models import Symbol
-        from datetime import datetime
 
         symbol = Symbol(
             id="test-1",
@@ -312,15 +308,17 @@ class Calculator:
 
             # 初始化数据库
             await tool.db.initialize()
+            try:
+                # 索引目录
+                count = await tool.indexer.index_directory(Path(tmpdir))
+                assert count >= 1
 
-            # 索引目录
-            count = await tool.indexer.index_directory(Path(tmpdir))
-            assert count >= 1
+                # 搜索
+                result = await tool.execute("function:hello", path=tmpdir)
+                assert "hello" in result
 
-            # 搜索
-            result = await tool.execute("function:hello", path=tmpdir)
-            assert "hello" in result
-
-            # 状态
-            status = await tool.execute("status")
-            assert "Symbols:" in status
+                # 状态
+                status = await tool.execute("status")
+                assert "Symbols:" in status
+            finally:
+                await tool.db.close()

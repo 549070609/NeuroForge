@@ -7,7 +7,7 @@ Catches exceptions and returns appropriate JSON responses.
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
@@ -27,7 +27,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         """Process request with error handling."""
         try:
             return await call_next(request)
-        except HTTPException as e:
+        except HTTPException:
             # Let FastAPI handle HTTP exceptions
             raise
         except Exception as e:

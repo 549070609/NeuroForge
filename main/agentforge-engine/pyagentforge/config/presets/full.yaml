@@ -11,10 +11,6 @@ enabled:
   - protocol.mcp_server
   - protocol.mcp_client
   - protocol.lsp
-  # Tools
-  - tools.web_tools
-  - tools.file_tools
-  - tools.interact_tools
   # Middleware
   - middleware.compaction
   - middleware.failover

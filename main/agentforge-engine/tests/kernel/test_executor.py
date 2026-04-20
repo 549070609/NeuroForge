@@ -5,8 +5,6 @@ Comprehensive tests for tool execution, timeout handling, and permissions.
 """
 
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,8 +14,8 @@ from pyagentforge.kernel.executor import (
     ToolExecutor,
 )
 from pyagentforge.kernel.message import ToolUseBlock
-from pyagentforge.tools.registry import ToolRegistry
 from pyagentforge.tools.base import BaseTool
+from pyagentforge.tools.registry import ToolRegistry
 
 
 class SlowTool(BaseTool):
@@ -512,7 +510,7 @@ class TestToolExecutorBatchExecution:
         assert results[1][0] == "call_2"
         assert results[2][0] == "call_3"
 
-        for tool_id, result in results:
+        for _tool_id, result in results:
             assert result == "Success"
 
     @pytest.mark.asyncio
@@ -530,7 +528,7 @@ class TestToolExecutorBatchExecution:
             ToolUseBlock(id="call_3", name="mock_tool", input={}),
         ]
 
-        results = await tool_executor.execute_batch(tool_calls)
+        results = await executor.execute_batch(tool_calls)
 
         assert len(results) == 3
         assert results[0][1] == "Success"
@@ -655,5 +653,5 @@ class TestToolExecutorConcurrency:
         results = await tool_executor.execute_batch(tool_calls)
 
         assert len(results) == 10
-        for tool_id, result in results:
+        for _tool_id, result in results:
             assert result == "Success"

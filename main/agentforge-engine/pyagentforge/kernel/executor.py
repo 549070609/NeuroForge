@@ -7,7 +7,8 @@
 import asyncio
 import logging
 import traceback
-from typing import Any, Callable, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from pyagentforge.kernel.message import ToolUseBlock
 
@@ -15,7 +16,7 @@ from pyagentforge.kernel.message import ToolUseBlock
 from pyagentforge.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
-    from pyagentforge.kernel.base_tool import BaseTool
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class PermissionChecker:
         self.denied_tools = denied_tools or set()
         self.ask_tools = ask_tools or set()
 
-    def check(self, tool_name: str, tool_input: dict) -> str:
+    def check(self, tool_name: str, _tool_input: dict) -> str:
         """检查工具权限"""
         if tool_name in self.denied_tools:
             return PermissionResult.DENY
@@ -140,7 +141,7 @@ class ToolExecutor:
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error_msg = f"Error: Tool '{tool_name}' execution timed out after {self.timeout}s"
             logger.error(f"Tool execution timeout: {tool_name}, timeout={self.timeout}")
             return error_msg

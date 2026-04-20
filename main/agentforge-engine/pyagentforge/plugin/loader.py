@@ -8,11 +8,10 @@ import importlib
 import importlib.util
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
 
 from pyagentforge.plugin.base import Plugin
-from pyagentforge.plugin.registry import PluginRegistry
 from pyagentforge.plugin.dependencies import DependencyResolver
+from pyagentforge.plugin.registry import PluginRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ class PluginLoader:
         self.registry = registry
         self.resolver = resolver
 
-    def discover(self, plugin_dirs: List[str]) -> List[str]:
+    def discover(self, plugin_dirs: list[str]) -> list[str]:
         """
         发现插件目录
 
@@ -56,7 +55,6 @@ class PluginLoader:
                 discovered.append(str(plugin_file.parent))
 
             for plugin_file in base_path.rglob("plugin.py"):
-                plugin_file_name = plugin_file.name
                 # 避免重复发现
                 if str(plugin_file.parent) not in discovered:
                     discovered.append(str(plugin_file.parent))
@@ -117,7 +115,7 @@ class PluginLoader:
             return plugin
 
         except Exception as e:
-            raise PluginLoadError(f"Failed to load plugin from {plugin_path}: {e}")
+            raise PluginLoadError(f"Failed to load plugin from {plugin_path}: {e}") from e
 
     def load_from_module(self, module_name: str) -> Plugin:
         """
@@ -141,13 +139,13 @@ class PluginLoader:
             return plugin_class()
 
         except ImportError as e:
-            raise PluginLoadError(f"Cannot import module {module_name}: {e}")
+            raise PluginLoadError(f"Cannot import module {module_name}: {e}") from e
 
     def load_all(
         self,
-        plugin_ids: List[str],
-        plugin_dirs: List[str] | None = None,
-    ) -> Dict[str, Plugin]:
+        plugin_ids: list[str],
+        plugin_dirs: list[str] | None = None,
+    ) -> dict[str, Plugin]:
         """
         加载所有插件
 
@@ -194,7 +192,7 @@ class PluginLoader:
 
         return loaded
 
-    def _find_plugin_class(self, module) -> Optional[Type[Plugin]]:
+    def _find_plugin_class(self, module) -> type[Plugin] | None:
         """在模块中查找 Plugin 子类"""
         for attr_name in dir(module):
             attr = getattr(module, attr_name)

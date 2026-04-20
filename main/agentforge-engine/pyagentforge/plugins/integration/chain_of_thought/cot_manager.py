@@ -6,17 +6,17 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .models import (
     ChainOfThought,
-    CoTPhase,
-    CoTExecutionTrace,
+    Constraint,
     ConstraintType,
     ConstraintViolation,
-    Constraint,
+    CoTExecutionTrace,
+    CoTPhase,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class ChainOfThoughtManager:
 
         for file_path in self._templates_dir.glob("*.json"):
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     data = json.load(f)
                 cot = ChainOfThought.from_dict(data)
                 self._templates[cot.name] = cot
@@ -284,9 +284,8 @@ class ChainOfThoughtManager:
                     return False, f"Plan has {len(plan_steps)} steps, max allowed is {max_steps}"
 
         # 检查验证步骤约束
-        if "验证" in desc or "可验证" in desc:
-            if not plan_data["has_validation"]:
-                return False, "Plan lacks validation steps"
+        if ("验证" in desc or "可验证" in desc) and not plan_data["has_validation"]:
+            return False, "Plan lacks validation steps"
 
         return True, ""
 
@@ -386,7 +385,7 @@ class ChainOfThoughtManager:
         }
 
         # 分析阶段效果
-        for phase_name, result in trace.phase_results.items():
+        for phase_name, _result in trace.phase_results.items():
             phase = cot.get_phase(phase_name)
             if phase:
                 # 检查该阶段是否有违反
@@ -450,7 +449,7 @@ class ChainOfThoughtManager:
                 if phase_name not in cot.metadata["smooth_phases"]:
                     cot.metadata["smooth_phases"].append(phase_name)
 
-        cot.updated_at = datetime.now(timezone.utc).isoformat()
+        cot.updated_at = datetime.now(UTC).isoformat()
 
         # 保存更新
         if cot.source == "agent":
@@ -533,7 +532,7 @@ class ChainOfThoughtManager:
             if phase and addition:
                 phase.prompt += f"\n\n{addition}"
 
-        new_cot.updated_at = datetime.now(timezone.utc).isoformat()
+        new_cot.updated_at = datetime.now(UTC).isoformat()
 
         return new_cot
 
@@ -1020,10 +1019,9 @@ class ChainOfThoughtManager:
                             logger.warning(f"Failed to delete file {file_path}: {e}")
 
                 return True
-        elif source == "template":
-            if cot_name in self._templates:
-                del self._templates[cot_name]
-                return True
+        elif source == "template" and cot_name in self._templates:
+            del self._templates[cot_name]
+            return True
 
         return False
 
@@ -1060,7 +1058,7 @@ class ChainOfThoughtManager:
         cloned = copy.deepcopy(source)
         cloned.name = new_name
         cloned.source = "agent"
-        cloned.created_at = datetime.now(timezone.utc).isoformat()
+        cloned.created_at = datetime.now(UTC).isoformat()
         cloned.updated_at = cloned.created_at
         cloned.execution_count = 0
         cloned.success_rate = 0.0

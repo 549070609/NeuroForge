@@ -5,10 +5,14 @@ Tests for shell command execution.
 """
 
 import asyncio
+import os
+import sys
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from pyagentforge.tools.builtin.bash import BashTool
+
+PYTHON_CMD = f'"{sys.executable}"'
 
 
 class TestBashTool:
@@ -75,7 +79,10 @@ class TestBashTool:
         tool = BashTool()
 
         # Command that sleeps longer than timeout
-        result = await tool.execute(command="sleep 10", timeout=500)  # 500ms timeout
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"import time; time.sleep(10)\"",
+            timeout=500,
+        )  # 500ms timeout
 
         assert "timed out" in result.lower() or "timeout" in result.lower()
 
@@ -84,7 +91,9 @@ class TestBashTool:
         """Test command with no output."""
         tool = BashTool()
 
-        result = await tool.execute(command="true")  # Command that succeeds with no output
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"pass\""
+        )  # Command that succeeds with no output
 
         assert "(no output)" in result or "Exit code: 0" in result
 
@@ -93,7 +102,10 @@ class TestBashTool:
         """Test command with pipes."""
         tool = BashTool()
 
-        result = await tool.execute(command="echo 'hello world' | grep hello")
+        grep_cmd = "findstr hello" if os.name == "nt" else "grep hello"
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"print('hello world')\" | {grep_cmd}"
+        )
 
         assert "hello world" in result
 
@@ -145,13 +157,15 @@ class TestBashTool:
         assert "Special:" in result
 
     @pytest.mark.asyncio
-    async def test_working_directory(self):
+    async def test_working_directory(self, tmp_path):
         """Test command execution in specific directory."""
-        tool = BashTool(working_dir="/tmp")
+        tool = BashTool(working_dir=str(tmp_path))
 
-        result = await tool.execute(command="pwd")
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"import os; print(os.getcwd())\""
+        )
 
-        assert "/tmp" in result
+        assert str(tmp_path).lower() in result.lower()
 
     @pytest.mark.asyncio
     async def test_nonexistent_working_directory(self):
@@ -285,10 +299,14 @@ class TestBashToolIntegration:
         tool = BashTool(working_dir=str(temp_workspace))
 
         # Create a file
-        await tool.execute(command="echo 'test content' > bash_test.txt")
+        await tool.execute(
+            command=f"{PYTHON_CMD} -c \"from pathlib import Path; Path('bash_test.txt').write_text('test content')\""
+        )
 
         # Read the file
-        result = await tool.execute(command="cat bash_test.txt")
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"from pathlib import Path; print(Path('bash_test.txt').read_text())\""
+        )
 
         assert "test content" in result
 
@@ -297,7 +315,9 @@ class TestBashToolIntegration:
         """Test directory listing."""
         tool = BashTool(working_dir=str(temp_workspace))
 
-        result = await tool.execute(command="ls -la")
+        result = await tool.execute(
+            command=f"{PYTHON_CMD} -c \"import os; print('\\n'.join(sorted(os.listdir('.'))))\""
+        )
 
         assert "test.py" in result
         assert "config.yaml" in result

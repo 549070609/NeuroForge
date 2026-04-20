@@ -4,11 +4,11 @@
 定义不同类型的子代理
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     """代理类型"""
 
     EXPLORE = "explore"

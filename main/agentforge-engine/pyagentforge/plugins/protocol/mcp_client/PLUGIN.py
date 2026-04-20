@@ -4,11 +4,9 @@ MCP Client Plugin
 Model Context Protocol (MCP) Client implementation
 """
 
-import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
-from pyagentforge.kernel.base_tool import BaseTool
 
 
 class MCPClientPlugin(Plugin):
@@ -77,7 +75,7 @@ class MCPClientPlugin(Plugin):
             return True
         return False
 
-    def get_client(self, server_name: str) -> Optional[dict]:
+    def get_client(self, server_name: str) -> dict | None:
         """Get MCP client by server name"""
         return self._clients.get(server_name)
 

@@ -4,9 +4,8 @@ AST-Grep 结果格式化
 负责将搜索/替换结果格式化为用户友好的文本
 """
 
-from typing import Optional
 
-from pyagentforge.plugins.tools.ast_grep.types import SgResult, SgMatch
+from pyagentforge.plugins.tools.ast_grep.types import SgResult
 
 
 def format_search_result(result: SgResult) -> str:
@@ -93,7 +92,7 @@ def format_replace_result(result: SgResult, dry_run: bool) -> str:
     return "\n".join(lines)
 
 
-def get_empty_result_hint(pattern: str, lang: str) -> Optional[str]:
+def get_empty_result_hint(pattern: str, lang: str) -> str | None:
     """
     提供空结果时的提示
 

@@ -9,8 +9,8 @@ Automation Module - 自动化模块
 - AutomationManager: 自动化管理器
 """
 
-from pyagentforge.automation.task import TriggerType, AutomationTask
 from pyagentforge.automation.scheduler import AutomationManager
+from pyagentforge.automation.task import AutomationTask, TriggerType
 
 __all__ = [
     "TriggerType",

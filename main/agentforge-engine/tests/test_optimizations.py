@@ -9,10 +9,9 @@ Phase 5: Multi-level Config
 Phase 6: Prompt Builder
 """
 
-import asyncio
+from unittest.mock import Mock
+
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, AsyncMock, MagicMock
 
 
 class TestProcessCleanup:
@@ -20,13 +19,13 @@ class TestProcessCleanup:
 
     def test_import(self):
         """Test import works"""
-        from pyagentforge.core.cleanup import ProcessCleanup, CleanupPriority
+        from pyagentforge.kernel.cleanup import CleanupPriority, ProcessCleanup
         assert ProcessCleanup is not None
         assert CleanupPriority.CRITICAL.value == 100
 
     def test_register_callback(self):
         """Test callback registration"""
-        from pyagentforge.core.cleanup import ProcessCleanup, CleanupPriority
+        from pyagentforge.kernel.cleanup import CleanupPriority, ProcessCleanup
 
         cleanup = ProcessCleanup()
         called = []
@@ -39,7 +38,7 @@ class TestProcessCleanup:
 
     def test_register_async_callback(self):
         """Test async callback registration"""
-        from pyagentforge.core.cleanup import ProcessCleanup
+        from pyagentforge.kernel.cleanup import ProcessCleanup
 
         cleanup = ProcessCleanup()
 
@@ -52,7 +51,7 @@ class TestProcessCleanup:
     @pytest.mark.asyncio
     async def test_cleanup_execution(self):
         """Test cleanup execution"""
-        from pyagentforge.core.cleanup import ProcessCleanup
+        from pyagentforge.kernel.cleanup import ProcessCleanup
 
         cleanup = ProcessCleanup()
         called = []
@@ -73,7 +72,7 @@ class TestProcessCleanup:
 
     def test_unregister(self):
         """Test callback unregistration"""
-        from pyagentforge.core.cleanup import ProcessCleanup
+        from pyagentforge.kernel.cleanup import ProcessCleanup
 
         cleanup = ProcessCleanup()
 
@@ -90,14 +89,14 @@ class TestHookPriority:
 
     def test_import(self):
         """Test import works"""
-        from pyagentforge.plugin.hooks import HookRegistry, HookResult, HookPriority
+        from pyagentforge.plugin.hooks import HookPriority, HookRegistry, HookResult
         assert HookRegistry is not None
         assert HookResult.CONTINUE.value == "continue"
         assert HookPriority.HIGH.value == 750
 
     def test_register_with_priority(self):
         """Test hook registration with priority"""
-        from pyagentforge.plugin.hooks import HookRegistry, HookType, HookPriority
+        from pyagentforge.plugin.hooks import HookPriority, HookRegistry, HookType
 
         registry = HookRegistry()
         plugin = Mock()
@@ -117,7 +116,7 @@ class TestHookPriority:
     @pytest.mark.asyncio
     async def test_priority_order(self):
         """Test hooks execute in priority order"""
-        from pyagentforge.plugin.hooks import HookRegistry, HookType, HookPriority
+        from pyagentforge.plugin.hooks import HookRegistry, HookType
 
         registry = HookRegistry()
         plugin = Mock()
@@ -172,13 +171,13 @@ class TestRecoveryExecutor:
 
     def test_import(self):
         """Test import works"""
-        from pyagentforge.core.error_recovery import RecoveryExecutor, RecoveryStrategy
+        from pyagentforge.plugins.middleware.error_recovery.error_recovery import RecoveryExecutor, RecoveryStrategy
         assert RecoveryExecutor is not None
         assert RecoveryStrategy.TRUNCATE_MESSAGES.value == "truncate_messages"
 
     def test_strategies_defined(self):
         """Test all strategies have handlers"""
-        from pyagentforge.core.error_recovery import RecoveryExecutor, RecoveryStrategy
+        from pyagentforge.plugins.middleware.error_recovery.error_recovery import RecoveryExecutor, RecoveryStrategy
 
         mock_context = Mock()
         mock_context.messages = []
@@ -191,7 +190,7 @@ class TestRecoveryExecutor:
     @pytest.mark.asyncio
     async def test_truncate_messages(self):
         """Test truncate messages strategy"""
-        from pyagentforge.core.error_recovery import RecoveryExecutor, RecoveryStrategy
+        from pyagentforge.plugins.middleware.error_recovery.error_recovery import RecoveryExecutor, RecoveryStrategy
 
         mock_context = Mock()
         mock_context.messages = [Mock() for _ in range(20)]
@@ -320,8 +319,8 @@ class TestSessionRecoveryPlugin:
     def test_import(self):
         """Test import works"""
         from pyagentforge.plugins.integration.session_recovery import (
-            SessionRecoveryPlugin,
             SessionRecoveryConfig,
+            SessionRecoveryPlugin,
         )
         assert SessionRecoveryPlugin is not None
         assert SessionRecoveryConfig is not None

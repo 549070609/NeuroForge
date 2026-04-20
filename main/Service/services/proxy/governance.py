@@ -66,7 +66,8 @@ class GuardrailResult:
         if not self.decisions:
             return None
         priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-        return max(self.decisions, key=lambda d: (priority[d.severity], d.action))
+        action_priority = {"block": 3, "review": 2, "allow": 1}
+        return max(self.decisions, key=lambda d: (priority[d.severity], action_priority.get(d.action, 0)))
 
     def to_dict(self) -> dict[str, Any]:
         return {

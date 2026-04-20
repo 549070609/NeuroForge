@@ -5,23 +5,22 @@
 """
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel
-
-from pyagentforge.kernel.context import ContextManager
-from pyagentforge.kernel.engine import AgentEngine, AgentConfig
 from pyagentforge.kernel.base_provider import BaseProvider
+from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.engine import AgentConfig, AgentEngine
 from pyagentforge.kernel.executor import ToolRegistry
 from pyagentforge.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-class SubagentStatus(str, Enum):
+class SubagentStatus(StrEnum):
     """子代理状态"""
 
     PENDING = "pending"
@@ -148,7 +147,7 @@ class ParallelSubagentExecutor:
         subagent_tasks = []
         for i, task_data in enumerate(tasks):
             task = SubagentTask(
-                id=f"sub_{i}_{datetime.now(timezone.utc).timestamp():.0f}",
+                id=f"sub_{i}_{datetime.now(UTC).timestamp():.0f}",
                 description=task_data.get("description", f"Task {i+1}"),
                 prompt=task_data["prompt"],
                 agent_type=task_data.get("agent_type", "explore"),
@@ -205,7 +204,7 @@ class ParallelSubagentExecutor:
     ) -> SubagentResult:
         """执行单个子代理任务"""
         task.status = SubagentStatus.RUNNING
-        task.started_at = datetime.now(timezone.utc)
+        task.started_at = datetime.now(UTC)
         start_time = asyncio.get_event_loop().time()
 
         logger.debug(
@@ -255,7 +254,7 @@ class ParallelSubagentExecutor:
                 task.result = result
                 task.progress = 100.0
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.status = SubagentStatus.TIMEOUT
                 task.error = f"Task timed out after {timeout} seconds"
 
@@ -268,7 +267,7 @@ class ParallelSubagentExecutor:
             )
 
         finally:
-            task.completed_at = datetime.now(timezone.utc)
+            task.completed_at = datetime.now(UTC)
             end_time = asyncio.get_event_loop().time()
             duration_ms = int((end_time - start_time) * 1000)
 

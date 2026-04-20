@@ -2,13 +2,14 @@
 思维链数据模型
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
-class ConstraintType(str, Enum):
+class ConstraintType(StrEnum):
     """约束类型"""
 
     HARD = "hard"      # 硬约束：必须满足，违反则阻止执行
@@ -43,7 +44,7 @@ class ConstraintViolation:
     constraint_description: str
     constraint_type: ConstraintType
     violation_details: str
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 @dataclass
@@ -115,8 +116,8 @@ class ChainOfThought:
     version: str = "1.0"
     author: str = ""
     tags: list[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     source: str = "user"  # user, agent, llm
     execution_count: int = 0
     success_rate: float = 0.0
@@ -170,8 +171,8 @@ class ChainOfThought:
             version=data.get("version", "1.0"),
             author=data.get("author", ""),
             tags=data.get("tags", []),
-            created_at=data.get("created_at", datetime.now(timezone.utc).isoformat()),
-            updated_at=data.get("updated_at", datetime.now(timezone.utc).isoformat()),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
             source=data.get("source", "user"),
             execution_count=data.get("execution_count", 0),
             success_rate=data.get("success_rate", 0.0),
@@ -184,7 +185,7 @@ class CoTExecutionTrace:
 
     cot_name: str
     session_id: str
-    start_time: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    start_time: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     end_time: str | None = None
     phase_results: dict[str, Any] = field(default_factory=dict)
     violations: list[ConstraintViolation] = field(default_factory=list)
@@ -196,7 +197,7 @@ class CoTExecutionTrace:
         """添加阶段结果"""
         self.phase_results[phase_name] = {
             "result": result,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def add_violation(self, violation: ConstraintViolation) -> None:
@@ -205,7 +206,7 @@ class CoTExecutionTrace:
 
     def complete(self, success: bool, reflection: str | None = None) -> None:
         """完成执行"""
-        self.end_time = datetime.now(timezone.utc).isoformat()
+        self.end_time = datetime.now(UTC).isoformat()
         self.success = success
         self.reflection = reflection
 

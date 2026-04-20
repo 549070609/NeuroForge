@@ -7,21 +7,22 @@
 - 约束违反的处理逻辑
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock
 
-from pyagentforge.plugins.integration.chain_of_thought.PLUGIN import ChainOfThoughtPlugin
+import pytest
+
+from pyagentforge.plugin.hooks import HookDecision
 from pyagentforge.plugins.integration.chain_of_thought.cot_manager import ChainOfThoughtManager
 from pyagentforge.plugins.integration.chain_of_thought.models import (
     ChainOfThought,
-    CoTPhase,
     Constraint,
     ConstraintType,
     ConstraintViolation,
+    CoTPhase,
 )
-from pyagentforge.plugin.hooks import HookDecision
+from pyagentforge.plugins.integration.chain_of_thought.PLUGIN import ChainOfThoughtPlugin
 
 
 @pytest.fixture
@@ -160,7 +161,7 @@ class TestPlanValidation:
         assert result is None
 
         # 但应该有违反记录
-        trace = manager.get_execution_trace()
+        manager.get_execution_trace()
         # 注意：实际验证逻辑取决于具体实现
 
 
@@ -292,7 +293,7 @@ class TestExecutionTrace:
 
         await plugin.on_engine_start(engine)
 
-        trace = manager.get_execution_trace()
+        manager.get_execution_trace()
         # 如果没有当前思维链，不会创建轨迹
         # 这是预期行为
 

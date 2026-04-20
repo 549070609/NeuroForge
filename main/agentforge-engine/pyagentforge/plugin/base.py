@@ -4,16 +4,17 @@
 定义插件的标准接口和元数据
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, List, Optional, Type
+from enum import StrEnum
+from typing import Any
 
-from pyagentforge.kernel.base_tool import BaseTool
 from pyagentforge.kernel.base_provider import BaseProvider
+from pyagentforge.tools.base import BaseTool
 
 
-class PluginType(str, Enum):
+class PluginType(StrEnum):
     """插件类型"""
     INTERFACE = "interface"      # API, CLI, WebSocket
     PROTOCOL = "protocol"        # MCP, LSP
@@ -33,10 +34,10 @@ class PluginMetadata:
     type: PluginType                     # 插件类型
     description: str = ""                # 描述
     author: str = ""                     # 作者
-    dependencies: List[str] = field(default_factory=list)          # 必需依赖
-    optional_dependencies: List[str] = field(default_factory=list) # 可选依赖
-    provides: List[str] = field(default_factory=list)              # 提供的能力标识
-    conflicts: List[str] = field(default_factory=list)             # 冲突的插件ID
+    dependencies: list[str] = field(default_factory=list)          # 必需依赖
+    optional_dependencies: list[str] = field(default_factory=list) # 可选依赖
+    provides: list[str] = field(default_factory=list)              # 提供的能力标识
+    conflicts: list[str] = field(default_factory=list)             # 冲突的插件ID
     priority: int = 0                    # 加载优先级（越高越先加载）
 
 
@@ -58,7 +59,7 @@ class Plugin(ABC):
     metadata: PluginMetadata
 
     def __init__(self):
-        self._context: Optional[PluginContext] = None
+        self._context: PluginContext | None = None
         self._activated = False
 
     @property
@@ -101,23 +102,23 @@ class Plugin(ABC):
         """引擎停止时"""
         pass
 
-    async def on_before_llm_call(self, messages: list) -> Optional[list]:
+    async def on_before_llm_call(self, _messages: list) -> list | None:
         """LLM调用前 - 返回修改后的消息或None"""
         return None
 
-    async def on_after_llm_call(self, response) -> Optional[Any]:
+    async def on_after_llm_call(self, _response) -> Any | None:
         """LLM调用后 - 返回修改后的响应或None"""
         return None
 
-    async def on_before_tool_call(self, tool_use) -> Optional[Any]:
+    async def on_before_tool_call(self, _tool_use) -> Any | None:
         """工具执行前 - 返回替换的工具调用或None"""
         return None
 
-    async def on_after_tool_call(self, result: str) -> Optional[str]:
+    async def on_after_tool_call(self, _result: str) -> str | None:
         """工具执行后 - 返回修改后的结果或None"""
         return None
 
-    async def on_context_overflow(self, token_count: int) -> bool:
+    async def on_context_overflow(self, _token_count: int) -> bool:
         """上下文溢出时 - 返回True表示已处理"""
         return False
 
@@ -135,11 +136,11 @@ class Plugin(ABC):
 
     # ============ 资源提供方法 ============
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
         return []
 
-    def get_providers(self) -> List[Type[BaseProvider]]:
+    def get_providers(self) -> list[type[BaseProvider]]:
         """返回插件提供的Provider类"""
         return []
 

@@ -4,7 +4,6 @@ Session Recovery Plugin
 Auto-recovery from session crashes with automatic state saving.
 """
 
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -13,15 +12,14 @@ from typing import TYPE_CHECKING, Any
 from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.plugins.integration.persistence.persistence import (
-    SessionPersistence,
     SessionManager,
     SessionMetadata,
-    SessionState,
+    SessionPersistence,
 )
 from pyagentforge.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from pyagentforge.core.context import ContextManager
+    from pyagentforge.kernel.context import ContextManager
     from pyagentforge.kernel.engine import AgentEngine
 
 logger = get_logger(__name__)
@@ -72,7 +70,7 @@ class SessionRecoveryPlugin(Plugin):
         self._session_manager: SessionManager | None = None
         self._current_session: SessionPersistence | None = None
         self._call_count: int = 0
-        self._engine: "AgentEngine | None" = None
+        self._engine: AgentEngine | None = None
 
     async def on_plugin_activate(self) -> None:
         """Activate plugin"""
@@ -135,7 +133,7 @@ class SessionRecoveryPlugin(Plugin):
     def _register_cleanup(self) -> None:
         """Register cleanup handler for graceful shutdown"""
         try:
-            from pyagentforge.core.cleanup import register_cleanup_async
+            from pyagentforge.kernel.cleanup import register_cleanup_async
 
             register_cleanup_async(
                 self._cleanup_handler,
@@ -267,7 +265,7 @@ class SessionRecoveryPlugin(Plugin):
 
         # Import message types
         try:
-            from pyagentforge.core.message import Message
+            from pyagentforge.kernel.message import Message
 
             for msg_dict in messages:
                 try:

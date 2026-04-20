@@ -5,7 +5,7 @@
 """
 
 from typing import List, Optional
-from pyagentforge.kernel.base_tool import BaseTool
+from pyagentforge.tools.base import BaseTool
 
 from ..processor_engine import ProcessorEngine
 

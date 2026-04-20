@@ -1,0 +1,142 @@
+# ------------------------------------------------------------
+# NeuroForge Monorepo — root aggregation manifest
+# ------------------------------------------------------------
+# This file exists to:
+#   1. Declare a workspace-level project identity (not distributable).
+#   2. Hold shared pytest/ruff/mypy/coverage config so running `pytest`
+#      at the repo root discovers and runs every sub-package's tests.
+#   3. Pin Python version and shared dev tooling.
+#
+# Individual sub-packages keep their own pyproject.toml for dependency
+# declaration and (where applicable) wheel build configuration:
+#   - main/agentforge-engine   → pyagentforge (SDK, distributable)
+#   - main/Service             → service     (API gateway, distributable)
+#   - main/Agent               → neuroforge-agent (workspace-only)
+#   - main/Long-memory/long-memory   → neuroforge-long-memory (workspace-only)
+#   - main/Long-memory/embeddings    → neuroforge-embeddings   (workspace-only)
+# ------------------------------------------------------------
+
+[project]
+name = "neuroforge-workspace"
+version = "0.1.0"
+description = "NeuroForge monorepo workspace (SDK + API + plugins)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+# Root is not a distributable package; do NOT declare dependencies here.
+# Install sub-packages with `pip install -e main/agentforge-engine` etc.
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+
+# ------------------------------------------------------------
+# pytest — aggregate test discovery across the whole workspace
+# ------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+asyncio_mode = "auto"
+# Use importlib import mode so test modules with the same bare name across
+# sub-packages (e.g. multiple `PLUGIN.py`, `config.py`) don't collide in
+# sys.modules when collecting the whole workspace.
+addopts = "-ra --tb=short -p no:cacheprovider --import-mode=importlib"
+
+# Testpaths are intentionally exhaustive so `pytest` at the repo root
+# runs every sub-project's tests without extra flags.
+testpaths = [
+    "main/agentforge-engine/tests",
+    "main/agentforge-engine/pyagentforge",
+    "main/Service/tests",
+    "main/Agent/tests",
+    "main/Long-memory/long-memory/tests",
+    "main/Long-memory/long-memory/super_compress/tests",
+    "main/Long-memory/long-memory/memory_processor/tests",
+    "main/Long-memory/embeddings",
+]
+
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Sub-packages import from each other via these roots; pytest needs them
+# on sys.path even when the user hasn't `pip install -e`'d every package.
+pythonpath = [
+    ".",                              # enables `main.Agent.*` namespace imports
+    "main",                           # enables `import Service`, `import Agent`
+    "main/agentforge-engine",         # pyagentforge
+    "main/Long-memory/long-memory",   # long-memory plugin
+    "main/Long-memory/embeddings",    # embeddings plugin
+]
+
+# Skip scanning examples/scripts and cache directories while collecting tests.
+# (pytest reads `norecursedirs` from ini_options to prune walk.)
+norecursedirs = [
+    "examples",
+    "scripts",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "node_modules",
+    ".venv",
+    "dist",
+    "build",
+]
+
+filterwarnings = [
+    "ignore::DeprecationWarning:pkg_resources.*",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ------------------------------------------------------------
+# ruff — shared lint config (each sub-project may override)
+# ------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/build",
+    "**/dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
+ignore = ["E501", "B008", "B905", "ARG001"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["ARG002", "ARG005", "F401", "F403", "E741", "E402"]
+"**/examples/**/*.py" = ["ARG002", "ARG005", "F401", "F403", "E741", "E402"]
+
+# ------------------------------------------------------------
+# coverage — aggregate across sub-packages
+# ------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = [
+    "main/agentforge-engine/pyagentforge",
+    "main/Service/Service",
+    "main/Agent",
+    "main/Long-memory/long-memory",
+    "main/Long-memory/embeddings",
+]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/examples/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

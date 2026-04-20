@@ -2,17 +2,16 @@
 Tests for Category System
 """
 
-import pytest
 
-from pyagentforge.core.category import (
+from pyagentforge.plugins.integration.category_system.category import (
     BUILTIN_CATEGORIES,
     Category,
     TaskComplexity,
-    get_category,
     get_categories_by_complexity,
+    get_category,
     get_sorted_categories,
 )
-from pyagentforge.core.category_registry import (
+from pyagentforge.plugins.integration.category_system.category_registry import (
     CategoryRegistry,
     ClassificationResult,
 )
