@@ -4,6 +4,7 @@ Plan management with in-memory + file dual-write storage.
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import threading
@@ -147,7 +148,44 @@ class PlanFileManager:
         self._plans_dir.mkdir(parents=True, exist_ok=True)
         self._plans: dict[str, PlanFile] = {}
         self._lock = threading.RLock()
+        # P1-11: per-plan asyncio.Lock 防止并发写入损坏
+        self._async_locks: dict[str, asyncio.Lock] = {}
         self._load_from_disk()
+
+    def _get_plan_lock(self, plan_id: str) -> asyncio.Lock:
+        """P1-11: 获取 per-plan 的 asyncio.Lock。"""
+        if plan_id not in self._async_locks:
+            self._async_locks[plan_id] = asyncio.Lock()
+        return self._async_locks[plan_id]
+
+    async def async_update_step(
+        self,
+        plan_id: str,
+        step_id: str,
+        status: StepStatus | None = None,
+        notes: str | None = None,
+    ) -> PlanFile | None:
+        """P1-11: 带 per-plan asyncio.Lock 的异步 update_step。"""
+        async with self._get_plan_lock(plan_id):
+            return self.update_step(plan_id, step_id, status=status, notes=notes)
+
+    async def async_add_step(
+        self,
+        plan_id: str,
+        title: str,
+        description: str = "",
+        dependencies: list[str] | None = None,
+        estimated_time: str = "",
+        acceptance_criteria: list[str] | None = None,
+        files_affected: list[str] | None = None,
+    ) -> PlanFile | None:
+        """P1-11: 带 per-plan asyncio.Lock 的异步 add_step。"""
+        async with self._get_plan_lock(plan_id):
+            return self.add_step(
+                plan_id, title, description=description,
+                dependencies=dependencies, estimated_time=estimated_time,
+                acceptance_criteria=acceptance_criteria, files_affected=files_affected,
+            )
 
     def create_plan(
         self,

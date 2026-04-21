@@ -16,7 +16,14 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ApiType(StrEnum):
-    """API 类型"""
+    """常见 API 协议类型常量。
+
+    注意：仅作为「建议/示例」保留，**不再**用于 Pydantic 字段的强制校验。
+    协议适配层已插件化（见 ``pyagentforge.protocols.PROTOCOL_ADAPTERS``），
+    第三方插件通过 entry_points ``pyagentforge.protocol_adapters`` 或
+    ``register_protocol_adapter()`` 注册的任何 api_type 字符串都应被接受；
+    真正的合法性由运行时查 registry 决定。
+    """
 
     ANTHROPIC_MESSAGES = "anthropic-messages"
     OPENAI_COMPLETIONS = "openai-completions"
@@ -34,7 +41,13 @@ class ModelConfigBase(BaseModel):
 
     name: str = Field(description="显示名称")
     provider: str = Field(description="提供商标识，仅作分组展示")
-    api_type: ApiType = Field(description="API 类型")
+    api_type: str = Field(
+        description=(
+            "API 协议类型。运行时由 PROTOCOL_ADAPTERS 动态校验，"
+            "支持通过 entry_points 或 register_protocol_adapter 注册的任意值。"
+        ),
+        min_length=1,
+    )
     model_name: str | None = Field(default=None, description="实际传给远端的模型名")
 
     # 模型能力
@@ -86,7 +99,14 @@ class ModelConfigUpdate(BaseModel):
 
     name: str | None = Field(default=None, description="显示名称")
     provider: str | None = Field(default=None, description="提供商类型")
-    api_type: ApiType | None = Field(default=None, description="API 类型")
+    api_type: str | None = Field(
+        default=None,
+        description=(
+            "API 协议类型。运行时由 PROTOCOL_ADAPTERS 动态校验，"
+            "支持通过 entry_points 或 register_protocol_adapter 注册的任意值。"
+        ),
+        min_length=1,
+    )
     model_name: str | None = Field(default=None, description="实际传给远端的模型名")
 
     supports_vision: bool | None = Field(default=None, description="是否支持图像")

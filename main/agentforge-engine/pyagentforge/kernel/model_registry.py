@@ -52,7 +52,7 @@ class ModelConfig(BaseModel):
 
     base_url: str | None = Field(default=None, description="API 基础 URL")
     api_key: str | None = Field(default=None, description="直接传入的 API Key")
-    api_key_env: str = Field(default="", description="API Key 环境变量名")
+    api_key_env: str | None = Field(default=None, description="API Key 环境变量名")
     headers: dict[str, str] = Field(default_factory=dict, description="附加请求头")
     timeout: int = Field(default=120, description="请求超时（秒）")
 
@@ -109,39 +109,33 @@ class ModelRegistry:
             config = manager.get_config()
 
             for model_id, model_cfg in config.models.items():
-                api_key = model_cfg.api_key
-                if not api_key and model_cfg.api_key_env:
-                    api_key = os.environ.get(model_cfg.api_key_env)
+                # config.llm_config.ModelConfig 现已与本文件 ModelConfig 同源
+                # （重定向导入），这里仅在必要时补齐运行期派生字段：
+                #   1) 若未显式填 api_key，则从 api_key_env 解析
+                #   2) 合并 extra.headers 到 headers
+                #   3) 未填 model_name 时回落到 id
+                resolved_api_key = model_cfg.api_key
+                if not resolved_api_key and model_cfg.api_key_env:
+                    resolved_api_key = os.environ.get(model_cfg.api_key_env)
 
-                headers = {}
+                merged_headers: dict[str, str] = {}
                 if isinstance(model_cfg.headers, dict):
-                    headers.update({str(k): str(v) for k, v in model_cfg.headers.items()})
+                    merged_headers.update(
+                        {str(k): str(v) for k, v in model_cfg.headers.items()}
+                    )
                 if isinstance(model_cfg.extra, dict):
                     extra_headers = model_cfg.extra.get("headers")
                     if isinstance(extra_headers, dict):
-                        headers.update({str(k): str(v) for k, v in extra_headers.items()})
+                        merged_headers.update(
+                            {str(k): str(v) for k, v in extra_headers.items()}
+                        )
 
-                self._config_models[model_id] = ModelConfig(
-                    id=model_cfg.id,
-                    name=model_cfg.name,
-                    provider=model_cfg.provider,
-                    api_type=model_cfg.api_type,
-                    model_name=model_cfg.model_name or model_cfg.id,
-                    supports_vision=model_cfg.supports_vision,
-                    supports_tools=model_cfg.supports_tools,
-                    supports_streaming=model_cfg.supports_streaming,
-                    context_window=model_cfg.context_window,
-                    max_output_tokens=model_cfg.max_output_tokens,
-                    cost_input=model_cfg.cost_input,
-                    cost_output=model_cfg.cost_output,
-                    cost_cache_read=model_cfg.cost_cache_read,
-                    cost_cache_write=model_cfg.cost_cache_write,
-                    base_url=model_cfg.base_url,
-                    api_key=api_key,
-                    api_key_env=model_cfg.api_key_env or "",
-                    headers=headers,
-                    timeout=model_cfg.timeout,
-                    extra=model_cfg.extra,
+                self._config_models[model_id] = model_cfg.model_copy(
+                    update={
+                        "api_key": resolved_api_key,
+                        "headers": merged_headers,
+                        "model_name": model_cfg.model_name or model_cfg.id,
+                    }
                 )
 
             logger.info("Loaded models from JSON config", extra_data={"count": len(config.models)})

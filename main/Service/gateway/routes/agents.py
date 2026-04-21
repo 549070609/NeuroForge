@@ -143,23 +143,15 @@ async def execute_agent(
         options=request.options,
     )
 
-    from datetime import datetime, timezone
-
-    def _utcnow():
-        return datetime.now(timezone.utc).replace(tzinfo=None)
-
+    # P1-10: service 已返回 tz-aware datetime 和 ErrorDetail dict，直接构造响应
     return AgentExecuteResponse(
         agent_id=agent_id,
         status=result.get("status", "error"),
         result=result.get("result"),
         plan_id=result.get("plan_id"),
         error=result.get("error"),
-        started_at=datetime.fromisoformat(result["started_at"].rstrip("Z"))
-        if result.get("started_at")
-        else _utcnow(),
-        completed_at=datetime.fromisoformat(result["completed_at"].rstrip("Z"))
-        if result.get("completed_at")
-        else None,
+        started_at=result.get("started_at"),
+        completed_at=result.get("completed_at"),
     )
 
 

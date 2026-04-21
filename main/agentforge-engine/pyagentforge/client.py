@@ -30,6 +30,19 @@ logger = get_logger(__name__)
 
 
 @dataclass
+class ConnectionPoolConfig:
+    """HTTP 连接池配置（策略模式：可按部署环境注入不同配置）"""
+
+    max_connections: int = 100
+    max_keepalive_connections: int = 20
+    keepalive_expiry: float = 30.0
+    connect_timeout: float = 10.0
+    read_timeout: float = 120.0
+    write_timeout: float = 30.0
+    pool_timeout: float = 10.0
+
+
+@dataclass
 class RetryConfig:
     """LLMClient 重试配置"""
 
@@ -79,10 +92,12 @@ class LLMClient:
         retry_config: RetryConfig | None = None,
         fallback_model_ids: list[str] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        pool_config: ConnectionPoolConfig | None = None,
     ) -> None:
         self.registry = registry or ModelRegistry(load_from_config=True)
         self.retry_config = retry_config or RetryConfig()
         self.fallback_model_ids = fallback_model_ids or []
+        self._pool_config = pool_config or ConnectionPoolConfig()
         # 可选的底层 httpx transport（主要用于测试注入 MockTransport）
         self._transport = transport
         # key: (id(loop), timeout) -> (loop_ref, httpx.AsyncClient)
@@ -93,6 +108,8 @@ class LLMClient:
             extra_data={
                 "max_retries": self.retry_config.max_retries,
                 "fallbacks": self.fallback_model_ids,
+                "pool_max_connections": self._pool_config.max_connections,
+                "pool_max_keepalive": self._pool_config.max_keepalive_connections,
             },
         )
 
@@ -507,7 +524,22 @@ class LLMClient:
         for k in stale:
             self._http_clients.pop(k, None)
 
-        client_kwargs: dict[str, Any] = {"timeout": timeout}
+        pool = self._pool_config
+        limits = httpx.Limits(
+            max_connections=pool.max_connections,
+            max_keepalive_connections=pool.max_keepalive_connections,
+            keepalive_expiry=pool.keepalive_expiry,
+        )
+        timeout_cfg = httpx.Timeout(
+            connect=pool.connect_timeout,
+            read=max(float(timeout), pool.read_timeout),
+            write=pool.write_timeout,
+            pool=pool.pool_timeout,
+        )
+        client_kwargs: dict[str, Any] = {
+            "timeout": timeout_cfg,
+            "limits": limits,
+        }
         if self._transport is not None:
             client_kwargs["transport"] = self._transport
         client = httpx.AsyncClient(**client_kwargs)
@@ -517,3 +549,35 @@ class LLMClient:
     def get_model_config(self, model_id: str) -> ModelConfig | None:
         """获取模型配置（供外部组件使用）。"""
         return self.registry.get_model(model_id)
+
+
+# ── 共享单例（单例模式：避免 AgentExecutor 每次新建连接池） ──────────
+
+_shared_client: LLMClient | None = None
+_shared_lock = asyncio.Lock()
+
+
+def get_shared_llm_client(
+    *,
+    pool_config: ConnectionPoolConfig | None = None,
+    retry_config: RetryConfig | None = None,
+) -> LLMClient:
+    """获取进程级共享 LLMClient（懒初始化）。
+
+    多个 AgentExecutor 实例复用同一连接池，避免逐次新建 httpx 客户端。
+    """
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = LLMClient(
+            pool_config=pool_config,
+            retry_config=retry_config,
+        )
+    return _shared_client
+
+
+async def close_shared_llm_client() -> None:
+    """关闭共享 LLMClient（服务关机时调用）。"""
+    global _shared_client
+    if _shared_client is not None:
+        await _shared_client.aclose()
+        _shared_client = None

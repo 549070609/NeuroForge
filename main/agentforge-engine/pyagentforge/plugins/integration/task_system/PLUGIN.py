@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pyagentforge.plugin.base import Plugin as BasePlugin
+from pyagentforge.plugin.base import Plugin as BasePlugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookType
 from pyagentforge.tools.base import BaseTool
 from pyagentforge.utils.logging import get_logger
@@ -172,6 +172,7 @@ class TaskManager:
         complexity: TaskComplexity = TaskComplexity.MODERATE,
         estimated_hours: float | None = None,
         parent_id: str | None = None,
+        background_task_id: str | None = None,
         blocked_by: list[str] | None = None,
     ) -> Task:
         """
@@ -185,6 +186,7 @@ class TaskManager:
             complexity: 复杂度
             estimated_hours: 预估时间（小时）
             parent_id: 父任务 ID（用于子任务）
+            background_task_id: 关联的后台任务 ID
             blocked_by: 依赖任务 ID 列表
 
         Returns:
@@ -211,6 +213,7 @@ class TaskManager:
             estimated_hours=estimated_hours,
             parent_id=parent_id,
             level=level,
+            background_task_id=background_task_id,
             blockedBy=blocked_by or [],
         )
 
@@ -1100,10 +1103,11 @@ class TaskManagementPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
 
-        self.metadata = self.PluginMetadata(
+        self.metadata = PluginMetadata(
             id="task_system",
             name="Task Management System",
             version="4.0.0",
+            type=PluginType.INTEGRATION,
             description="Task creation and management tools",
             author="PyAgentForge Team",
         )

@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyagentforge.plugin.base import Plugin as BasePlugin
+from pyagentforge.plugin.base import Plugin as BasePlugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookDecision, HookType
 from pyagentforge.utils.logging import get_logger
 
@@ -50,10 +50,11 @@ class TodoContinuationEnforcerPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
 
-        self.metadata = self.PluginMetadata(
+        self.metadata = PluginMetadata(
             id="todo_continuation",
             name="Todo Continuation Enforcer",
             version="4.0.0",
+            type=PluginType.INTEGRATION,
             description="Auto-continuation for incomplete todo tasks",
             author="PyAgentForge Team",
         )
@@ -280,10 +281,15 @@ class TodoContinuationEnforcerPlugin(BasePlugin):
             pending = task_manager.list_tasks(status=TaskStatus.PENDING)
             in_progress = task_manager.list_tasks(status=TaskStatus.IN_PROGRESS)
 
-            return [
-                {"id": t.id, "title": t.title, "status": t.status.value}
-                for t in pending + in_progress
-            ]
+            unique_tasks: dict[str, dict[str, Any]] = {}
+            for task in pending + in_progress:
+                unique_tasks[task.id] = {
+                    "id": task.id,
+                    "title": task.title,
+                    "status": task.status.value,
+                }
+
+            return list(unique_tasks.values())
         except Exception as e:
             logger.warning(f"Failed to get tasks from TaskSystem: {e}")
             return []

@@ -101,22 +101,58 @@ class ContextMonitor:
         return sum(self.count_message_tokens(message) for message in messages)
 
     def calculate_usage(self, messages: list["Message"], current_turn_tokens: int = 0) -> ContextUsage:
-        used_tokens = self.count_messages_tokens(messages) + current_turn_tokens
-        usage_ratio = used_tokens / self.max_context_tokens if self.max_context_tokens > 0 else 0.0
-        remaining_tokens = max(0, self.max_context_tokens - used_tokens)
-
-        settings = get_settings()
-        warning_threshold = settings.context_warning_threshold
-        critical_threshold = settings.context_critical_threshold
-
-        is_warning = usage_ratio >= warning_threshold
-        is_critical = usage_ratio >= critical_threshold
-
+        total_tokens = self.count_messages_tokens(messages) + current_turn_tokens
         return ContextUsage(
-            used_tokens=used_tokens,
+            total_tokens=total_tokens,
             max_tokens=self.max_context_tokens,
-            usage_ratio=usage_ratio,
-            remaining_tokens=remaining_tokens,
-            is_warning=is_warning,
-            is_critical=is_critical,
+            message_count=len(messages),
         )
+
+    def should_compact(self, messages: list["Message"], threshold: float = 0.8) -> bool:
+        """判断当前上下文是否应触发压缩。"""
+        usage = self.calculate_usage(messages)
+        return (usage.total_tokens / usage.max_tokens) >= threshold if usage.max_tokens > 0 else False
+
+    def get_compaction_recommendation(self, messages: list["Message"]) -> dict[str, Any]:
+        """给出压缩建议，兼容旧测试和 plugin 调用。"""
+        usage = self.calculate_usage(messages)
+        usage_ratio = (usage.total_tokens / usage.max_tokens) if usage.max_tokens > 0 else 0.0
+        settings = get_settings()
+        threshold = getattr(settings, "compaction_threshold", 0.8)
+
+        if usage_ratio >= 0.95:
+            urgency = "critical"
+        elif usage_ratio >= threshold:
+            urgency = "high"
+        elif usage_ratio >= max(0.6, threshold - 0.1):
+            urgency = "medium"
+        else:
+            urgency = "low"
+
+        needs_compaction = usage_ratio >= threshold
+        if usage_ratio >= 0.95:
+            strategy = "summarize"
+        elif usage_ratio >= threshold:
+            strategy = "hybrid"
+        else:
+            strategy = "truncate"
+
+        reserve_tokens = getattr(settings, "compaction_reserve_tokens", 8000)
+        tokens_to_free = max(0, usage.total_tokens - max(0, usage.max_tokens - reserve_tokens))
+
+        if needs_compaction:
+            message = (
+                f"Context usage is {usage.usage_percentage:.1f}%, compaction recommended."
+            )
+        else:
+            message = (
+                f"Context usage is {usage.usage_percentage:.1f}%, compaction not needed yet."
+            )
+
+        return {
+            "needs_compaction": needs_compaction,
+            "urgency": urgency,
+            "suggested_strategy": strategy,
+            "tokens_to_free": tokens_to_free,
+            "message": message,
+        }

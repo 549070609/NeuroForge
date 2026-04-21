@@ -6,6 +6,7 @@ Agent 执行引擎
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -13,6 +14,11 @@ from typing import Any, Callable
 
 from pyagentforge.kernel.checkpoint import BaseCheckpointer, Checkpoint
 from pyagentforge.kernel.context import ContextManager
+from pyagentforge.kernel.errors import (
+    AgentCancelledError,
+    AgentMaxIterationsError,
+    AgentTimeoutError,
+)
 from pyagentforge.kernel.executor import ToolExecutor, ToolRegistry
 from pyagentforge.kernel.message import ProviderResponse
 from pyagentforge.kernel.base_provider import BaseProvider
@@ -86,16 +92,27 @@ class AgentEngine:
         """获取会话 ID"""
         return self._session_id
 
-    async def run(self, prompt: str, *, resume: bool = False) -> str:
+    async def run(
+        self,
+        prompt: str,
+        *,
+        resume: bool = False,
+        cancel_event: asyncio.Event | None = None,
+    ) -> str:
         """
         运行 Agent
 
         Args:
             prompt: 用户输入
             resume: 是否从 checkpoint 恢复执行
+            cancel_event: 外部取消信号，set() 后引擎在下一迭代入口退出
 
         Returns:
             Agent 响应
+
+        Raises:
+            AgentTimeoutError: LLM 调用或工具执行超时
+            AgentCancelledError: cancel_event 被 set
         """
         logger.info(
             f"Starting Agent run: session_id={self._session_id}, prompt_len={len(prompt)}"
@@ -124,85 +141,68 @@ class AgentEngine:
         max_iterations = self.config.max_iterations
 
         while iteration < max_iterations:
-            iteration += 1
+            await self._check_cancel(cancel_event, iteration, "Agent Loop")
 
+            iteration += 1
             logger.info(
                 f"[Agent Loop] Iteration {iteration}/{max_iterations}"
             )
 
-            # 插件钩子: on_before_llm_call
-            messages = self.context.get_messages_for_api()
-            if self.plugin_manager:
-                modified = await self.plugin_manager.emit_hook(
-                    "on_before_llm_call", messages
-                )
-                if modified and modified[0]:
-                    messages = modified[0]
-
-            # 调用 LLM
+            messages = await self._prepare_messages()
             response = await self._call_llm(messages)
-
-            # 插件钩子: on_after_llm_call
-            if self.plugin_manager:
-                modified = await self.plugin_manager.emit_hook(
-                    "on_after_llm_call", response
-                )
-                if (
-                    modified
-                    and modified[0]
-                    and isinstance(modified[0], ProviderResponse)
-                ):
-                    response = modified[0]
+            response = await self._apply_after_llm_hook(response)
 
             logger.info(
                 f"[Agent Loop] Response: stop_reason={response.stop_reason}, "
                 f"has_tools={response.has_tool_calls}, text_len={len(response.text)}"
             )
 
-            # 如果没有工具调用，返回文本响应
             if not response.has_tool_calls:
-                self.context.add_assistant_text(response.text)
-
-                # 任务完成，清理 checkpoint
-                await self._delete_checkpoint()
-
-                # 插件钩子: on_task_complete
-                if self.plugin_manager:
-                    await self.plugin_manager.emit_hook("on_task_complete", response.text)
-
-                logger.info(
-                    f"Agent run completed: session_id={self._session_id}, iterations={iteration}"
-                )
+                await self._handle_completion(response.text, iteration)
                 return response.text
 
             # 添加助手消息（包含工具调用）
             self.context.add_assistant_message(response.content)
 
-            # 记录工具调用
             tool_names = [tc.name for tc in response.tool_calls]
             logger.info(f"[Agent Loop] Tool calls: {tool_names}")
 
-            # 执行工具
-            tool_results = await self.executor.execute_batch(
-                response.tool_calls,
-                self.ask_callback,
-            )
+            # 执行工具（带超时保护）
+            try:
+                tool_results = await asyncio.wait_for(
+                    self.executor.execute_batch(
+                        response.tool_calls,
+                        self.ask_callback,
+                    ),
+                    timeout=self.config.timeout,
+                )
+            except TimeoutError:
+                logger.error(
+                    f"[Agent Loop] Tool batch execution timed out after "
+                    f"{self.config.timeout}s, session_id={self._session_id}"
+                )
+                await self._delete_checkpoint()
+                raise AgentTimeoutError(
+                    session_id=self._session_id,
+                    iteration=iteration,
+                    timeout=self.config.timeout,
+                    detail="tool_batch_execution",
+                )
 
-            # 添加工具结果
             for tool_use_id, result in tool_results:
                 self.context.add_tool_result(tool_use_id, result)
 
-            # Checkpoint: 每次迭代后保存
-            await self._save_checkpoint(iteration)
-
-            # 检查是否需要截断上下文
-            if len(self.context) > self.context.max_messages * 0.8:
-                self.context.truncate()
+            await self._post_tool_iteration(iteration)
 
         logger.error(
             f"[Agent Loop] Maximum iterations reached! session_id={self._session_id}"
         )
-        return "Error: Maximum iterations reached"
+        await self._delete_checkpoint()
+        raise AgentMaxIterationsError(
+            session_id=self._session_id,
+            iteration=iteration,
+            max_iterations=max_iterations,
+        )
 
     PHASE_LABELS = {
         1: "快速响应",
@@ -210,7 +210,12 @@ class AgentEngine:
         3: "总结建议",
     }
 
-    async def run_stream(self, prompt: str):
+    async def run_stream(
+        self,
+        prompt: str,
+        *,
+        cancel_event: asyncio.Event | None = None,
+    ):
         """
         流式运行 Agent（分阶段输出）
 
@@ -221,9 +226,14 @@ class AgentEngine:
 
         Args:
             prompt: 用户输入
+            cancel_event: 外部取消信号，set() 后引擎在下一迭代入口退出
 
         Yields:
             带 phase 标记的流式响应事件
+
+        Raises:
+            AgentTimeoutError: LLM 调用或工具执行超时
+            AgentCancelledError: cancel_event 被 set
         """
         logger.info(
             f"Starting Agent stream: session_id={self._session_id}, prompt_len={len(prompt)}"
@@ -242,6 +252,8 @@ class AgentEngine:
         max_iterations = self.config.max_iterations
 
         while iteration < max_iterations:
+            await self._check_cancel(cancel_event, iteration, "Agent Stream")
+
             iteration += 1
             phase += 1
             phase_label = self.PHASE_LABELS.get(phase, f"阶段 {phase}")
@@ -251,52 +263,48 @@ class AgentEngine:
                 f"iteration {iteration}/{max_iterations}"
             )
 
-            # yield 阶段开始事件
             yield {
                 "type": "phase_start",
                 "phase": phase,
                 "phase_label": phase_label,
             }
 
-            # 插件钩子: on_before_llm_call
-            messages = self.context.get_messages_for_api()
-            if self.plugin_manager:
-                modified = await self.plugin_manager.emit_hook(
-                    "on_before_llm_call", messages
-                )
-                if modified and modified[0]:
-                    messages = modified[0]
+            messages = await self._prepare_messages()
 
-            # 流式调用 LLM (使用适配后的提示词)
+            # 流式调用 LLM（带超时保护）
             system_prompt = self._adapt_system_prompt()
             final_response = None
-            async for event in self.provider.stream_message(
-                system_prompt,
-                messages,
-                self.tools.get_schemas(),
-            ):
-                if isinstance(event, ProviderResponse):
-                    final_response = event
-                else:
-                    yield {"type": "stream", "event": event, "phase": phase}
+            try:
+                async with asyncio.timeout(self.config.timeout):
+                    async for event in self.provider.stream_message(
+                        system_prompt,
+                        messages,
+                        self.tools.get_schemas(),
+                    ):
+                        if isinstance(event, ProviderResponse):
+                            final_response = event
+                        else:
+                            yield {"type": "stream", "event": event, "phase": phase}
+            except TimeoutError:
+                logger.error(
+                    f"[Agent Stream] LLM stream timed out after "
+                    f"{self.config.timeout}s, session_id={self._session_id}"
+                )
+                raise AgentTimeoutError(
+                    session_id=self._session_id,
+                    iteration=iteration,
+                    timeout=self.config.timeout,
+                    detail="llm_stream",
+                )
 
             if final_response is None:
                 logger.warning(
-                    f"[Agent Stream] No final response from provider, session_id={self._session_id}"
+                    f"[Agent Stream] No final response from provider, "
+                    f"session_id={self._session_id}"
                 )
                 break
 
-            # 插件钩子: on_after_llm_call
-            if self.plugin_manager:
-                modified = await self.plugin_manager.emit_hook(
-                    "on_after_llm_call", final_response
-                )
-                if (
-                    modified
-                    and modified[0]
-                    and isinstance(modified[0], ProviderResponse)
-                ):
-                    final_response = modified[0]
+            final_response = await self._apply_after_llm_hook(final_response)
 
             logger.info(
                 f"[Agent Stream] Phase {phase}: stop_reason={final_response.stop_reason}, "
@@ -304,12 +312,7 @@ class AgentEngine:
             )
 
             if not final_response.has_tool_calls:
-                self.context.add_assistant_text(final_response.text)
-
-                # 插件钩子: on_task_complete
-                if self.plugin_manager:
-                    await self.plugin_manager.emit_hook("on_task_complete", final_response.text)
-
+                await self._handle_completion(final_response.text, iteration)
                 yield {
                     "type": "complete",
                     "text": final_response.text,
@@ -320,11 +323,10 @@ class AgentEngine:
             # 添加助手消息（包含工具调用）
             self.context.add_assistant_message(final_response.content)
 
-            # 记录工具调用
             tool_names = [tc.name for tc in final_response.tool_calls]
             logger.info(f"[Agent Stream] Phase {phase} tool calls: {tool_names}")
 
-            # 执行工具并 yield 结果
+            # 执行工具并 yield 结果（带超时保护）
             for tool_call in final_response.tool_calls:
                 yield {
                     "type": "tool_start",
@@ -333,7 +335,23 @@ class AgentEngine:
                     "phase": phase,
                 }
 
-                result = await self.executor.execute(tool_call, self.ask_callback)
+                try:
+                    result = await asyncio.wait_for(
+                        self.executor.execute(tool_call, self.ask_callback),
+                        timeout=self.config.timeout,
+                    )
+                except TimeoutError:
+                    logger.error(
+                        f"[Agent Stream] Tool '{tool_call.name}' timed out after "
+                        f"{self.config.timeout}s, session_id={self._session_id}"
+                    )
+                    raise AgentTimeoutError(
+                        session_id=self._session_id,
+                        iteration=iteration,
+                        timeout=self.config.timeout,
+                        detail=f"tool_execution:{tool_call.name}",
+                    )
+
                 self.context.add_tool_result(tool_call.id, result)
 
                 yield {
@@ -343,35 +361,60 @@ class AgentEngine:
                     "phase": phase,
                 }
 
-            # 检查是否需要截断上下文
-            if len(self.context) > self.context.max_messages * 0.8:
-                self.context.truncate()
+            # 共享：保存 checkpoint + 截断上下文
+            await self._post_tool_iteration(iteration)
 
         logger.error(
             f"[Agent Stream] Maximum iterations reached! session_id={self._session_id}"
         )
-        yield {"type": "error", "message": "Maximum iterations reached"}
+        await self._delete_checkpoint()
+        raise AgentMaxIterationsError(
+            session_id=self._session_id,
+            iteration=iteration,
+            max_iterations=max_iterations,
+        )
 
     async def _call_llm(self, messages: list[dict]) -> ProviderResponse:
-        """调用 LLM"""
-        # 适配系统提示词
+        """调用 LLM（带超时保护）
+
+        Raises:
+            AgentTimeoutError: 调用超时
+        """
         system_prompt = self._adapt_system_prompt()
 
-        return await self.provider.create_message(
-            system=system_prompt,
-            messages=messages,
-            tools=self.tools.get_schemas(),
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
-        )
+        try:
+            return await asyncio.wait_for(
+                self.provider.create_message(
+                    system=system_prompt,
+                    messages=messages,
+                    tools=self.tools.get_schemas(),
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                ),
+                timeout=self.config.timeout,
+            )
+        except TimeoutError:
+            logger.error(
+                f"[Agent] LLM call timed out after {self.config.timeout}s, "
+                f"session_id={self._session_id}"
+            )
+            raise AgentTimeoutError(
+                session_id=self._session_id,
+                timeout=self.config.timeout,
+                detail="llm_call",
+            )
 
     def _adapt_system_prompt(self) -> str:
         """
-        根据模型适配系统提示词
+        根据模型适配系统提示词（P1-4: 缓存 adapted prompt，model 不变时复用）
 
         Returns:
             适配后的系统提示词
         """
+        cache_key = (self.provider.model, self.config.system_prompt)
+        if hasattr(self, "_adapted_cache") and self._adapted_cache[0] == cache_key:
+            return self._adapted_cache[1]
+
         from pyagentforge.kernel.model_registry import get_model
         from pyagentforge.agents.prompts.adapter import get_prompt_adapter
         from pyagentforge.agents.prompts.base import AdaptationContext
@@ -395,6 +438,7 @@ class AgentEngine:
             )
 
             adapted_prompt = adapter.adapt_prompt(context)
+            self._adapted_cache = (cache_key, adapted_prompt)
             logger.info(
                 f"Adapted system prompt for model={self.provider.model}, "
                 f"len={len(adapted_prompt)}"
@@ -490,24 +534,119 @@ class AgentEngine:
         """获取类别注册表"""
         return self.category_registry
 
-    # ── Checkpoint helpers ──────────────────────────────────────
+    # ── Shared iteration helpers ─────────────────────────────────
+    # run() 与 run_stream() 共用，确保 hook / checkpoint 行为一致。
+
+    async def _prepare_messages(self) -> list[dict]:
+        """获取 API 消息并执行 on_before_llm_call 钩子。"""
+        messages = self.context.get_messages_for_api()
+        if self.plugin_manager:
+            modified = await self.plugin_manager.emit_hook(
+                "on_before_llm_call", messages
+            )
+            if modified and modified[0]:
+                messages = modified[0]
+        return messages
+
+    async def _apply_after_llm_hook(
+        self, response: ProviderResponse
+    ) -> ProviderResponse:
+        """执行 on_after_llm_call 钩子，返回可能被修改的 response。"""
+        if self.plugin_manager:
+            modified = await self.plugin_manager.emit_hook(
+                "on_after_llm_call", response
+            )
+            if (
+                modified
+                and modified[0]
+                and isinstance(modified[0], ProviderResponse)
+            ):
+                return modified[0]
+        return response
+
+    async def _handle_completion(self, text: str, iteration: int) -> None:
+        """任务完成共享逻辑：更新上下文 → 清理 checkpoint → on_task_complete。"""
+        self.context.add_assistant_text(text)
+        await self._delete_checkpoint()
+        if self.plugin_manager:
+            await self.plugin_manager.emit_hook("on_task_complete", text)
+        logger.info(
+            f"Agent completed: session_id={self._session_id}, iterations={iteration}"
+        )
+
+    async def _post_tool_iteration(self, iteration: int) -> None:
+        """工具迭代后共享逻辑：保存 checkpoint → 截断上下文。"""
+        await self._save_checkpoint(iteration)
+        if len(self.context) > self.context.max_messages * 0.8:
+            self.context.truncate()
+
+    async def _check_cancel(
+        self, cancel_event: asyncio.Event | None, iteration: int, label: str
+    ) -> None:
+        """检查取消信号，已 set 则抛出 AgentCancelledError。"""
+        if cancel_event is not None and cancel_event.is_set():
+            logger.info(
+                f"[{label}] Cancelled by cancel_event, "
+                f"session_id={self._session_id}, iteration={iteration}"
+            )
+            raise AgentCancelledError(
+                session_id=self._session_id,
+                iteration=iteration,
+            )
+
+    # ── Checkpoint helpers (P1-7: 重试 + 降级) ─────────────────
+
+    _CHECKPOINT_MAX_RETRIES = 3
+    _CHECKPOINT_FAIL_THRESHOLD = 5
+    _RETRYABLE_ERRORS = (OSError, TimeoutError, ConnectionError)
 
     async def _save_checkpoint(self, iteration: int) -> None:
         if not self.checkpointer:
             return
-        try:
-            cp = Checkpoint(
-                session_id=self._session_id,
-                iteration=iteration,
-                context_data=self.context.to_dict(),
-                metadata={
-                    "model": self.provider.model,
-                    "max_iterations": self.config.max_iterations,
-                },
+        if getattr(self, "_checkpoint_disabled", False):
+            return
+
+        cp = Checkpoint(
+            session_id=self._session_id,
+            iteration=iteration,
+            context_data=self.context.to_dict(),
+            metadata={
+                "model": self.provider.model,
+                "max_iterations": self.config.max_iterations,
+            },
+        )
+
+        last_err: Exception | None = None
+        for attempt in range(self._CHECKPOINT_MAX_RETRIES):
+            try:
+                await self.checkpointer.save(self._session_id, cp)
+                self._checkpoint_consecutive_failures = 0
+                return
+            except self._RETRYABLE_ERRORS as e:
+                last_err = e
+                wait = 0.1 * (2 ** attempt)
+                logger.warning(
+                    "Checkpoint save retryable error (attempt %d/%d): %s",
+                    attempt + 1, self._CHECKPOINT_MAX_RETRIES, e,
+                )
+                await asyncio.sleep(wait)
+            except Exception as e:
+                last_err = e
+                logger.warning("Checkpoint save non-retryable error: %s", e)
+                break
+
+        count = getattr(self, "_checkpoint_consecutive_failures", 0) + 1
+        self._checkpoint_consecutive_failures = count
+        if count >= self._CHECKPOINT_FAIL_THRESHOLD:
+            self._checkpoint_disabled = True
+            logger.error(
+                "Checkpoint disabled after %d consecutive failures", count
             )
-            await self.checkpointer.save(self._session_id, cp)
-        except Exception as e:
-            logger.warning(f"Failed to save checkpoint: {e}")
+        if self.plugin_manager:
+            await self.plugin_manager.emit_hook(
+                "on_checkpoint_failed",
+                {"session_id": self._session_id, "error": str(last_err), "consecutive": count},
+            )
 
     async def _restore_from_checkpoint(self) -> int | None:
         """从 checkpoint 恢复上下文，返回恢复的 iteration 编号。"""

@@ -14,14 +14,17 @@ from typing import Any
 
 
 def _utcnow() -> datetime:
-    """Return a naive UTC datetime (timezone stripped for backward compat)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return a tz-aware UTC datetime (P1-10: 保留 tzinfo)."""
+    return datetime.now(timezone.utc)
+
+from pyagentforge.kernel.errors import AgentError
 
 from ..core.registry import ServiceRegistry
 from ..schemas.agents import (
     AgentInfoResponse,
     AgentListResponse,
     AgentStatsResponse,
+    ErrorDetail,
     NamespaceInfo,
     NamespaceListResponse,
     PlanCreate,
@@ -41,6 +44,15 @@ from ..services.base import BaseService
 logger = logging.getLogger(__name__)
 
 
+def _is_path_within(target: Path, base: Path) -> bool:
+    """检查 target 路径是否在 base 目录内（resolve 后比较，防止 .. 和符号链接绕过）。"""
+    try:
+        target.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 class AgentService(BaseService):
     """
     Agent 管理服务
@@ -58,15 +70,12 @@ class AgentService(BaseService):
         self._loader = None  # AgentLoader
 
     async def _on_initialize(self) -> None:
-        """初始化服务"""
-        # 延迟导入以避免循环依赖
-        import sys
+        """初始化服务。
 
-        # 确保 Agent 模块路径可用
-        agent_path = Path("main/Agent")
-        if str(agent_path) not in sys.path:
-            sys.path.insert(0, str(agent_path.parent))
-
+        P0-4: `Agent.core` 现在通过包导入，要求运行环境 `main/` 在 PYTHONPATH
+        上（由 `pyproject.toml` / `uvicorn --app-dir main` 保证），不再在运行时
+        修改 `sys.path`。
+        """
         try:
             from Agent.core import AgentDirectory, PlanFileManager
 
@@ -176,7 +185,7 @@ class AgentService(BaseService):
 
     def list_namespaces(self) -> NamespaceListResponse:
         """
-        列出所有命名空间
+        列出所有命名空间（P1-6: 使用 get_namespace_summary 一次聚合，消除 N+1）
 
         Returns:
             NamespaceListResponse
@@ -184,18 +193,15 @@ class AgentService(BaseService):
         if not self._directory:
             return NamespaceListResponse(namespaces=[], total=0)
 
-        namespaces = self._directory.list_namespaces()
-        namespace_infos = []
-
-        for ns in namespaces:
-            agents = self._directory.list_agents(namespace=ns)
-            namespace_infos.append(
-                NamespaceInfo(
-                    name=ns,
-                    agent_count=len(agents),
-                    agents=[a.agent_id for a in agents],
-                )
+        summaries = self._directory.get_namespace_summary()
+        namespace_infos = [
+            NamespaceInfo(
+                name=s["name"],
+                agent_count=s["agent_count"],
+                agents=s["agents"],
             )
+            for s in summaries
+        ]
 
         return NamespaceListResponse(
             namespaces=namespace_infos,
@@ -422,16 +428,16 @@ class AgentService(BaseService):
         started_at = _utcnow()
         options = options or {}
 
-        def _error_response(error: str) -> dict[str, Any]:
+        def _error_response(error: str, *, error_code: str = "AgentError") -> dict[str, Any]:
             completed_at = _utcnow()
             return {
                 "agent_id": agent_id,
                 "status": "error",
                 "result": None,
-                "error": error,
+                "error": {"code": error_code, "message": error},
                 "plan_id": None,
-                "started_at": started_at.isoformat() + "Z",
-                "completed_at": completed_at.isoformat() + "Z",
+                "started_at": started_at,
+                "completed_at": completed_at,
             }
 
         agent_info = self.get_agent(agent_id)
@@ -453,11 +459,27 @@ class AgentService(BaseService):
         capabilities = metadata.get("capabilities", {})
         limits = metadata.get("limits", {})
 
-        root_path = options.get("workspace_root") or options.get("root_path") or str(Path.cwd())
+        # P1-9: 从 settings.data_dir 解析默认工作区，不再依赖 Path.cwd()
+        from ..config import get_settings as _get_settings_p19
+        _s = _get_settings_p19()
+        default_root = str(Path(_s.data_dir).resolve()) if _s.data_dir else str(Path.cwd())
+        root_path = options.get("workspace_root") or options.get("root_path") or default_root
         namespace = options.get("namespace") or getattr(agent, "namespace", "default")
         allowed_tools = options.get("allowed_tools") or options.get("tools") or capabilities.get("tools", ["*"])
         denied_tools = options.get("denied_tools") or capabilities.get("denied_tools", [])
         is_readonly = bool(options.get("is_readonly", limits.get("is_readonly", False)))
+
+        # P0-10: workspace_base 路径消毒
+        from ..config import get_settings as _get_settings
+
+        _settings = _get_settings()
+        if _settings.workspace_base:
+            workspace_base = Path(_settings.workspace_base).resolve()
+            resolved_root = Path(root_path).resolve()
+            if not _is_path_within(resolved_root, workspace_base):
+                return _error_response(
+                    f"invalid_workspace: workspace_root is outside allowed base directory"
+                )
 
         from .proxy.agent_executor import AgentExecutor
         from .proxy.workspace_manager import WorkspaceConfig, WorkspaceContext
@@ -485,18 +507,29 @@ class AgentService(BaseService):
             )
             result = await executor.execute(prompt=task, context=context)
             completed_at = _utcnow()
+            error_code = result.metadata.get("error_code", "")
+            error_detail = (
+                {"code": error_code or "ExecutionError", "message": result.error}
+                if not result.success and result.error
+                else None
+            )
             return {
                 "agent_id": agent_id,
                 "status": "completed" if result.success else "error",
                 "result": result.output if result.success else None,
-                "error": result.error if not result.success else None,
+                "error": error_detail,
                 "plan_id": None,
-                "started_at": started_at.isoformat() + "Z",
-                "completed_at": completed_at.isoformat() + "Z",
+                "started_at": started_at,
+                "completed_at": completed_at,
             }
+        except AgentError as exc:
+            self._logger.exception(
+                "Agent execution failed for %s (%s)", agent_id, type(exc).__name__
+            )
+            return _error_response(str(exc), error_code=type(exc).__name__)
         except Exception as exc:
             self._logger.exception("Agent execution failed for %s", agent_id)
-            return _error_response(str(exc))
+            return _error_response(str(exc), error_code=type(exc).__name__)
 
     # ==================== 辅助方法 ====================
 

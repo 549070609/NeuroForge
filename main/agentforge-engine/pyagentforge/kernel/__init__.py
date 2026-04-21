@@ -13,6 +13,14 @@ from pyagentforge.kernel.checkpoint import (
 )
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentEngine
+from pyagentforge.kernel.errors import (
+    AgentCancelledError,
+    AgentError,
+    AgentMaxIterationsError,
+    AgentProviderError,
+    AgentTimeoutError,
+    AgentToolError,
+)
 from pyagentforge.kernel.executor import PermissionChecker, ToolExecutor, ToolRegistry
 from pyagentforge.kernel.message import (
     Message,
@@ -48,6 +56,12 @@ __all__ = [
     "ToolRegistry",
     "PermissionChecker",
     "AgentEngine",
+    "AgentError",
+    "AgentTimeoutError",
+    "AgentCancelledError",
+    "AgentMaxIterationsError",
+    "AgentProviderError",
+    "AgentToolError",
     "ModelRegistry",
     "ModelConfig",
     "get_registry",

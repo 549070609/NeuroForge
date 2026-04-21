@@ -292,6 +292,30 @@ class AgentDirectory:
 
         return None
 
+    def list_namespaces(self) -> list[str]:
+        """列出所有命名空间（去重排序）。"""
+        if not self._initialized:
+            self.scan()
+        return sorted({a.namespace for a in self._agents.values()})
+
+    def get_namespace_summary(self) -> list[dict[str, Any]]:
+        """P1-6: 一次遍历聚合命名空间摘要，消除 N+1 查询。
+
+        Returns:
+            [{"name": str, "agent_count": int, "agents": [agent_id, ...]}]
+        """
+        if not self._initialized:
+            self.scan()
+
+        ns_map: dict[str, list[str]] = {}
+        for agent in self._agents.values():
+            ns_map.setdefault(agent.namespace, []).append(agent.agent_id)
+
+        return [
+            {"name": ns, "agent_count": len(ids), "agents": sorted(ids)}
+            for ns, ids in sorted(ns_map.items())
+        ]
+
     # ==================== 缓存管理 ====================
 
     def refresh(self) -> None:

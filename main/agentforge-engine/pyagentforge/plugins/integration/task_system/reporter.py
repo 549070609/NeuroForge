@@ -175,6 +175,8 @@ class TaskReporter:
         lines = [
             "# Task Progress Report",
             "",
+            f"Progress: {report.progress_percentage:.1f}%",
+            "",
             "## Overview",
             f"- **Task ID**: {report.task.id}",
             f"- **Title**: {report.task.title}",

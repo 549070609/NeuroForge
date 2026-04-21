@@ -13,7 +13,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from pyagentforge.plugin.base import Plugin, PluginType
+from pyagentforge.plugin.base import Plugin, PluginMetadata, PluginType
 from pyagentforge.plugin.hooks import HookDecision
 from pyagentforge.utils.logging import get_logger
 
@@ -48,7 +48,7 @@ class ChainOfThoughtPlugin(Plugin):
     def __init__(self):
         super().__init__()
 
-        self.metadata = self.PluginMetadata(
+        self.metadata = PluginMetadata(
             id="chain_of_thought",
             name="Chain of Thought System",
             version="4.0.0",
@@ -334,11 +334,11 @@ class ChainOfThoughtPlugin(Plugin):
             "plan": ["计划", "步骤", "plan", "step", "approach"],
             "execute": ["执行", "实现", "execute", "implement", "run"],
             "reflect": ["反思", "验证", "总结", "reflect", "verify", "summary"],
-            "reproduce": ["复现", "重现", "reproduce"],
-            "localize": ["定位", "找到", "localize", "locate", "find"],
+            "reproduce": ["复现", "已复现", "重现", "错误", "异常", "reproduce", "error"],
+            "localize": ["定位", "定位到", "找到", "函数", "代码行", "localize", "locate", "find", "function", "line"],
             "hypothesize": ["假设", "猜测", "hypothes", "guess", "assume"],
             "verify": ["验证", "确认", "verify", "confirm", "test"],
-            "fix": ["修复", "改正", "fix", "repair", "patch"],
+            "fix": ["修复", "改正", "fix", "repair", "patch", "bug"],
         }
 
         for phase in current_cot.phases:

@@ -11,47 +11,25 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+# 统一使用 kernel 层的 ModelConfig，避免两份重复定义导致的字段漂移与
+# api_type 枚举不一致（插件式协议注册要求 api_type 为开放字符串）。
+# 该导入是顶层导入，``kernel.model_registry`` 未反向依赖本模块顶层，
+# 因此不会触发循环导入（kernel 对 config 的引用在函数内部延迟加载）。
+from pyagentforge.kernel.model_registry import ModelConfig
+
 logger = logging.getLogger(__name__)
 
-
-class ModelConfig(BaseModel):
-    """模型配置。"""
-
-    id: str = Field(..., description="模型 ID")
-    name: str = Field(..., description="显示名称")
-    provider: str = Field(..., description="供应商标识，仅用于分组展示")
-    api_type: Literal[
-        "anthropic-messages",
-        "openai-completions",
-        "openai-responses",
-        "google-generative-ai",
-        "bedrock-converse-stream",
-        "custom",
-    ] = Field(..., description="兼容协议类型")
-    model_name: str | None = Field(default=None, description="实际请求时使用的模型名")
-
-    supports_vision: bool = Field(default=False, description="是否支持图像")
-    supports_tools: bool = Field(default=True, description="是否支持工具调用")
-    supports_streaming: bool = Field(default=True, description="是否支持流式")
-
-    context_window: int = Field(default=200000, description="上下文窗口大小")
-    max_output_tokens: int = Field(default=4096, description="最大输出 tokens")
-
-    cost_input: float = Field(default=0.0, description="输入成本/百万 tokens")
-    cost_output: float = Field(default=0.0, description="输出成本/百万 tokens")
-    cost_cache_read: float = Field(default=0.0, description="缓存读取成本/百万 tokens")
-    cost_cache_write: float = Field(default=0.0, description="缓存写入成本/百万 tokens")
-
-    api_key: str | None = Field(default=None, description="直接传入的 API Key")
-    api_key_env: str | None = Field(default=None, description="API Key 环境变量名")
-    base_url: str | None = Field(default=None, description="API 基础 URL")
-    timeout: int = Field(default=120, description="请求超时（秒）")
-    headers: dict[str, str] = Field(default_factory=dict, description="附加请求头")
-    extra: dict[str, Any] = Field(default_factory=dict, description="额外配置")
+__all__ = [
+    "ModelConfig",
+    "LLMConfig",
+    "LLMConfigManager",
+    "get_llm_config_manager",
+    "get_llm_config",
+]
 
 
 class LLMConfig(BaseModel):
@@ -103,6 +81,7 @@ class LLMConfigManager:
         self._config_path: Path | None = None
 
     def _resolve_config_path(self, custom_path: str | Path | None = None) -> Path:
+        """P1-9: 配置路径解析优先级 custom_path > env > 向上查找 > CWD fallback。"""
         if custom_path:
             return Path(custom_path)
 
@@ -110,18 +89,24 @@ class LLMConfigManager:
         if env_path:
             return Path(env_path)
 
-        # 从 CWD 开始向上查找 llm_config.json
-        current = Path.cwd()
-        for _ in range(5):  # 最多向上 5 级
-            candidate = current / self.DEFAULT_CONFIG_PATH
-            if candidate.exists():
-                return candidate
-            parent = current.parent
-            if parent == current:
-                break
-            current = parent
+        # 从本文件所在目录开始向上查找，再尝试 CWD
+        search_roots = [Path(__file__).resolve().parent]
+        try:
+            search_roots.append(Path.cwd())
+        except OSError:
+            pass
 
-        # 未找到：返回 CWD 下的默认路径（load_config 将记录 warning 并返回空配置）
+        for root in search_roots:
+            current = root
+            for _ in range(5):
+                candidate = current / self.DEFAULT_CONFIG_PATH
+                if candidate.exists():
+                    return candidate
+                parent = current.parent
+                if parent == current:
+                    break
+                current = parent
+
         return Path.cwd() / self.DEFAULT_CONFIG_PATH
 
     def load_config(self, path: str | Path | None = None) -> LLMConfig:

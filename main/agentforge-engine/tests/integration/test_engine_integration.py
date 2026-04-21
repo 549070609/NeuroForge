@@ -13,6 +13,7 @@ import pytest
 
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentConfig, AgentEngine
+from pyagentforge.kernel.errors import AgentMaxIterationsError
 from pyagentforge.kernel.executor import PermissionChecker, ToolExecutor
 from pyagentforge.kernel.message import (
     ProviderResponse,
@@ -937,8 +938,8 @@ class TestErrorRecoveryInToolExecution:
             config=AgentConfig(max_iterations=5),  # Low limit
         )
 
-        result = await engine.run("Loop forever")
+        with pytest.raises(AgentMaxIterationsError):
+            await engine.run("Loop forever")
 
         # Verify: Engine stopped at max iterations
-        assert "error" in result.lower() or "maximum" in result.lower()
         assert mock_provider.call_count == 5  # Stopped at limit

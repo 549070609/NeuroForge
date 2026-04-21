@@ -42,7 +42,7 @@ def format_search_result(result: SgResult) -> str:
     output = "\n".join(lines)
 
     # 统计信息
-    output += f"\n\n[Total] {result.total_matches} match(es)"
+    output += f"\n\nTotal: {result.total_matches} match(es)"
 
     if result.truncated:
         output += f" (truncated: {result.truncated_reason})"

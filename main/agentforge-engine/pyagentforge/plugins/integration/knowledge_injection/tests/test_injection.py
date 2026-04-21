@@ -105,7 +105,7 @@ class TestKnowledgeInjector:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create Python rules
-            os.makedirs(os.path.join(tmpdir, ".agent"), exist_ok=True)
+            os.makedirs(os.path.join(tmpdir, ".agent", "rules"), exist_ok=True)
             python_rules = os.path.join(tmpdir, ".agent/rules/python")
             with open(python_rules, "w") as f:
                 f.write("Use type hints")

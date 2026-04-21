@@ -181,6 +181,7 @@ class TestPhaseTracking:
             ],
         )
         manager.set_current_cot(cot)
+        plugin._cot_manager = manager
 
         # 测试推断
         phase = plugin._infer_current_phase("问题已复现，错误出现在第42行")

@@ -318,6 +318,8 @@ class BackgroundManager:
                 raise RuntimeError("Engine factory not set")
 
             engine = self.engine_factory(task.agent_type)
+            if inspect.isawaitable(engine):
+                engine = await engine
 
             if engine is None:
                 raise RuntimeError(f"Failed to create engine for {task.agent_type}")

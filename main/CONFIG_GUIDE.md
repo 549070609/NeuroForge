@@ -9,12 +9,15 @@
 
 ## 支持的协议格式
 
+协议适配器已插件化，`api_type` 由运行时 `PROTOCOL_ADAPTERS` 注册表校验，第三方通过 entry_points `pyagentforge.protocol_adapters` 或 `register_protocol_adapter()` 注册的任意值均可使用。
+
+仓库内置（开箱即用）：
+
 - `anthropic-messages`
 - `openai-completions`
 - `openai-responses`
-- `google-generative-ai`
-- `bedrock-converse-stream`
-- `custom`
+
+> 若配置了未注册的 `api_type`，将在调用时抛出 `Unsupported api_type`。
 
 ## 推荐配置结构
 

@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # 需要排除的目录（不是 Agent 目录，或 Agent 目录中的非配置子目录）
@@ -65,8 +65,7 @@ class AgentBaseConfig(BaseModel):
         description="扫描时排除的目录"
     )
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     def get_full_path(self) -> Path:
         """获取完整的基础路径"""

@@ -213,9 +213,9 @@ class TestTaskManagementPlugin:
 
         await plugin.on_activate()
 
-        # Should have registered 4 tools
+        # Should have registered 6 tools
         tools = plugin.get_tools()
-        assert len(tools) == 4
+        assert len(tools) == 6
 
     @pytest.mark.asyncio
     async def test_plugin_context(self):

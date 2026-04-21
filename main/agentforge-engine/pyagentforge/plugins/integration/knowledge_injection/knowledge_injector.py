@@ -219,8 +219,9 @@ class KnowledgeInjector:
         tokens = self.estimate_tokens(content)
         if tokens > self.max_total_tokens:
             # Truncate if too long
-            max_chars = self.max_total_tokens * 4
-            content = content[:max_chars] + "\n... (truncated)"
+            truncation_suffix = "\n... (truncated)"
+            max_chars = max(0, (self.max_total_tokens * 4) - len(truncation_suffix))
+            content = content[:max_chars] + truncation_suffix
             tokens = self.estimate_tokens(content)
 
         # Build injection content

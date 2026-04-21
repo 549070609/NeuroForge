@@ -39,7 +39,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["Service"]
+# P0-4: 同时打包 Service 与 Agent，避免运行时 sys.path.insert
+packages = ["Service", "../Agent"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

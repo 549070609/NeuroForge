@@ -13,6 +13,7 @@ import pytest
 from pyagentforge.kernel.base_provider import BaseProvider
 from pyagentforge.kernel.context import ContextManager
 from pyagentforge.kernel.engine import AgentConfig, AgentEngine
+from pyagentforge.kernel.errors import AgentMaxIterationsError
 from pyagentforge.kernel.message import (
     ProviderResponse,
     TextBlock,
@@ -269,9 +270,11 @@ class TestAgentEngineMaxIterations:
             config=config,
         )
 
-        result = await engine.run("Start infinite loop")
+        with pytest.raises(AgentMaxIterationsError) as exc_info:
+            await engine.run("Start infinite loop")
 
-        assert "Maximum iterations reached" in result
+        assert exc_info.value.max_iterations == 5
+        assert exc_info.value.iteration == 5
         assert infinite_tool_provider.call_count == 5
 
 

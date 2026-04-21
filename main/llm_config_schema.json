@@ -41,13 +41,12 @@
         },
         "api_type": {
           "type": "string",
-          "enum": [
+          "minLength": 1,
+          "description": "协议类型。运行时由 PROTOCOL_ADAPTERS 动态校验，支持通过 entry_points(pyagentforge.protocol_adapters) 或 register_protocol_adapter() 注册的任意 api_type。内置示例：anthropic-messages、openai-completions、openai-responses。",
+          "examples": [
             "anthropic-messages",
             "openai-completions",
-            "openai-responses",
-            "google-generative-ai",
-            "bedrock-converse-stream",
-            "custom"
+            "openai-responses"
           ]
         },
         "model_name": { "type": ["string", "null"] },

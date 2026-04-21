@@ -310,7 +310,11 @@ class PluginManager:
         for hook_name, callback in hooks.items():
             try:
                 hook_type = HookType(hook_name)
-                self.hooks.register(hook_type, plugin, callback)
+                if isinstance(callback, tuple):
+                    hook_callback, priority = callback
+                    self.hooks.register(hook_type, plugin, hook_callback, priority)
+                else:
+                    self.hooks.register(hook_type, plugin, callback)
             except ValueError:
                 logger.warning(f"Unknown hook type: {hook_name}")
 

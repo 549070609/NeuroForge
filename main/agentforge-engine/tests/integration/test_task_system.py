@@ -587,9 +587,9 @@ class TestTaskErrorHandling:
         # Wait for completion
         await manager.wait_for_completion(task.id, timeout=5.0)
 
-        # Verify: Task completed (with error message)
-        assert task.status == TaskStatus.COMPLETED
-        assert "Maximum iterations" in task.result or "Error" in task.result
+        # Verify: Task failed due to AgentMaxIterationsError (P0-2: exceptions replace string returns)
+        assert task.status == TaskStatus.FAILED
+        assert "Maximum iterations" in (task.error or "") or "exceeded" in (task.error or "")
 
 
 class TestTaskCancellationPropagation:

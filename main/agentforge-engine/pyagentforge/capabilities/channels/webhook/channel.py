@@ -114,8 +114,8 @@ class WebhookChannel(BaseChannel):
 
     async def send_message(
         self,
-        _to: str,
-        _content: str,
+        _to: str = "",
+        _content: str = "",
         **_kwargs: Any
     ) -> SendMessageResult:
         """

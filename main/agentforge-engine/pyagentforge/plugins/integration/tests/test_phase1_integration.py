@@ -40,7 +40,7 @@ class TestTodoTaskSystemIntegration:
     @pytest.mark.asyncio
     async def test_todo_reads_task_system(self, setup_plugins):
         """Test that Todo plugin reads tasks from TaskSystem"""
-        task_plugin, todo_plugin = await setup_plugins
+        task_plugin, todo_plugin = setup_plugins
 
         # Create a task in TaskSystem
         task_manager = task_plugin.task_manager
@@ -60,7 +60,7 @@ class TestTodoTaskSystemIntegration:
     @pytest.mark.asyncio
     async def test_in_progress_tasks_detected(self, setup_plugins):
         """Test that in_progress tasks are detected"""
-        task_plugin, todo_plugin = await setup_plugins
+        task_plugin, todo_plugin = setup_plugins
 
         task_manager = task_plugin.task_manager
 
@@ -81,7 +81,7 @@ class TestTodoTaskSystemIntegration:
     @pytest.mark.asyncio
     async def test_completed_tasks_not_detected(self, setup_plugins):
         """Test that completed tasks are not detected"""
-        task_plugin, todo_plugin = await setup_plugins
+        task_plugin, todo_plugin = setup_plugins
 
         task_manager = task_plugin.task_manager
 

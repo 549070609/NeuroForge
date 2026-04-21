@@ -226,7 +226,7 @@ class ModelConfigService:
             id=request.id,
             name=request.name,
             provider=request.provider,
-            api_type=request.api_type.value,
+            api_type=str(request.api_type),
             model_name=request.model_name,
             supports_vision=request.supports_vision,
             supports_tools=request.supports_tools,

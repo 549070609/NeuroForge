@@ -20,6 +20,7 @@ from pyagentforge import (
 )
 from pyagentforge.client import LLMClient
 from pyagentforge.kernel.base_provider import BaseProvider
+from pyagentforge.kernel.errors import AgentError
 from pyagentforge.workflow import EngineFactory, TraceCollector, TracingPlugin
 
 logger = logging.getLogger(__name__)
@@ -260,6 +261,19 @@ class AgentExecutor:
                 },
             )
 
+        except AgentError as e:
+            self._logger.error(f"Agent execution failed ({type(e).__name__}): {e}")
+            return ExecutionResult(
+                success=False,
+                output="",
+                error=str(e),
+                metadata={
+                    "trace_id": self.get_trace_id(),
+                    "error_code": type(e).__name__,
+                    "session_id": e.session_id,
+                },
+            )
+
         except Exception as e:
             self._logger.error(f"Agent execution failed: {e}")
             return ExecutionResult(
@@ -300,9 +314,17 @@ class AgentExecutor:
                     event = {**event, "trace_id": trace_id}
                 yield event
 
+        except AgentError as e:
+            self._logger.error(f"Streaming execution failed ({type(e).__name__}): {e}")
+            yield {
+                "type": "error",
+                "code": type(e).__name__,
+                "message": str(e),
+            }
+
         except Exception as e:
             self._logger.error(f"Streaming execution failed: {e}")
-            yield {"type": "error", "message": str(e)}
+            yield {"type": "error", "code": "InternalError", "message": str(e)}
 
     def reset(self) -> None:
         """Reset executor state."""
@@ -384,10 +406,12 @@ class AgentExecutor:
         raise RuntimeError(message) from exc
 
     def _create_llm_client(self) -> LLMClient:
-        """创建 LLM 客户端"""
+        """获取共享 LLM 客户端（单例模式：所有 Executor 复用同一连接池）"""
         try:
-            client = LLMClient()
-            self._logger.info(f"Created LLM client for model: {self._model_id}")
+            from pyagentforge.client import get_shared_llm_client
+
+            client = get_shared_llm_client()
+            self._logger.info(f"Using shared LLM client for model: {self._model_id}")
             return client
         except ImportError as exc:
             self._raise_missing_dependency("llm client", exc)

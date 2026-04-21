@@ -61,6 +61,8 @@ class Plugin(ABC):
     def __init__(self):
         self._context: PluginContext | None = None
         self._activated = False
+        self._registered_tools: list[BaseTool] = []
+        self._registered_hooks: dict[str, tuple[Callable, int]] = {}
 
     @property
     def context(self) -> PluginContext:
@@ -83,9 +85,15 @@ class Plugin(ABC):
     async def on_plugin_activate(self) -> None:
         """插件激活时调用"""
         self._activated = True
+        legacy_activate = getattr(self, "on_activate", None)
+        if callable(legacy_activate):
+            await legacy_activate()
 
     async def on_plugin_deactivate(self) -> None:
         """插件停用时调用"""
+        legacy_deactivate = getattr(self, "on_deactivate", None)
+        if callable(legacy_deactivate):
+            await legacy_deactivate()
         self._activated = False
 
     # ============ 钩子方法 - 子类可选重写 ============
@@ -136,17 +144,27 @@ class Plugin(ABC):
 
     # ============ 资源提供方法 ============
 
+    def register_tool(self, tool: BaseTool) -> None:
+        """兼容旧插件：注册插件提供的工具。"""
+        self._registered_tools.append(tool)
+
+    def register_hook(self, hook_type: Any, callback: Callable, priority: int = 0) -> None:
+        """兼容旧插件：登记钩子回调并保留优先级。"""
+        hook_name = getattr(hook_type, "value", hook_type)
+        if isinstance(hook_name, str):
+            self._registered_hooks[hook_name] = (callback, priority)
+
     def get_tools(self) -> list[BaseTool]:
         """返回插件提供的工具"""
-        return []
+        return list(self._registered_tools)
 
     def get_providers(self) -> list[type[BaseProvider]]:
         """返回插件提供的Provider类"""
         return []
 
-    def get_hooks(self) -> dict[str, Callable]:
+    def get_hooks(self) -> dict[str, Callable | tuple[Callable, int]]:
         """返回插件实现的钩子映射"""
-        hooks = {}
+        hooks = dict(self._registered_hooks)
         for hook_name in [
             "on_engine_init", "on_engine_start", "on_engine_stop",
             "on_before_llm_call", "on_after_llm_call",

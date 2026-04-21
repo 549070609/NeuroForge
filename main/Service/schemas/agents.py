@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 
 
 def _utcnow() -> datetime:
-    """Return a naive UTC datetime (timezone stripped for backward compat)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return a tz-aware UTC datetime (P1-10: 保留 tzinfo)."""
+    return datetime.now(timezone.utc)
 
 # ==================== Agent Schemas ====================
 
@@ -70,16 +70,25 @@ class AgentExecuteRequest(BaseModel):
     options: dict[str, Any] | None = Field(default=None, description="执行选项")
 
 
+class ErrorDetail(BaseModel):
+    """P1-10: 错误详情子模型"""
+
+    code: str = Field(description="错误类型代码")
+    message: str = Field(description="错误描述")
+
+
 class AgentExecuteResponse(BaseModel):
-    """Agent 执行响应"""
+    """Agent 执行响应（P1-10: Literal status + tz-aware datetime）"""
 
     agent_id: str = Field(description="执行的 Agent ID")
-    status: str = Field(description="执行状态")
+    status: Literal["completed", "error", "timeout", "cancelled"] = Field(
+        description="执行状态",
+    )
     result: str | None = Field(default=None, description="执行结果")
     plan_id: str | None = Field(default=None, description="生成的计划 ID (如果是 Plan Agent)")
-    error: str | None = Field(default=None, description="错误信息")
-    started_at: datetime = Field(default_factory=_utcnow, description="开始时间")
-    completed_at: datetime | None = Field(default=None, description="完成时间")
+    error: ErrorDetail | None = Field(default=None, description="错误信息")
+    started_at: datetime = Field(default_factory=_utcnow, description="开始时间 (UTC)")
+    completed_at: datetime | None = Field(default=None, description="完成时间 (UTC)")
 
 
 # ==================== Plan Schemas ====================

@@ -42,6 +42,7 @@ class _Result:
         self.success = success
         self.output = output
         self.error = error
+        self.metadata: dict = {}
 
 
 @pytest.mark.asyncio
@@ -92,8 +93,9 @@ async def test_execute_agent_success_with_options_override(tmp_path: Path, monke
     assert result["result"] == "ok-result"
     assert result["error"] is None
     assert result["plan_id"] is None
-    assert result["started_at"].endswith("Z")
-    assert result["completed_at"].endswith("Z")
+    from datetime import datetime
+    assert isinstance(result["started_at"], datetime)
+    assert isinstance(result["completed_at"], datetime)
 
     workspace_context = RecordingExecutor.created[0]
     assert workspace_context.config.root_path == str(tmp_path)
@@ -113,11 +115,13 @@ async def test_execute_agent_not_found_returns_error(tmp_path: Path):
     result = await service.execute_agent(agent_id="missing", task="task")
 
     assert result["status"] == "error"
-    assert "not found" in result["error"].lower()
+    assert isinstance(result["error"], dict)
+    assert "not found" in result["error"]["message"].lower()
     assert result["result"] is None
     assert result["plan_id"] is None
-    assert result["started_at"].endswith("Z")
-    assert result["completed_at"].endswith("Z")
+    from datetime import datetime
+    assert isinstance(result["started_at"], datetime)
+    assert isinstance(result["completed_at"], datetime)
 
 
 @pytest.mark.asyncio
@@ -143,6 +147,7 @@ async def test_execute_agent_executor_exception_returns_error(tmp_path: Path, mo
     result = await service.execute_agent(agent_id=agent_id, task="task")
 
     assert result["status"] == "error"
-    assert "executor failed" in result["error"]
+    assert isinstance(result["error"], dict)
+    assert "executor failed" in result["error"]["message"]
     assert result["result"] is None
     assert result["plan_id"] is None

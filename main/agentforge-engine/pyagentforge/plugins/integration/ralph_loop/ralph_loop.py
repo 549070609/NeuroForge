@@ -165,6 +165,8 @@ class CompletionChecker:
     ):
         self.stop_keywords = stop_keywords or [
             "task completed",
+            "task is completed",
+            "task is now completed",
             "任务完成",
             "all done",
             "全部完成",

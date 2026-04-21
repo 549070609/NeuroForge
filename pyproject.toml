@@ -58,6 +58,16 @@ testpaths = [
     "main/Long-memory/long-memory/super_compress/tests",
     "main/Long-memory/long-memory/memory_processor/tests",
     "main/Long-memory/embeddings",
+    # 全局门禁：P0/P1 回归测试统一位于 /test 顶层目录（engine/service/resilience/perf）
+    "test",
+]
+
+# P0-P1 分阶段验证 marker（全局门禁要求）
+markers = [
+    "p0: P0 阶段必须上线前修复的回归测试",
+    "p1: P1 阶段上线后近期迭代修复的回归测试",
+    "resilience: 故障注入 / 弹性测试（依赖 FakeProvider / FakeCheckpointer）",
+    "perf: 性能压测（locust / 大并发场景）",
 ]
 
 python_files = ["test_*.py"]
@@ -86,6 +96,8 @@ norecursedirs = [
     ".venv",
     "dist",
     "build",
+    # live 测试依赖真实 LLM API key，不纳入常规回归（手动执行）
+    "live",
 ]
 
 filterwarnings = [

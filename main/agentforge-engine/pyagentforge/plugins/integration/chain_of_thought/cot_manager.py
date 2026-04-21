@@ -123,8 +123,25 @@ class ChainOfThoughtManager:
             加载的思维链，如果没有则返回 None
         """
         # 优先尝试 Agent 自生成
-        if prefer_agent and agent_id:
+        if prefer_agent:
             agent_cot = self.get_agent_cot(task_type, agent_id)
+            if agent_cot is None and not agent_id and task_type in self._agent_cots:
+                agent_cot = self._agent_cots[task_type]
+            if agent_cot is None and self._agent_cot_dir:
+                candidate_path = (
+                    self._agent_cot_dir / agent_id / f"{task_type}.json"
+                    if agent_id
+                    else self._agent_cot_dir / f"{task_type}.json"
+                )
+                if candidate_path.exists():
+                    try:
+                        with open(candidate_path, encoding="utf-8") as f:
+                            data = json.load(f)
+                        agent_cot = ChainOfThought.from_dict(data)
+                        key = f"{agent_id}/{task_type}" if agent_id else task_type
+                        self._agent_cots[key] = agent_cot
+                    except Exception as e:
+                        logger.warning(f"Failed to load agent CoT {candidate_path}: {e}")
             if agent_cot:
                 logger.info(f"Using agent-generated CoT: {task_type}")
                 self._current_cot = agent_cot
@@ -233,7 +250,12 @@ class ChainOfThoughtManager:
             "steps": plan_steps,
             "step_count": len(plan_steps),
             "has_validation": any(
-                step.get("validation") or step.get("verify")
+                step.get("validation")
+                or step.get("verify")
+                or any(
+                    keyword in str(step.get("description", ""))
+                    for keyword in ["验证", "校验", "确认", "测试", "验收", "verify", "validation", "test"]
+                )
                 for step in plan_steps
             ),
         }

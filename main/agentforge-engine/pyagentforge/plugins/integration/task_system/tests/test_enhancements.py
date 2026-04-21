@@ -54,7 +54,7 @@ def test_phase1_data_model():
 
     assert subtask.parent_id == task.id
     assert subtask.level == 1
-    assert task.id in manager.get_task(task.id).subtasks
+    assert subtask.id in manager.get_task(task.id).subtasks
     print("✓ Subtask created")
 
     # Test 3: Max nesting depth

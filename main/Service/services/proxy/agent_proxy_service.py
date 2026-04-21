@@ -112,12 +112,7 @@ class AgentProxyService(BaseService):
         self._workflow_checkpointer = FileCheckpointer(checkpoints_dir)
 
         try:
-            import sys
-
-            agent_path = Path("main/Agent")
-            if str(agent_path) not in sys.path:
-                sys.path.insert(0, str(agent_path.parent))
-
+            # P0-4: 直接包导入，要求 `main/` 在 PYTHONPATH 上
             from Agent.core import AgentDirectory
 
             self._agent_directory = AgentDirectory()
@@ -164,6 +159,20 @@ class AgentProxyService(BaseService):
     ) -> dict[str, Any]:
         if not self._workspace_manager:
             raise RuntimeError("Service not initialized")
+
+        # P0-10: workspace_base 路径消毒
+        from ...config import get_settings as _get_settings
+
+        _settings = _get_settings()
+        if _settings.workspace_base:
+            workspace_base = Path(_settings.workspace_base).resolve()
+            resolved_root = Path(root_path).resolve()
+            try:
+                resolved_root.relative_to(workspace_base)
+            except ValueError:
+                raise ValueError(
+                    "invalid_workspace: root_path is outside allowed workspace_base"
+                )
 
         config = WorkspaceConfig(
             root_path=root_path,

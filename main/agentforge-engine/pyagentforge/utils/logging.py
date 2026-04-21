@@ -10,7 +10,10 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-from pyagentforge.config.settings import get_settings
+# NOTE: ``get_settings`` 采用函数内延迟导入，避免 ``pyagentforge.config`` 包
+# 初始化路径与 ``pyagentforge.kernel.model_registry`` 形成循环：
+#   config.__init__ -> config.llm_config -> kernel.model_registry -> utils.logging
+# 在合并 ModelConfig 为单一来源（kernel 版）后，该链路才被激活。
 
 
 class JSONFormatter(logging.Formatter):
@@ -64,6 +67,8 @@ def setup_logging(
         level: 日志级别，默认从配置读取
         log_format: 日志格式 (json/text)，默认从配置读取
     """
+    from pyagentforge.config.settings import get_settings  # lazy import, see module header
+
     settings = get_settings()
 
     log_level = level or settings.log_level

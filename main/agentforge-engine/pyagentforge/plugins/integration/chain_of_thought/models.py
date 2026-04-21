@@ -116,6 +116,7 @@ class ChainOfThought:
     version: str = "1.0"
     author: str = ""
     tags: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     source: str = "user"  # user, agent, llm
@@ -152,6 +153,7 @@ class ChainOfThought:
             "version": self.version,
             "author": self.author,
             "tags": self.tags,
+            "metadata": self.metadata,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "source": self.source,
@@ -171,6 +173,7 @@ class ChainOfThought:
             version=data.get("version", "1.0"),
             author=data.get("author", ""),
             tags=data.get("tags", []),
+            metadata=data.get("metadata", {}),
             created_at=data.get("created_at", datetime.now(UTC).isoformat()),
             updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
             source=data.get("source", "user"),
