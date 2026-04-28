@@ -6,8 +6,13 @@ CLAUDE.md
 .obsidian/
 .claude/
 .cursor/
+.vscode/
 _bmad/
 _bmad-output/
+
+# Local data and tests (excluded from remote)
+/data/
+/test/
 
 # Python
 __pycache__/
