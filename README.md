@@ -115,3 +115,13 @@ pytest main/Service/tests
 pytest main/agentforge-engine/tests/building
 pytest main/Long-memory/long-memory/tests
 ```
+
+## 许可证 / License
+
+本项目采用 **[PolyForm Noncommercial License 1.0.0](./LICENSE)** 授权，仅允许非商业用途。
+
+- ✅ 允许：个人学习、研究、教学、非营利组织使用、开源贡献、爱好项目
+- ❌ 禁止：任何商业用途（包括但不限于销售、SaaS 商用部署、为付费客户提供服务等）
+- 📩 如需商业授权，请联系项目维护者获取单独的商业许可
+
+完整条款见仓库根目录 [`LICENSE`](./LICENSE) 文件，或访问 <https://polyformproject.org/licenses/noncommercial/1.0.0> 。

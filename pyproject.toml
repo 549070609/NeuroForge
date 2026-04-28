@@ -22,7 +22,7 @@ version = "0.1.0"
 description = "NeuroForge monorepo workspace (SDK + API + plugins)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 
 # Root is not a distributable package; do NOT declare dependencies here.
 # Install sub-packages with `pip install -e main/agentforge-engine` etc.
