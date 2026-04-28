@@ -1,44 +1,132 @@
+# ============================================================
+# Project-specific
+# ============================================================
 /Docs
 /Learncode
-
-# IDE and tooling
-CLAUDE.md
-AGENTS.md
-.obsidian/
-.claude/
-.cursor/
-.vscode/
-_bmad/
-_bmad-output/
-
-# Local data and tests (excluded from remote)
 /data/
 /test/
 
+# ============================================================
+# IDE / Editor / AI tooling
+# ============================================================
+.vscode/
+.idea/
+.obsidian/
+.claude/
+.cursor/
+_bmad/
+_bmad-output/
+CLAUDE.md
+AGENTS.md
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.ropeproject
+
+# ============================================================
+# Operating system files
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# ============================================================
 # Python
+# ============================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+*.egg
 *.egg-info/
+.Python
 dist/
 build/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
 .env
 .venv
 venv/
+env/
+ENV/
 
-# Tooling caches and reports (never commit)
+# Testing & coverage
+.tox/
+.nox/
+.hypothesis/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+nosetests.xml
+htmlcov/
+
+# Type checkers / linters
 .mypy_cache/
 .ruff_cache/
-.pytest_cache/
+.pyre/
+.pytype/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Custom tooling reports
 mypy_*.txt
 ruff_*.json
 ruff_*.txt
-.coverage
-.coverage.*
-htmlcov/
-*.bak
 
+# ============================================================
+# Secrets & credentials (NEVER commit)
+# ============================================================
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets.yaml
+secrets.yml
+credentials.json
+
+# ============================================================
+# Logs / databases / temp
+# ============================================================
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.tmp
+*.temp
+*.bak
+*.old
+
+# ============================================================
+# Node / frontend (if any)
+# ============================================================
+node_modules/
+.next/
+.nuxt/
+.turbo/
+.npm/
+.yarn/
+*.tsbuildinfo
+
+# ============================================================
+# Documentation build output
+# ============================================================
+docs/_build/
+site/
+.cache/
+
+# ============================================================
 # Misc
+# ============================================================
 nulAGENTS.md
